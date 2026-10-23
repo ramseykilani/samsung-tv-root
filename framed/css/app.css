@@ -33,7 +33,8 @@ button:focus { outline: none; }      /* focus is drawn explicitly below, never l
 .mast__clock, .mast__crumb { font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- launcher tiles ---------- */
-.tiles { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4rem; padding: 0 12rem; }
+/* five 36rem tiles must fit the 1920 logical width: 180 + 4·gap + 2·padding ≤ 192 */
+.tiles { flex: 1; display: flex; align-items: center; justify-content: center; gap: 2rem; padding: 0 2rem; }
 .tile {
   position: relative; width: 36rem; height: 36rem;
   display: flex; flex-direction: column; justify-content: flex-end; padding: 3.2rem;
