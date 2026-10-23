@@ -30,8 +30,14 @@ window.framed = window.framed || {};
    * Each entry is a Stremio addon base URL (the thing that ends before /manifest.json).
    * Order = the order catalogs and stream results appear in. Public defaults:
    *   Cinemeta — official movie/series catalogs + metadata.
-   *   Torrentio — stream results; note its sources are torrents (unplayable on TV, kept for parity).
+   *   Torrentio — stream results; its sources are torrents (unplayable on TV, kept for parity).
    *   Local demo — bundled offline catalog under addons/demo/ so the section works with no network.
+   *
+   * Personal/debrid addon URLs (e.g. a Torrentio URL configured with a debrid key at
+   * torrentio.strem.fun/configure) contain secrets — keep them out of git by dropping a
+   * gitignored 'addons.local.json' next to index.html:
+   *   {"addons": [{"name": "Torrentio", "base": "<your configured url>"}]}
+   * Local entries replace same-name defaults; unknown names are prepended.
    */
   var MEDIA_ADDONS = [
     { name: 'Cinemeta', base: 'https://v3-cinemeta.strem.io' },
@@ -45,6 +51,7 @@ window.framed = window.framed || {};
   var manifests = {};               // base -> manifest object | false (failed) | undefined (not asked)
   var current = null;               // { cat, item } handed from browse to detail
   var currentStream = null;         // stream handed from detail to player
+  var localAddonsLoaded = false;    // addons.local.json merge applied (or file absent)
 
   function note(msg) { console.info('[framed] media: ' + msg); }
 
@@ -103,21 +110,48 @@ window.framed = window.framed || {};
     return out;
   }
 
+  // Merge gitignored addons.local.json once: same-name entries replace defaults,
+  // unknown names prepend. Silent no-op when the file is absent (keep-off-the-air key store).
+  function withLocalAddons(cb) {
+    if (localAddonsLoaded) return cb();
+    localAddonsLoaded = true;
+    getJSON('addons.local.json', function (json) {
+      var locals = json && json.addons;
+      if (locals && locals.length) {
+        var fresh = [];
+        for (var i = 0; i < locals.length; i++) {
+          var l = locals[i];
+          if (!l || !l.base || !l.name) continue;
+          var replaced = false;
+          for (var j = 0; j < MEDIA_ADDONS.length; j++) {
+            if (MEDIA_ADDONS[j].name === l.name) { MEDIA_ADDONS[j].base = l.base; replaced = true; break; }
+          }
+          if (!replaced) fresh.push(l);
+        }
+        MEDIA_ADDONS = fresh.concat(MEDIA_ADDONS);
+        note('addons.local.json applied: ' + (fresh.length ? fresh.length + ' prepended, ' : '') + (locals.length - fresh.length) + ' replaced');
+      }
+      cb();
+    });
+  }
+
   // Aggregate catalogs across addons that declare the 'catalog' resource.
   function catalogs(cb) {
-    var per = {};
-    var pending = MEDIA_ADDONS.length;
-    if (!pending) return cb([]);
-    MEDIA_ADDONS.forEach(function (addon, ai) {
-      loadManifest(addon, function (m) {
-        if (m && hasResource(m, 'catalog') && m.catalogs && m.catalogs.length) {
-          per[ai] = [];
-          m.catalogs.forEach(function (c) {
-            if (!c || !c.type || !c.id) return;
-            per[ai].push({ addon: addon, type: c.type, id: c.id, label: (c.name || c.id) + ' · ' + c.type });
-          });
-        }
-        if (--pending === 0) cb(flatten(per));
+    withLocalAddons(function () {
+      var per = {};
+      var pending = MEDIA_ADDONS.length;
+      if (!pending) return cb([]);
+      MEDIA_ADDONS.forEach(function (addon, ai) {
+        loadManifest(addon, function (m) {
+          if (m && hasResource(m, 'catalog') && m.catalogs && m.catalogs.length) {
+            per[ai] = [];
+            m.catalogs.forEach(function (c) {
+              if (!c || !c.type || !c.id) return;
+              per[ai].push({ addon: addon, type: c.type, id: c.id, label: (c.name || c.id) + ' · ' + c.type });
+            });
+          }
+          if (--pending === 0) cb(flatten(per));
+        });
       });
     });
   }

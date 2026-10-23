@@ -115,6 +115,19 @@ var MEDIA_ADDONS = [
 - Streams are normalized to `{ name, label, sub, url, playable, kind }`. Anything that isn't a
   direct `http(s)` URL (torrent `infoHash`, `externalUrl`, `ytId`) comes back `playable:false`
   and the detail screen refuses it with a toast — the TV has no torrent engine.
+- **Secret-bearing addon URLs** (debrid-configured addons like
+  `https://torrentio.strem.fun/torbox=<key>` produced by
+  [torrentio.strem.fun/configure](https://torrentio.strem.fun/configure)) contain API keys —
+  keep them out of git. Drop a gitignored `addons.local.json` next to `index.html`:
+
+  ```json
+  {"addons": [{"name": "Torrentio", "base": "https://torrentio.strem.fun/torbox=<key>"}]}
+  ```
+
+  On the first `catalogs()` call the file is fetched once; entries whose `name` matches a
+  default entry replace its `base`, unknown names are prepended. Absent file → quiet no-op.
+  With a debrid-backed base, `stream/` responses become HTTPS `…/resolve/…` URLs the TV's
+  `<video>` can play directly.
 - Persisted state is one key, `localStorage["framed.media"]` = `{ catalog: <index> }` (the last
   selected catalog). Nothing heavier is cached; addon data is fetched fresh per visit.
 - **Degraded path is identical to `library.js`:** every request is XHR with a timeout
