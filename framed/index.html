@@ -43,6 +43,13 @@
           <span class="tile__label">Art</span>
           <span class="tile__sub">Matte &amp; frame</span>
         </button>
+        <button class="tile" data-focusable data-app="media" data-kind="screen" role="menuitem" tabindex="-1">
+          <span class="tile__mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="64" height="64"><rect x="8" y="12" width="48" height="40" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M8 24h48" stroke="currentColor" stroke-width="2.5"/><path d="M27 32l14 7-14 7z" fill="currentColor"/></svg>
+          </span>
+          <span class="tile__label">Media</span>
+          <span class="tile__sub">Streams &amp; catalog</span>
+        </button>
         <button class="tile" data-focusable data-app="settings" data-kind="screen" role="menuitem" tabindex="-1">
           <span class="tile__mark" aria-hidden="true">
             <svg viewBox="0 0 64 64" width="64" height="64"><path d="M12 20h40M12 32h40M12 44h40" stroke="currentColor" stroke-width="2.5"/><circle cx="24" cy="20" r="4" fill="var(--fr-color-surface)" stroke="currentColor" stroke-width="2.5"/><circle cx="42" cy="32" r="4" fill="var(--fr-color-surface)" stroke="currentColor" stroke-width="2.5"/><circle cx="30" cy="44" r="4" fill="var(--fr-color-surface)" stroke="currentColor" stroke-width="2.5"/></svg>
@@ -96,6 +103,70 @@
           <span class="hint"><kbd>Back</kbd> close</span>
         </footer>
       </aside>
+    </section>
+
+    <!-- ============ MEDIA: BROWSE ============ -->
+    <section id="screen-media" class="screen screen--media" data-screen="media" hidden>
+      <header class="mast mast--compact">
+        <div class="mast__brand">
+          <span class="mast__word">Media</span>
+        </div>
+        <div class="mast__crumb">framed / media</div>
+      </header>
+
+      <div class="media-browse">
+        <div class="media-cats" id="media-cats"></div>
+        <div class="status media-status" id="media-status" aria-live="polite"></div>
+        <div class="media-grid" id="media-grid"></div>
+      </div>
+
+      <footer class="hints">
+        <span class="hint"><kbd>◂ ▸</kbd> catalog</span>
+        <span class="hint"><kbd>▴ ▾</kbd> browse</span>
+        <span class="hint"><kbd>OK</kbd> open</span>
+        <span class="hint"><kbd>Back</kbd> home</span>
+      </footer>
+    </section>
+
+    <!-- ============ MEDIA: DETAIL ============ -->
+    <section id="screen-media-item" class="screen screen--media-item" data-screen="media-item" hidden>
+      <header class="mast mast--compact">
+        <div class="mast__brand">
+          <span class="mast__word">Media</span>
+        </div>
+        <div class="mast__crumb" id="md-crumb">framed / media</div>
+      </header>
+
+      <div class="media-detail">
+        <div class="media-detail__poster" id="md-poster" role="img" aria-label="Poster"></div>
+        <div class="media-detail__info">
+          <h2 class="media-detail__title" id="md-title"></h2>
+          <div class="media-detail__meta" id="md-meta"></div>
+          <p class="media-detail__desc" id="md-desc"></p>
+          <h3 class="media-detail__streams-head">Streams</h3>
+          <div class="media-streams" id="md-streams"></div>
+          <div class="status" id="md-status" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <footer class="hints">
+        <span class="hint"><kbd>▴ ▾</kbd> stream</span>
+        <span class="hint"><kbd>OK</kbd> play</span>
+        <span class="hint"><kbd>Back</kbd> catalog</span>
+      </footer>
+    </section>
+
+    <!-- ============ MEDIA: PLAYBACK ============ -->
+    <section id="screen-media-play" class="screen screen--media-play" data-screen="media-play" hidden>
+      <div class="media-player" id="mp-surface" data-focusable tabindex="-1" role="button" aria-label="Play or pause">
+        <video class="media-player__video" id="mp-video" playsinline></video>
+        <div class="media-player__status" id="mp-status" aria-live="polite"></div>
+      </div>
+
+      <footer class="hints">
+        <span class="hint"><kbd>OK</kbd> play / pause</span>
+        <span class="hint"><kbd>Back</kbd> stop</span>
+      </footer>
     </section>
 
     <!-- ============ SETTINGS ============ -->
@@ -174,6 +245,10 @@
   <script src="js/router.js"></script>
   <script src="js/screens/launcher.js"></script>
   <script src="js/screens/art.js"></script>
+  <script src="js/media.js"></script>     <!-- media source seam: Stremio addon protocol client + config block -->
+  <script src="js/screens/media.js"></script>
+  <script src="js/screens/media-item.js"></script>
+  <script src="js/screens/media-play.js"></script>
   <script src="js/screens/settings.js"></script>
   <script src="js/app.js"></script>
 </body>

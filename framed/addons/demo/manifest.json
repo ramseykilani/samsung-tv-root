@@ -1,0 +1,12 @@
+{
+  "id": "framed.demo",
+  "version": "1.0.0",
+  "name": "Local demo (bundled)",
+  "description": "Bundled offline catalog so the Media section works with no network. Uses the same Stremio addon protocol as remote addons — relative URLs resolve against the app root.",
+  "resources": ["catalog", "meta", "stream"],
+  "types": ["movie"],
+  "idPrefixes": ["demo"],
+  "catalogs": [
+    { "type": "movie", "id": "demo", "name": "Demo" }
+  ]
+}

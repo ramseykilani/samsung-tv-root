@@ -12,7 +12,7 @@ mechanics described here — not redesign an existing look.
 ```
 framed/
 ├── config.xml                 Tizen web-app manifest (wgt)
-├── index.html                 single page, three screens, hash routing, plain <script> tags
+├── index.html                 single page, six screens, hash routing, plain <script> tags
 ├── css/
 │   ├── theme-placeholder.css  ★ DESIGN SURFACE — every colour / font / radius / motion token
 │   └── app.css                layout + mechanics only; consumes the tokens, holds no literals
@@ -25,11 +25,15 @@ framed/
 │   ├── controls.js            declarative TV controls (range / choice / swatch / action rows)
 │   ├── nav.js                 d-pad focus engine (geometric nearest-in-direction)
 │   ├── router.js              #/launcher · #/art · #/settings
-│   ├── screens/launcher.js · art.js · settings.js
+│   ├── media.js               ★ MEDIA SOURCE SEAM — Stremio addon protocol client (catalog/meta/stream) + addon config block
+│   ├── screens/launcher.js · art.js · settings.js · media.js · media-item.js · media-play.js
 │   └── app.js                 boot
+├── addons/
+│   └── demo/                  bundled offline Stremio addon (manifest + catalog/meta/stream JSON)
 └── assets/
     ├── icon.png
-    └── art/                   bundled picture library (6 placeholder test cards, landscape + portrait + square)
+    ├── art/                   bundled picture library (6 placeholder test cards, landscape + portrait + square)
+    └── media/                 bundled demo clip (demo.mp4, served by the demo addon)
 ```
 
 ## What is mechanical-complete vs. left for the designer
@@ -38,7 +42,7 @@ framed/
 |---|---|---|
 | Routing | Hash routes, default = launcher, Back semantics (home = no-op; panel closes first) | — |
 | D-pad | Geometric focus engine, focus never lost, `Left/Right` adjust rows, pointer-remote hover, Tizen RETURN (10009) | Focus **look** (ring colour/width/scale are tokens) |
-| Launcher | 4 tiles (Stremio, YouTube, Art, Settings), external → `__tvBridge.launch`, clock | All visuals: tile art, iconography, typography, layout rhythm |
+| Launcher | 5 tiles (Stremio, YouTube, Art, Media, Settings), external → `__tvBridge.launch`, clock | All visuals: tile art, iconography, typography, layout rhythm |
 | Art | Matte width/bottom-weight/colour (8 presets + custom HSL), 5 frame styles, frame weight/tone, contain/cover with frame hugging the image, caption slot, persistence, panel focus-trap, `s` key, corner affordance reveal | Preset palette values, frame-style rendering refinement, caption typography, panel chrome, any motion |
 | Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / 30 s / hourly / daily, sequential / seeded shuffle, daily = day-of-epoch pick on open, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, "n of N" indicator in panel + Settings only, persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
 | Settings | Brightness + Art-floor ranges wired to the bridge and persisted, floor preview thumbnail, theme chooser with disabled "coming soon" slots, About | Real theme list and token blocks, all visuals |
@@ -52,6 +56,9 @@ framed/
 | `#/launcher` (default, home) | Tiles: Stremio · YouTube · Art · Settings | ◂ ▸ move · OK open · Back does nothing |
 | `#/art` | Fullscreen picture on a matte with a frame; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
 | `#/settings` | Brightness · Art Mode floor · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
+| `#/media` | Media browse: catalog picker + poster grid across the configured addons | ◂ ▸ switch catalog · ▴ ▾ browse grid · OK open item · Back → home |
+| `#/media-item` | Detail: poster, title, year/genres/rating, description, stream list | ▴ ▾ stream · OK play (or quiet refusal for unplayable sources) · Back → catalog |
+| `#/media-play` | Playback on the native HTML5 `<video>` | OK play/pause · Back → detail |
 
 Art options (persisted in `localStorage["framed.art"]`): artwork, image fit (contain hugs the image
 with the frame; cover fills the matte opening), matte width 0–30 % (of the shorter screen edge, each
@@ -77,6 +84,57 @@ Settings screen): **Rotate** off · every 30 s · hourly · daily; **Order** seq
 
 Settings (persisted in `localStorage["framed.settings"]`): brightness 0–100 and the Art Mode
 **ambient floor** 0–100 — the lowest level ambient dimming may take the art to (0 = fully black).
+
+## The media seam (`js/media.js`)
+
+The Media section is "our own Stremio": it speaks the public **Stremio addon protocol** to any
+HTTP addon base. Each addon is just a base URL — the same string that precedes
+`/manifest.json`:
+
+| Request | Response used |
+|---|---|
+| `GET <base>/manifest.json` | `resources[]` (which of `catalog`/`meta`/`stream` it serves), `catalogs[]` |
+| `GET <base>/catalog/<type>/<id>.json` | `metas[]` → poster grid items (`id`, `name`, `poster`, `releaseInfo`) |
+| `GET <base>/meta/<type>/<id>.json` | `meta{}` → detail fields (`description`, `runtime`, `genres`, `imdbRating`) |
+| `GET <base>/stream/<type>/<id>.json` | `streams[]` → normalized rows (`url` playable; `infoHash`/`externalUrl`/`ytId` not) |
+
+Configure addons in the **marked config block at the top of `js/media.js`** (same convention
+as `REMOTE_ART_BASE` in `js/library.js`):
+
+```js
+var MEDIA_ADDONS = [
+  { name: 'Cinemeta',   base: 'https://v3-cinemeta.strem.io' },  // official movie/series catalog + meta
+  { name: 'Torrentio',  base: 'https://torrentio.strem.fun' },   // stream results (torrents → unplayable)
+  { name: 'Local demo', base: 'addons/demo' }                    // bundled offline catalog
+];
+```
+
+- `addons/demo/` is a **bundled addon** served from the app itself — same protocol, relative
+  URLs — so Media works with zero network. Its one playable stream is `assets/media/demo.mp4`;
+  it also advertises a torrent row to exercise the unplayable-source path.
+- Streams are normalized to `{ name, label, sub, url, playable, kind }`. Anything that isn't a
+  direct `http(s)` URL (torrent `infoHash`, `externalUrl`, `ytId`) comes back `playable:false`
+  and the detail screen refuses it with a toast — the TV has no torrent engine.
+- Persisted state is one key, `localStorage["framed.media"]` = `{ catalog: <index> }` (the last
+  selected catalog). Nothing heavier is cached; addon data is fetched fresh per visit.
+- **Degraded path is identical to `library.js`:** every request is XHR with a timeout
+  (`MEDIA_TIMEOUT_MS`); unreachable hosts, non-2xx, malformed JSON → one `console.info` line
+  and a quiet status line / empty grid. No error UI, never blocks the rest of the app.
+- Search is not implemented (the protocol supports `extra` params and `search` catalogs — a
+  later pass can add an on-screen keyboard if wanted).
+
+### Tizen playback constraints
+
+- Playback is the TV's native HTML5 `<video>` — no external player, no MSE/EME libraries. On
+  Tizen 8 that means **H.264/H.265 in MP4/MKV-like containers and HLS where the firmware
+  exposes it**; anything else (`infoHash` torrents, `externalUrl` embeds, `ytId`) is refused
+  before it reaches the player.
+- A codec/container the engine rejects surfaces as a `MediaError` on `<video>` → the screen
+  shows a "Can't play this format on this TV" status line instead of crashing.
+- Remote `stremio`/`external` addon hosts must be reachable over HTTP(S); `config.xml` already
+  carries `<access origin="*"/>`. Manifest/catalog/stream JSON are read with XHR — addon
+  servers must send `Access-Control-Allow-Origin: *` (Cinemeta/Torrentio do; the bundled
+  `addons/demo` is same-origin anyway).
 
 ## The `__tvBridge` seam
 
