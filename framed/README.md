@@ -196,7 +196,7 @@ auto-generate it server-side; nothing is hand-maintained):
 - `file` is required (relative to the base URL, URL-encoded by the app). `title` and
   `orientation` (`landscape | portrait`) are optional; `title` falls back to the file name.
 - Configure the base in **one constant at the top of `js/library.js`**:
-  `REMOTE_ART_BASE = 'http://192.168.1.20:8080/art/'` (`''` = remote disabled, default).
+  `REMOTE_ART_BASE = 'http://<desktop-ip>:8080/art/'` (`''` = remote disabled, default).
   At boot the app GETs `<base>index.json` (cache-busted, 4 s timeout) and loads every image
   from `<base><file>`.
 - The server must send `Access-Control-Allow-Origin: *` on `index.json` (the manifest is read

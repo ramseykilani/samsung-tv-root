@@ -37,6 +37,21 @@ FORBIDDEN_SUFFIXES = {
     ".xz",
     ".zip",
 }
+# Media/font assets a shipped web app legitimately carries (framed/ posters, clips, icons).
+# They are exempt from the UTF-8 requirement but still checked for forbidden magic/suffixes.
+BINARY_ASSET_SUFFIXES = {
+    ".gif",
+    ".ico",
+    ".jpeg",
+    ".jpg",
+    ".mp3",
+    ".mp4",
+    ".png",
+    ".webm",
+    ".webp",
+    ".woff",
+    ".woff2",
+}
 FORBIDDEN_MAGIC = {
     b"\x7fELF": "ELF",
     b"MZ": "PE",
@@ -108,7 +123,8 @@ def audit() -> list[str]:
         try:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
-            failures.append(f"non-UTF-8 file is not allowed: {relative}")
+            if path.suffix.lower() not in BINARY_ASSET_SUFFIXES:
+                failures.append(f"non-UTF-8 file is not allowed: {relative}")
             continue
         for description, pattern in FORBIDDEN_TEXT.items():
             if pattern.search(text):
