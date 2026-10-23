@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any, Callable
 
-from .config import TelevisionConfiguration
+from .archive_root import AGENT_DIRECTORY
+from .config import GENERIC_MODEL_NAMES, TelevisionConfiguration
 from .root_agent import (
     RootAgentConnection,
     RootAgentProtocolError,
@@ -30,6 +31,7 @@ EVENT_AGENT_NAME = "SamsungTvEventAgent.dll"
 REMOTE_DIRECTORIES = {
     "qn90b": PurePosixPath("/home/owner/share/tmp/sdk_tools/samsung-tv-root/qn90b"),
     "qn90f": PurePosixPath("/home/owner/share/tmp/sdk_tools/qn90f-probe"),
+    **{model: AGENT_DIRECTORY for model in GENERIC_MODEL_NAMES},
 }
 STATE_KEYS = (
     "memory/appfw/current_fullscreen_appid",

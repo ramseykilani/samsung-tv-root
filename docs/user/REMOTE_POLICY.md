@@ -80,6 +80,12 @@ Packaged actions are:
 | `local_dimming.disable` | none |
 | `display.picture_off` | none |
 | `display.wake` | none |
+| `app.launch` | `app = "<package id>"` |
+
+`app.launch` is available on models using the generic (archive) root route —
+`archive`, `ls03d`, `ls03f`. Run `samsung-tv-root apps list my-tv` after
+rooting to discover the package ids installed on your TV (Stremio, YouTube,
+and the branded-button targets differ by region and firmware).
 
 The selected model adapter determines whether an action is available. A
 `proven_not_packaged` or `not_investigated` capability returns that explicit

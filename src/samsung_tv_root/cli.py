@@ -253,6 +253,40 @@ def command_service(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def command_bridge(arguments: argparse.Namespace) -> int:
+    from .bridge import bridge_token_path, run_bridge
+
+    art_dir = arguments.art_dir.expanduser().resolve()
+    if not art_dir.is_dir():
+        raise CommandError(f"art directory does not exist: {art_dir}")
+
+    async def main() -> None:
+        server, token = await run_bridge(
+            host=arguments.host,
+            port=arguments.port,
+            art_directory=art_dir,
+            control_file=arguments.control_file.expanduser().resolve(),
+            television=arguments.television,
+            timeout=arguments.timeout,
+        )
+        emit(
+            {
+                "listening": f"http://{arguments.host}:{arguments.port}",
+                "art": f"http://<this-host>:{arguments.port}/art/index.json",
+                "intent_endpoint": f"http://<this-host>:{arguments.port}/intent",
+                "bearer_token": token,
+                "token_file": str(
+                    bridge_token_path(arguments.control_file.expanduser().resolve())
+                ),
+            },
+            arguments.output,
+        )
+        await server.serve_forever()
+
+    asyncio.run(main())
+    return 0
+
+
 def command_controller_request(arguments: argparse.Namespace) -> int:
     request: dict[str, object] = {"action": arguments.controller_action}
     if getattr(arguments, "television", None) is not None:
@@ -266,6 +300,8 @@ def command_controller_request(arguments: argparse.Namespace) -> int:
         request["enabled"] = arguments.state == "enabled"
     if arguments.controller_action == "volume.set":
         request["level"] = arguments.level
+    if arguments.controller_action == "app.launch":
+        request["app"] = arguments.app
     if arguments.controller_action == "overlay.graphics":
         request["seconds"] = arguments.seconds
         if getattr(arguments, "message", None) is not None:
@@ -915,6 +951,24 @@ def build_parser() -> argparse.ArgumentParser:
         controller_action="volume.set",
     )
 
+    apps = commands.add_parser("apps")
+    apps_commands = apps.add_subparsers(dest="apps_command", required=True)
+    apps_list = apps_commands.add_parser("list")
+    apps_list.add_argument("television")
+    apps_list.add_argument("--timeout", type=float, default=20.0)
+    apps_list.set_defaults(
+        handler=command_controller_request,
+        controller_action="app.list",
+    )
+    apps_launch = apps_commands.add_parser("launch")
+    apps_launch.add_argument("television")
+    apps_launch.add_argument("app")
+    apps_launch.add_argument("--timeout", type=float, default=20.0)
+    apps_launch.set_defaults(
+        handler=command_controller_request,
+        controller_action="app.launch",
+    )
+
     screenshot = commands.add_parser("screenshot")
     screenshot.add_argument("television")
     screenshot.add_argument("path", type=Path)
@@ -942,6 +996,17 @@ def build_parser() -> argparse.ArgumentParser:
         handler=command_controller_request,
         controller_action="overlay.graphics",
     )
+
+    bridge = commands.add_parser(
+        "bridge",
+        help="serve the art share and a token-authed intent endpoint for voice/Alexa",
+    )
+    bridge.add_argument("--host", default="0.0.0.0")
+    bridge.add_argument("--port", type=int, default=8765)
+    bridge.add_argument("--art-dir", type=Path, required=True)
+    bridge.add_argument("--television")
+    bridge.add_argument("--timeout", type=float, default=20.0)
+    bridge.set_defaults(handler=command_bridge)
 
     events = commands.add_parser("events")
     events_commands = events.add_subparsers(dest="events_command", required=True)
@@ -1062,7 +1127,8 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("legacy_host", nargs="?", help=argparse.SUPPRESS)
         command.set_defaults(model=None)
         command.add_argument(
-            "--runtime", choices=("3.1", "6.0"),
+            "--runtime",
+            choices=("3.1", "6.0"),
             help="explicit target runtime when automatic discovery is unavailable",
         )
         command.add_argument("--callback-host")

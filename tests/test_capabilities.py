@@ -1,4 +1,10 @@
-from samsung_tv_root.capabilities import CapabilityState, TelevisionCapabilities
+import asyncio
+
+from samsung_tv_root.capabilities import (
+    CapabilityError,
+    CapabilityState,
+    TelevisionCapabilities,
+)
 from samsung_tv_root.config import RemoteConfiguration, TelevisionConfiguration
 
 
@@ -49,3 +55,64 @@ def test_inventory_includes_daemon_and_remote_capabilities() -> None:
     assert states["remote.filter"] == "implemented"
     assert states["volume.events"] == "implemented"
     assert states["events.tv_state"] == "implemented"
+
+
+def test_ls03d_inventory_implements_apps_and_marks_adapter_gaps() -> None:
+    inventory = TelevisionCapabilities(television("ls03d")).inventory()
+    states = {item["name"]: item["state"] for item in inventory}
+    assert states["app.list"] == "implemented"
+    assert states["app.launch"] == "implemented"
+    assert states["volume.status"] == "implemented"
+    assert states["remote.filter"] == "implemented"
+    assert states["source.select"] == "not_investigated"
+    assert states["local_dimming.toggle"] == "not_investigated"
+    assert states["display.picture_off"] == "not_investigated"
+    assert states["screenshot.hdmi_960x540"] == "not_investigated"
+    assert all(state != "unavailable" for state in states.values())
+
+
+class _StubResult:
+    def __init__(self, exit_code: int = 0, stdout: str = "", stderr: str = "") -> None:
+        self.exit_code = exit_code
+        self.timed_out = False
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+class _StubConnection:
+    def __init__(self, results: list[_StubResult]) -> None:
+        self.results = results
+        self.commands: list[str] = []
+
+    async def execute(self, command: str, timeout: float) -> _StubResult:
+        self.commands.append(command)
+        return self.results.pop(0)
+
+
+def test_ls03d_app_list_and_launch() -> None:
+    capabilities = TelevisionCapabilities(television("ls03d"))
+    list_connection = _StubConnection(
+        [_StubResult(stdout="pkgid=[org.stremio.one]\nNFLXOldModel\n")]
+    )
+    listed = asyncio.run(capabilities.handle(list_connection, "app.list", {}))
+    assert [app["app_id"] for app in listed["apps"]] == [
+        "org.stremio.one",
+        "NFLXOldModel",
+    ]
+    launch_connection = _StubConnection([_StubResult(stdout="launched\n")])
+    launched = asyncio.run(
+        capabilities.handle(launch_connection, "app.launch", {"app": "org.stremio.one"})
+    )
+    assert launched["launch"]["app_id"] == "org.stremio.one"
+    assert launched["launch"]["launcher"] == "app_launcher"
+    assert "org.stremio.one" in launch_connection.commands[0]
+
+
+def test_ls03d_adapter_bound_action_reports_gap() -> None:
+    capabilities = TelevisionCapabilities(television("ls03d"))
+    try:
+        asyncio.run(capabilities.handle(_StubConnection([]), "source.list", {}))
+    except CapabilityError as error:
+        assert "not_investigated" in str(error)
+    else:  # pragma: no cover - assertion guard
+        raise AssertionError("expected CapabilityError")

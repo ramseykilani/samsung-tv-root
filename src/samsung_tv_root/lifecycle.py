@@ -6,8 +6,13 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .archive_root import ArchiveRootLease, acquire as archive_root_acquire
 from .compatibility import QN90F_PROFILE, TargetCompatibilityError
-from .config import RetryConfiguration, TelevisionConfiguration
+from .config import (
+    GENERIC_MODEL_NAMES,
+    RetryConfiguration,
+    TelevisionConfiguration,
+)
 from .qn90b import (
     Qn90bRootAcquirer,
     Qn90bRootLease,
@@ -176,11 +181,47 @@ class Qn90fRootBackend:
         return f"/usr/bin/dotnet {REMOTE_PROBE_PATH} disable-uep"
 
 
+class ArchiveRootBackend:
+    """Persistent root over the model-independent SDK archive-launcher route.
+
+    Used by the generic model profiles ("archive", "ls03d", "ls03f") — the
+    TV-side prerequisite checks in archive_root._check_target decide
+    compatibility instead of a build-specific kernel exploit.
+    """
+
+    def __init__(self, configuration: TelevisionConfiguration) -> None:
+        self.configuration = configuration
+
+    async def acquire(self, host: str) -> ArchiveRootLease:
+        callback_host = route_callback_host(host)
+        return await archive_root_acquire(
+            host,
+            model=self.configuration.model,
+            callback_host=callback_host,
+            bind_host=callback_host,
+            accept_timeout=20.0,
+        )
+
+    def is_transient(self, error: BaseException) -> bool:
+        return isinstance(
+            error,
+            (
+                SdbError,
+                RootAgentUnavailableError,
+                TimeoutError,
+                ConnectionError,
+                OSError,
+            ),
+        )
+
+
 def root_backend(configuration: TelevisionConfiguration) -> RootBackend:
     if configuration.model == "qn90b":
         return Qn90bRootBackend(configuration)
     if configuration.model == "qn90f":
         return Qn90fRootBackend(configuration)
+    if configuration.model in GENERIC_MODEL_NAMES:
+        return ArchiveRootBackend(configuration)
     raise RootLifecycleError(f"unsupported model: {configuration.model}")
 
 

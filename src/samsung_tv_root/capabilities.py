@@ -4,7 +4,8 @@ import base64
 from enum import Enum
 from typing import Any
 
-from .config import TelevisionConfiguration
+from .apps import AppControlError, TizenAppControl
+from .config import GENERIC_MODEL_NAMES, TelevisionConfiguration
 from .capture import CaptureError, Qn90fCaptureControl
 from .display import (
     DisplayControlError,
@@ -76,7 +77,50 @@ MODEL_ACTION_CAPABILITIES = {
         "screenshot.hdmi_960x540",
         "overlay.graphics",
     ),
+    **{
+        model: (
+            "app.list",
+            "app.launch",
+        )
+        for model in GENERIC_MODEL_NAMES
+    },
 }
+
+GENERIC_IMPLEMENTED_CAPABILITIES = (
+    "root.acquire",
+    "execute",
+    "uep.status",
+    "uep.disable",
+    "remote.devices",
+    "remote.observe",
+    "remote.filter",
+    "volume.status",
+    "volume.set",
+    "volume.events",
+    "events.tv_state",
+    "app.list",
+    "app.launch",
+)
+
+# Actions that need a model-specific adapter (Tizen service interface, panel
+# control, or capture path). On generic models they report not_investigated.
+ADAPTER_BOUND_ACTIONS = (
+    "source.list",
+    "source.current",
+    "source.select",
+    "source.recover",
+    "hdmi_policy.status",
+    "hdmi_policy.enforce",
+    "video_policy.status",
+    "local_dimming.status",
+    "local_dimming.set",
+    "local_dimming.toggle",
+    "display.status",
+    "display.picture_off",
+    "display.wake",
+    "screenshot.hdmi_960x540",
+    "overlay.graphics",
+)
 
 SHARED_CAPABILITY_GAPS: dict[str, tuple[CapabilityState, str]] = {}
 
@@ -109,22 +153,45 @@ QN90B_CAPABILITY_GAPS = {
 
 QN90F_CAPABILITY_GAPS: dict[str, tuple[CapabilityState, str]] = {}
 
+GENERIC_CAPABILITY_GAPS: dict[str, tuple[CapabilityState, str]] = {
+    action: (
+        CapabilityState.NOT_INVESTIGATED,
+        "This action needs a model-specific adapter that has not been "
+        "validated on this Tizen model.",
+    )
+    for action in ADAPTER_BOUND_ACTIONS
+}
+
+
+def _model_gaps(model: str) -> dict[str, tuple[CapabilityState, str]]:
+    if model == "qn90b":
+        return QN90B_CAPABILITY_GAPS
+    if model == "qn90f":
+        return QN90F_CAPABILITY_GAPS
+    return GENERIC_CAPABILITY_GAPS
+
 
 class TelevisionCapabilities:
     def __init__(self, configuration: TelevisionConfiguration) -> None:
         self.configuration = configuration
         if configuration.model == "qn90f":
-            self.source = Qn90fSourceControl()
-            self.display = Qn90fDisplayControl()
-            self.capture = Qn90fCaptureControl(self.source)
-            self.overlay = Qn90fOverlayControl()
+            self.source: Any = Qn90fSourceControl()
+            self.display: Any = Qn90fDisplayControl()
+            self.capture: Any = Qn90fCaptureControl(self.source)
+            self.overlay: Any = Qn90fOverlayControl()
         elif configuration.model == "qn90b":
             self.source = Qn90bSourceControl()
             self.display = Qn90bDisplayControl()
             self.capture = None
             self.overlay = None
+        elif configuration.model in GENERIC_MODEL_NAMES:
+            self.source = None
+            self.display = None
+            self.capture = None
+            self.overlay = None
         else:
             raise CapabilityError(f"unsupported model: {configuration.model}")
+        self.apps = TizenAppControl()
         store = LocalDimmingModeStore(
             default_local_dimming_state_path(configuration.name)
         )
@@ -132,33 +199,40 @@ class TelevisionCapabilities:
         self.volume = SamsungTvVolumeControl()
 
     def names(self) -> tuple[str, ...]:
-        shared_actions = (
-            "source.list",
-            "source.current",
-            "source.select",
-            "local_dimming.status",
-            "local_dimming.set",
-            "local_dimming.toggle",
-            "volume.status",
-            "volume.set",
-        )
+        if self.configuration.model in GENERIC_MODEL_NAMES:
+            shared_actions: tuple[str, ...] = (
+                "volume.status",
+                "volume.set",
+            )
+        else:
+            shared_actions = (
+                "source.list",
+                "source.current",
+                "source.select",
+                "local_dimming.status",
+                "local_dimming.set",
+                "local_dimming.toggle",
+                "volume.status",
+                "volume.set",
+            )
         return shared_actions + MODEL_ACTION_CAPABILITIES[self.configuration.model]
 
     def inventory(self) -> list[dict[str, str]]:
-        implemented_names = (
-            SHARED_IMPLEMENTED_CAPABILITIES
-            + MODEL_ACTION_CAPABILITIES[self.configuration.model]
-        )
+        if self.configuration.model in GENERIC_MODEL_NAMES:
+            implemented_names = GENERIC_IMPLEMENTED_CAPABILITIES
+        else:
+            implemented_names = (
+                SHARED_IMPLEMENTED_CAPABILITIES
+                + MODEL_ACTION_CAPABILITIES[self.configuration.model]
+            )
         implemented = [
             {"name": name, "state": CapabilityState.IMPLEMENTED.value}
             for name in implemented_names
         ]
-        model_gaps = (
-            QN90B_CAPABILITY_GAPS
-            if self.configuration.model == "qn90b"
-            else QN90F_CAPABILITY_GAPS
-        )
-        gaps = {**SHARED_CAPABILITY_GAPS, **model_gaps}
+        gaps = {
+            **SHARED_CAPABILITY_GAPS,
+            **_model_gaps(self.configuration.model),
+        }
         return implemented + [
             {
                 "name": name,
@@ -177,6 +251,7 @@ class TelevisionCapabilities:
         try:
             return await self._handle(connection, action, request)
         except (
+            AppControlError,
             CaptureError,
             DisplayControlError,
             LocalDimmingControlError,
@@ -194,6 +269,15 @@ class TelevisionCapabilities:
     ) -> dict[str, Any]:
         if action == "capabilities":
             return {"capabilities": self.inventory()}
+        if action == "app.list":
+            apps = await self.apps.list_apps(connection)
+            return {"apps": [app.to_dict() for app in apps]}
+        if action == "app.launch":
+            app_id = self._required_string(request.get("app"), "app")
+            launch = await self.apps.launch_app(connection, app_id)
+            return {"launch": launch.to_dict()}
+        if self.source is None and action in ADAPTER_BOUND_ACTIONS:
+            self._require(action)
         if action == "source.list":
             devices = await self.source.list_sources(connection)
             return {"sources": [device.to_dict() for device in devices]}
@@ -346,12 +430,10 @@ class TelevisionCapabilities:
 
     def _require(self, action: str) -> None:
         if action not in self.names():
-            model_gaps = (
-                QN90B_CAPABILITY_GAPS
-                if self.configuration.model == "qn90b"
-                else QN90F_CAPABILITY_GAPS
-            )
-            state, detail = {**SHARED_CAPABILITY_GAPS, **model_gaps}.get(
+            state, detail = {
+                **SHARED_CAPABILITY_GAPS,
+                **_model_gaps(self.configuration.model),
+            }.get(
                 action,
                 (
                     CapabilityState.NOT_INVESTIGATED,

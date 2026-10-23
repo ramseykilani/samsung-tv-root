@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import ipaddress
 import json
@@ -15,19 +16,35 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from .resources import payload_directory
-from .root_agent import RootAgentServer, generate_secret, write_secret
+from .root_agent import (
+    RootAgentConnection,
+    RootAgentServer,
+    generate_secret,
+    write_secret,
+)
 from .sdb import CaptureResult, SdbClient, SdbError, find_sdb, route_callback_host
 
 
 STAGING_ROOT = PurePosixPath("/home/owner/share/tmp/sdk_tools")
 ON_DEMAND = STAGING_ROOT / "on-demand"
+# Fixed on-TV directory for persistent root-agent sessions. The remote-input
+# and native-event helpers resolve the same path from REMOTE_DIRECTORIES.
+AGENT_DIRECTORY = STAGING_ROOT / "samsung-tv-root"
 PAYLOAD_FILES = (
     "SamsungTvArchiveRoot.dll",
     "SamsungTvRootAgent.dll",
 )
+AGENT_PAYLOAD_FILES = PAYLOAD_FILES + (
+    "SamsungTvRemoteInputAgent.dll",
+    "SamsungTvEventAgent.dll",
+)
 RUNTIME_CONFIG_FILES = (
     "SamsungTvArchiveRoot.runtimeconfig.json",
     "SamsungTvRootAgent.runtimeconfig.json",
+)
+AGENT_RUNTIME_CONFIG_FILES = RUNTIME_CONFIG_FILES + (
+    "SamsungTvRemoteInputAgent.runtimeconfig.json",
+    "SamsungTvEventAgent.runtimeconfig.json",
 )
 SYSTEM_HASH_COMMAND = "sha256sum /etc/passwd /usr/share/sdbd/public.pem"
 
@@ -158,8 +175,9 @@ def _prepare_artifacts(
     callback_host: str,
     callback_port: int,
     secret: bytes,
+    staging: PurePosixPath,
+    runtime_config_files: tuple[str, ...] = RUNTIME_CONFIG_FILES,
 ) -> None:
-    staging = STAGING_ROOT / package
     private_key = directory / "private.pem"
     public_key = directory / "public.pem"
     archive = directory / f"{package}.tar.gz"
@@ -188,7 +206,7 @@ def _prepare_artifacts(
             },
         }
     }
-    for name in RUNTIME_CONFIG_FILES:
+    for name in runtime_config_files:
         (directory / name).write_text(
             json.dumps(runtime_config) + "\n", encoding="ascii"
         )
@@ -224,16 +242,23 @@ def _prepare_artifacts(
     )
 
 
-def _stage(client: SdbClient, directory: Path, payloads: Path, package: str) -> None:
-    staging = STAGING_ROOT / package
+def _stage(
+    client: SdbClient,
+    directory: Path,
+    payloads: Path,
+    package: str,
+    staging: PurePosixPath,
+    payload_files: tuple[str, ...] = PAYLOAD_FILES,
+    runtime_config_files: tuple[str, ...] = RUNTIME_CONFIG_FILES,
+) -> None:
     _capture(client, f"/bin/mkdir -p {staging}")
     _capture(client, f"/bin/mkdir -p {ON_DEMAND}")
-    for name in PAYLOAD_FILES:
+    for name in payload_files:
         source = payloads / name
         if not source.is_file():
             raise ArchiveRootError(f"missing payload {source}")
         client.push(source, staging / name)
-    for name in RUNTIME_CONFIG_FILES:
+    for name in runtime_config_files:
         client.push(directory / name, staging / name)
     for name in ("public.pem", "passwd", "root-agent.token"):
         client.push(directory / name, staging / name)
@@ -245,8 +270,7 @@ def _stage(client: SdbClient, directory: Path, payloads: Path, package: str) -> 
     )
 
 
-def _cleanup(client: SdbClient, package: str) -> bool:
-    staging = STAGING_ROOT / package
+def _cleanup(client: SdbClient, staging: PurePosixPath, package: str) -> bool:
     archive = ON_DEMAND / f"{package}.tar.gz"
     signature = ON_DEMAND / f"{package}.tar.gz.signature"
     _capture(client, f"/bin/rm -rf {staging}")
@@ -256,6 +280,161 @@ def _cleanup(client: SdbClient, package: str) -> bool:
         if _capture(client, f"test ! -e {path} && echo absent") != "absent":
             return False
     return True
+
+
+class ArchiveRootLease:
+    """A live archive-route root session.
+
+    Closing shuts the TV-side agent down, releases the host listener, and
+    removes this session's on-TV staging files best-effort.
+    """
+
+    def __init__(
+        self,
+        client: SdbClient,
+        server: RootAgentServer,
+        connection: RootAgentConnection,
+        launch_task: asyncio.Task[CaptureResult] | None,
+        staging: PurePosixPath,
+        package: str,
+        assessment: TargetAssessment,
+    ) -> None:
+        self.client = client
+        self.server = server
+        self.connection = connection
+        self.launch_task = launch_task
+        self.staging = staging
+        self.package = package
+        self.assessment = assessment
+
+    async def shutdown(self) -> None:
+        if not self.connection.closed:
+            with contextlib.suppress(Exception):
+                await self.connection.shutdown()
+
+    async def close(self) -> None:
+        with contextlib.suppress(Exception):
+            await self.shutdown()
+        with contextlib.suppress(Exception):
+            await self.connection.close()
+        await self.server.close()
+        if self.launch_task is not None and not self.launch_task.done():
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(
+                    asyncio.shield(self.launch_task), timeout=5
+                )
+        with contextlib.suppress(Exception):
+            await asyncio.to_thread(_cleanup, self.client, self.staging, self.package)
+
+
+async def acquire(
+    tv_host: str,
+    *,
+    model: str | None = None,
+    runtime: str | None = None,
+    callback_host: str | None = None,
+    bind_host: str | None = None,
+    sdb_timeout: float = 15.0,
+    accept_timeout: float = 30.0,
+    payloads: Path | None = None,
+) -> ArchiveRootLease:
+    """Acquire a persistent archive-route root session.
+
+    Unlike ``probe`` this keeps the staged agent files and the authenticated
+    root connection open for the caller's lifetime (the daemon uses it to run
+    remote-input and native-event agents for generic Tizen models).
+    """
+    ipaddress.IPv4Address(tv_host)
+    callback = callback_host or route_callback_host(tv_host)
+    ipaddress.IPv4Address(callback)
+    bind = bind_host or callback
+    ipaddress.IPv4Address(bind)
+    client = SdbClient(find_sdb(), tv_host, timeout=sdb_timeout)
+    assessment = await asyncio.to_thread(_check_target, client, runtime)
+    payloads = payloads or payload_directory(
+        "common31" if assessment.runtime == "3.1" else "common"
+    )
+    for name in AGENT_PAYLOAD_FILES:
+        if not (payloads / name).is_file():
+            build_target = (
+                "common31-payload" if assessment.runtime == "3.1" else "common-payload"
+            )
+            raise ArchiveRootError(
+                f"missing payload {payloads / name}; re-extract the release or "
+                f"run 'make {build_target}' in the source checkout"
+            )
+    package = "archive-root-" + secrets.token_hex(8)
+    server = RootAgentServer(bind, 0, tv_host, generate_secret(), require_root=True)
+    await server.start()
+    launch_task: asyncio.Task[CaptureResult] | None = None
+    staged = False
+    try:
+        with tempfile.TemporaryDirectory(prefix="samsung-tv-archive-root-") as temp:
+            directory = Path(temp)
+            _prepare_artifacts(
+                directory,
+                assessment.runtime,
+                package,
+                callback,
+                server.listening_port,
+                server.secret,
+                AGENT_DIRECTORY,
+                AGENT_RUNTIME_CONFIG_FILES,
+            )
+            await asyncio.to_thread(
+                _stage,
+                client,
+                directory,
+                payloads,
+                package,
+                AGENT_DIRECTORY,
+                AGENT_PAYLOAD_FILES,
+                AGENT_RUNTIME_CONFIG_FILES,
+            )
+            staged = True
+            command = (
+                f"/usr/bin/dotnet {AGENT_DIRECTORY}/SamsungTvArchiveRoot.dll "
+                f"{package}"
+            )
+            launch_task = asyncio.create_task(
+                asyncio.to_thread(
+                    client.capture,
+                    command,
+                    callback_host=callback,
+                    bind_host=bind,
+                    timeout=accept_timeout + 20,
+                )
+            )
+            connection = await server.accept(accept_timeout)
+            try:
+                await connection.ping()
+            except BaseException:
+                with contextlib.suppress(Exception):
+                    await connection.shutdown()
+                await connection.close()
+                raise
+            return ArchiveRootLease(
+                client,
+                server,
+                connection,
+                launch_task,
+                AGENT_DIRECTORY,
+                package,
+                assessment,
+            )
+    except Exception as error:
+        if launch_task is not None and not launch_task.done():
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(asyncio.shield(launch_task), timeout=5)
+        if staged:
+            with contextlib.suppress(ArchiveRootError, SdbError):
+                await asyncio.to_thread(_cleanup, client, AGENT_DIRECTORY, package)
+        await server.close()
+        if isinstance(error, ArchiveRootError):
+            raise
+        raise ArchiveRootError(
+            f"archive root acquisition failed: {error}"
+        ) from error
 
 
 async def probe(
@@ -291,6 +470,7 @@ async def probe(
                 f"run 'make {build_target}' in the source checkout"
             )
     package = "archive-root-" + secrets.token_hex(8)
+    staging = STAGING_ROOT / package
     staging_started = False
     launch_task: asyncio.Task[CaptureResult] | None = None
     server = RootAgentServer(bind, 0, tv_host, generate_secret(), require_root=True)
@@ -305,11 +485,14 @@ async def probe(
                 callback,
                 server.listening_port,
                 server.secret,
+                staging,
             )
             staging_started = True
-            await asyncio.to_thread(_stage, client, directory, payloads, package)
+            await asyncio.to_thread(
+                _stage, client, directory, payloads, package, staging
+            )
             command = (
-                f"/usr/bin/dotnet {STAGING_ROOT / package}/SamsungTvArchiveRoot.dll "
+                f"/usr/bin/dotnet {staging}/SamsungTvArchiveRoot.dll "
                 f"{package}"
             )
             launch_task = asyncio.create_task(
@@ -326,7 +509,7 @@ async def probe(
             except Exception as error:
                 log_result = await asyncio.to_thread(
                     client.capture,
-                    f"/bin/cat {STAGING_ROOT / package}/launcher.log",
+                    f"/bin/cat {staging}/launcher.log",
                     timeout=10,
                 )
                 log = log_result.output.strip()
@@ -389,7 +572,7 @@ async def probe(
         cleaned = False
         if staging_started:
             try:
-                cleaned = await asyncio.to_thread(_cleanup, client, package)
+                cleaned = await asyncio.to_thread(_cleanup, client, staging, package)
             except (ArchiveRootError, SdbError):
                 pass
         final_hashes = await asyncio.to_thread(_capture, client, SYSTEM_HASH_COMMAND)
@@ -401,5 +584,5 @@ async def probe(
             if not evidence["system_files_unchanged"] or not cleaned:
                 raise ArchiveRootError(
                     "root callback succeeded, but system-file or cleanup checks failed; "
-                    f"staging={STAGING_ROOT / package}"
+                    f"staging={staging}"
                 )

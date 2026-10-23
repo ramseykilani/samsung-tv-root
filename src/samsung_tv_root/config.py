@@ -10,7 +10,11 @@ from typing import Any
 
 
 CONFIGURATION_VERSION = 1
-MODEL_NAMES = frozenset({"qn90b", "qn90f"})
+# "archive" is the generic model: it roots any Tizen TV through the
+# model-independent SDK archive-launcher route instead of a kernel exploit.
+# "ls03d"/"ls03f" are named aliases for the Samsung Frame (Tizen 8.0/9.0).
+GENERIC_MODEL_NAMES = frozenset({"archive", "ls03d", "ls03f"})
+MODEL_NAMES = frozenset({"qn90b", "qn90f"}) | GENERIC_MODEL_NAMES
 REMOTE_ACTION_NAMES = frozenset(
     {
         "suppress",
@@ -22,6 +26,7 @@ REMOTE_ACTION_NAMES = frozenset(
         "local_dimming.disable",
         "display.picture_off",
         "display.wake",
+        "app.launch",
     }
 )
 NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -50,6 +55,7 @@ class RemoteRuleConfiguration:
     code: int | None = None
     device: str | None = None
     source: str | None = None
+    app: str | None = None
     event: str = "down"
 
 
@@ -323,7 +329,7 @@ def _parse_remote_rule(
     table = _table(value, path)
     _reject_unknown(
         table,
-        {"action", "key", "code", "device", "source", "event"},
+        {"action", "key", "code", "device", "source", "app", "event"},
         path,
     )
     action = _string(table.get("action"), f"{path}.action")
@@ -354,6 +360,11 @@ def _parse_remote_rule(
         "hdmi_policy.enforce",
     }:
         raise ConfigurationError(f"{path}.source is not valid for {action}")
+    app = _optional_string(table.get("app"), f"{path}.app")
+    if action == "app.launch" and app is None:
+        raise ConfigurationError(f"{path}.app is required for app.launch")
+    if app is not None and action != "app.launch":
+        raise ConfigurationError(f"{path}.app is not valid for {action}")
     device = _optional_string(table.get("device"), f"{path}.device")
     return RemoteRuleConfiguration(
         action=action,
@@ -361,6 +372,7 @@ def _parse_remote_rule(
         code=code,
         device=device,
         source=source,
+        app=app,
         event=event,
     )
 

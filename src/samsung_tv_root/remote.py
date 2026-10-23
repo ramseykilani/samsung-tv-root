@@ -14,7 +14,9 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any, Awaitable, Callable
 
+from .archive_root import AGENT_DIRECTORY
 from .config import (
+    GENERIC_MODEL_NAMES,
     RemoteConfiguration,
     RemoteDeviceConfiguration,
     RemoteRuleConfiguration,
@@ -36,6 +38,7 @@ REMOTE_AGENT_NAME = "SamsungTvRemoteInputAgent.dll"
 REMOTE_DIRECTORIES = {
     "qn90b": PurePosixPath("/home/owner/share/tmp/sdk_tools/samsung-tv-root/qn90b"),
     "qn90f": PurePosixPath("/home/owner/share/tmp/sdk_tools/qn90f-probe"),
+    **{model: AGENT_DIRECTORY for model in GENERIC_MODEL_NAMES},
 }
 
 
@@ -670,6 +673,8 @@ def _capability_request(
         return "local_dimming.set", {"enabled": True}
     if rule.action == "local_dimming.disable":
         return "local_dimming.set", {"enabled": False}
+    if rule.action == "app.launch":
+        return rule.action, {"app": rule.app}
     return rule.action, {}
 
 
