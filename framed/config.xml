@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  framed — Tizen TV web application manifest (packaged as framed.wgt).
+  Widget id is the reverse-DNS app id requested by the product (com.framed.launcher).
+  Tizen additionally requires a 10-character alphanumeric package id; `cmfrmdlnch` is
+  that package id and `cmfrmdlnch.framed` is the Tizen application id derived from it.
+-->
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://com.framed.launcher"
+        version="0.1.0"
+        viewmodes="maximized">
+  <name>framed</name>
+  <description>Launcher and art mode for a Samsung Frame TV (design-agnostic skeleton).</description>
+  <author email="dev@framed.local">framed</author>
+  <license>MIT</license>
+
+  <tizen:application id="cmfrmdlnch.framed"
+                     package="cmfrmdlnch"
+                     required_version="8.0"/>
+  <tizen:profile name="tv-samsung"/>
+
+  <content src="index.html"/>
+  <icon src="assets/icon.png"/>
+  <feature name="http://tizen.org/feature/screen.size.all"/>
+
+  <!-- Deliver the remote's RETURN (keyCode 10009) to the page instead of exiting the app. -->
+  <tizen:setting screen-orientation="landscape"
+                 context-menu="disable"
+                 background-support="disable"
+                 encryption="disable"
+                 install-location="auto"
+                 hwkey-event="enable"/>
+
+  <!-- Needed by the real __tvBridge.launch() (tizen.application.launch / launchAppControl). -->
+  <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+  <!-- Needed by the real __tvBridge.setBrightness()/setArtFloor() path (Samsung product/display APIs). -->
+  <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+
+  <!-- Only js/library.js may reach the network: the optional LAN art folder (REMOTE_ART_BASE). Everything else is offline. -->
+  <access origin="*" subdomains="true"/>
+</widget>
