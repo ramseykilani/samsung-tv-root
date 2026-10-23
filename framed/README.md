@@ -181,13 +181,28 @@ The **Stream** tile launches the Moonlight game-streaming client installed on th
 
 ### The .wgt artifact
 
-Use the upstream release directly — no fork or rebuild needed for this TV:
+Use `Moonlight-Frame.wgt` — upstream **v1.19.0** repackaged with defaults tuned for the
+LS03D setup (1440p host display, 120 Hz PC + 120 Hz panel, Wi-Fi 5 GHz to the TV):
 
-- Download `Moonlight.wgt` from the latest
-  [brightcraft/moonlight-tizen release](https://github.com/brightcraft/moonlight-tizen/releases)
-  (verified: **v1.19.0**; its `config.xml` declares `required_version="5.5"`, so Tizen 8.0 is
-  inside its supported range). Use the standard `Moonlight.wgt`, **not**
-  `Moonlight-ForceGM.wgt` — that variant only exists for a Tizen 9.0 Game Mode regression.
+- **2560×1440** stream resolution (native match to the PC's display; the TV upscales to 4K)
+- **120 FPS** (both the PC display and the Frame's panel are 120 Hz; `Unlock all FPS`
+  defaults to ON so the option is selectable)
+- **HEVC** video codec (~40% less bitrate than the stock H.264 default at equal quality;
+  the Frame's decoder and Sunshine/NVENC both prefer it)
+- **50 Mbps** bitrate (vs stock 10 Mbps — far below Wi-Fi 5 GHz capacity)
+- **Game Mode** (Ultra-Low Latency) already defaults to ON on Tizen 8 in upstream code —
+  unchanged.
+
+Stock upstream defaults (720p / 60 fps / H.264 / 10 Mbps) are very conservative for this
+hardware. To rebuild the tuned package: unpack `Moonlight.wgt`, patch the
+`data-value`/`value` attributes in `index.html` and the `defaultResolution` /
+`defaultFramerate` / `defaultBitrate` / `defaultVideoCodec` / `defaultUnlockAllFps`
+constants in `platform/index.js`, drop the stale `signature1.xml`/`author-signature.xml`,
+re-zip. Alternatively download the standard `Moonlight.wgt` from
+[brightcraft/moonlight-tizen releases](https://github.com/brightcraft/moonlight-tizen/releases)
+and set the same values in the app's Settings — use the standard `Moonlight.wgt`, **not**
+`Moonlight-ForceGM.wgt` (that variant only exists for a Tizen 9.0 Game Mode regression).
+
 - **Tizen 8.0 caveat — signature, not code:** 2024-model TVs reject the prebuilt
   signature with `[118, -12] Invalid certificate chain`. The package must be **re-signed
   during install**; this is automatic with Apps2Samsung (below) and asks you to sign in
@@ -236,10 +251,12 @@ the `.wgt` with `tizen install`. Same signing requirement, more manual steps.
 - **Network:** the Frame's built-in Ethernet port is only 100 Mbps and can drop bursts at
   high bitrates. Keep the Moonlight bitrate ≤ ~50 Mbps on wired, or use 5 GHz Wi-Fi for
   4K/60. On the host, wired gigabit is strongly recommended.
-- **Game Mode:** Tizen 8 has no Game Mode regression (that is Tizen 9+); enabling
-  Moonlight's Game Mode (Ultra Low Latency) is optional.
-- Not verified on real hardware in this repo — the app itself is the unmodified upstream
-  release; report issues upstream on their Discord/issue tracker.
+- **Game Mode:** Tizen 8 has no Game Mode regression (that is Tizen 9+); the tuned build
+  defaults Game Mode (Ultra-Low Latency) to ON — turn it off in Settings if the image
+  looks different than expected.
+- Not verified on real hardware in this repo — the tuned build only changes settings
+  defaults on top of upstream v1.19.0; report functional issues upstream on their
+  Discord/issue tracker.
 
 ## Preview on a desktop
 
