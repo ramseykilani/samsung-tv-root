@@ -98,7 +98,7 @@ def _json_response(status: int, payload: dict[str, Any]) -> tuple[int, bytes, st
 def _scan_art(directory: Path) -> dict[str, Any]:
     images = []
     if directory.is_dir():
-        for entry in sorted(directory.iterdir()):
+        for entry in sorted(directory.iterdir(), key=lambda e: e.name):
             if entry.is_file() and entry.suffix.lower() in IMAGE_SUFFIXES:
                 images.append(
                     {
