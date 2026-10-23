@@ -53,6 +53,8 @@ window.framed = window.framed || {};
       });
       streamsEl.appendChild(row);
     });
+    // streams landed after enter()'s setScope — claim focus if the screen has none
+    if (!F.nav.current()) F.nav.setScope(el, { remember: true });
   }
 
   F.router.register('media-item', {

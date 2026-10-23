@@ -1,87 +1,80 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="placeholder">
+<html lang="en" data-theme="mhach">
 <head>
   <meta charset="utf-8">
-  <title>framed (skeleton)</title>
+  <title>framed</title>
   <meta name="viewport" content="width=1920, user-scalable=no">
   <meta name="description" content="framed — launcher + art mode for a Samsung Frame TV">
   <link rel="icon" href="assets/icon.png">
-  <link rel="stylesheet" href="css/theme-placeholder.css"> <!-- DESIGN SURFACE: the designer's replace-file -->
+  <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/frames.css">
 </head>
 <body>
   <div id="app" class="app">
 
     <!-- ============ LAUNCHER ============ -->
     <section id="screen-launcher" class="screen screen--launcher" data-screen="launcher" hidden>
-      <header class="mast">
-        <div class="mast__brand">
-          <span class="mast__word">framed</span>
+      <div class="home">
+        <div class="home__side">
+          <header class="mast mast--home">
+            <div class="mast__clock" id="mast-clock" aria-live="off">--:--</div>
+            <div class="mast__date" id="mast-date"></div>
+          </header>
+
+          <div class="tiles" id="tiles" role="menu" aria-label="Apps">
+            <button class="tile" data-focusable data-app="media" data-kind="screen" role="menuitem" tabindex="-1">
+              <span class="tile__label">Watch</span>
+            </button>
+            <button class="tile" data-focusable data-app="youtube" data-kind="external" role="menuitem" tabindex="-1">
+              <span class="tile__label">YouTube</span>
+            </button>
+            <!-- PC: launches the Moonlight app; the real bridge maps "moonlight" to its Tizen app id -->
+            <button class="tile" data-focusable data-app="moonlight" data-kind="external" role="menuitem" tabindex="-1">
+              <span class="tile__label">PC</span>
+            </button>
+            <button class="tile" data-focusable data-app="art" data-kind="screen" role="menuitem" tabindex="-1">
+              <span class="tile__label">Art</span>
+            </button>
+            <button class="tile" data-focusable data-app="settings" data-kind="screen" role="menuitem" tabindex="-1">
+              <span class="tile__label">Settings</span>
+            </button>
+          </div>
         </div>
-        <div class="mast__clock" id="mast-clock" aria-live="off">--:--</div>
-      </header>
 
-      <div class="tiles" id="tiles" role="menubar" aria-label="Apps">
-        <button class="tile" data-focusable data-app="stremio" data-kind="external" role="menuitem" tabindex="-1">
-          <span class="tile__mark" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="64" height="64"><path d="M18 12l34 20-34 20z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="miter"/></svg>
-          </span>
-          <span class="tile__label">Stremio</span>
-          <span class="tile__sub">Films &amp; series</span>
-        </button>
-        <button class="tile" data-focusable data-app="youtube" data-kind="external" role="menuitem" tabindex="-1">
-          <span class="tile__mark" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="64" height="64"><rect x="8" y="16" width="48" height="32" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M27 24l12 8-12 8z" fill="currentColor"/></svg>
-          </span>
-          <span class="tile__label">YouTube</span>
-          <span class="tile__sub">Video</span>
-        </button>
-        <button class="tile" data-focusable data-app="gamestream" data-kind="external" role="menuitem" tabindex="-1">
-          <span class="tile__mark" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="64" height="64"><rect x="8" y="12" width="48" height="32" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M28 20l12 8-12 8z" fill="currentColor"/><path d="M22 52h20M32 44v8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
-          </span>
-          <span class="tile__label">Stream</span>
-          <span class="tile__sub">PC · Moonlight</span>
-        </button>
-        <button class="tile" data-focusable data-app="art" data-kind="screen" role="menuitem" tabindex="-1">
-          <span class="tile__mark" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="64" height="64"><rect x="8" y="10" width="48" height="44" fill="none" stroke="currentColor" stroke-width="2.5"/><rect x="16" y="18" width="32" height="28" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M18 44l10-12 7 8 5-5 6 9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-          </span>
-          <span class="tile__label">Art</span>
-          <span class="tile__sub">Matte &amp; frame</span>
-        </button>
-        <button class="tile" data-focusable data-app="media" data-kind="screen" role="menuitem" tabindex="-1">
-          <span class="tile__mark" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="64" height="64"><rect x="8" y="12" width="48" height="40" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M8 24h48" stroke="currentColor" stroke-width="2.5"/><path d="M27 32l14 7-14 7z" fill="currentColor"/></svg>
-          </span>
-          <span class="tile__label">Media</span>
-          <span class="tile__sub">Streams &amp; catalog</span>
-        </button>
-        <button class="tile" data-focusable data-app="settings" data-kind="screen" role="menuitem" tabindex="-1">
-          <span class="tile__mark" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="64" height="64"><path d="M12 20h40M12 32h40M12 44h40" stroke="currentColor" stroke-width="2.5"/><circle cx="24" cy="20" r="4" fill="var(--fr-color-surface)" stroke="currentColor" stroke-width="2.5"/><circle cx="42" cy="32" r="4" fill="var(--fr-color-surface)" stroke="currentColor" stroke-width="2.5"/><circle cx="30" cy="44" r="4" fill="var(--fr-color-surface)" stroke="currentColor" stroke-width="2.5"/></svg>
-          </span>
-          <span class="tile__label">Settings</span>
-          <span class="tile__sub">Brightness, theme</span>
-        </button>
+        <!-- live miniature of the Art screen: the current picture, matte and frame -->
+        <div class="home__art" id="home-art" aria-hidden="true">
+          <div class="art-stage home__stage" id="home-stage">
+            <div class="art-frame" id="home-frame">
+              <span class="side side--t mount"></span>
+              <span class="side side--l mount"></span>
+              <span class="side side--r mount"></span>
+              <span class="side side--b mount"></span>
+              <span class="side side--t mould"></span>
+              <span class="side side--l mould"></span>
+              <span class="side side--r mould"></span>
+              <span class="side side--b mould"></span>
+              <div class="art-image" id="home-image"></div>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <footer class="hints">
-        <span class="hint"><kbd>◂ ▸</kbd> move</span>
-        <span class="hint"><kbd>OK</kbd> open</span>
-      </footer>
     </section>
 
     <!-- ============ ART ============ -->
     <section id="screen-art" class="screen screen--art" data-screen="art" hidden>
       <div class="art-stage" id="art-stage">
-        <div class="art-frame" id="art-frame" data-frame="thin">
-          <span class="art-frame__corner art-frame__corner--tl" aria-hidden="true"></span>
-          <span class="art-frame__corner art-frame__corner--tr" aria-hidden="true"></span>
-          <span class="art-frame__corner art-frame__corner--bl" aria-hidden="true"></span>
-          <span class="art-frame__corner art-frame__corner--br" aria-hidden="true"></span>
+        <div class="art-frame" id="art-frame">
+          <span class="side side--t mount"></span>
+          <span class="side side--l mount"></span>
+          <span class="side side--r mount"></span>
+          <span class="side side--b mount"></span>
+          <span class="side side--t mould"></span>
+          <span class="side side--l mould"></span>
+          <span class="side side--r mould"></span>
+          <span class="side side--b mould"></span>
           <div class="art-image" id="art-image" role="img" aria-label="Artwork">
-            <!-- two layers so the slideshow can cross-fade (opacity transition = --fr-motion) -->
+            <!-- two layers so the slideshow can cross-fade -->
             <div class="art-layer" id="art-layer-a" data-active="true"></div>
             <div class="art-layer" id="art-layer-b" data-active="false"></div>
           </div>
@@ -93,32 +86,19 @@
       </div>
       <!-- corner affordance: the only focusable on the stage while the panel is closed -->
       <button class="art-corner" id="art-corner" data-focusable tabindex="-1" aria-label="Art settings (S)">
-        <span class="art-corner__hint">Art settings</span>
+        <span class="art-corner__hint">Adjust</span>
       </button>
 
       <aside class="panel" id="art-panel" aria-label="Art settings" hidden>
-        <header class="panel__head">
-          <span class="panel__kicker">Art</span>
-          <h2 class="panel__title">Matte &amp; frame</h2>
-          <!-- slideshow position: settings chrome only, never on the stage -->
-          <div class="panel__status" id="art-panel-status" aria-live="polite"></div>
-        </header>
+        <div class="panel__status" id="art-panel-status" aria-live="polite"></div>
         <div class="panel__body" id="art-controls"></div>
-        <footer class="panel__foot">
-          <span class="hint"><kbd>▴ ▾</kbd> setting</span>
-          <span class="hint"><kbd>◂ ▸</kbd> adjust</span>
-          <span class="hint"><kbd>Back</kbd> close</span>
-        </footer>
       </aside>
     </section>
 
     <!-- ============ MEDIA: BROWSE ============ -->
     <section id="screen-media" class="screen screen--media" data-screen="media" hidden>
-      <header class="mast mast--compact">
-        <div class="mast__brand">
-          <span class="mast__word">Media</span>
-        </div>
-        <div class="mast__crumb">framed / media</div>
+      <header class="mast mast--tight">
+        <span class="mast__word">Watch</span>
       </header>
 
       <div class="media-browse">
@@ -126,24 +106,11 @@
         <div class="status media-status" id="media-status" aria-live="polite"></div>
         <div class="media-grid" id="media-grid"></div>
       </div>
-
-      <footer class="hints">
-        <span class="hint"><kbd>◂ ▸</kbd> catalog</span>
-        <span class="hint"><kbd>▴ ▾</kbd> browse</span>
-        <span class="hint"><kbd>OK</kbd> open</span>
-        <span class="hint"><kbd>Back</kbd> home</span>
-      </footer>
     </section>
 
     <!-- ============ MEDIA: DETAIL ============ -->
     <section id="screen-media-item" class="screen screen--media-item" data-screen="media-item" hidden>
-      <header class="mast mast--compact">
-        <div class="mast__brand">
-          <span class="mast__word">Media</span>
-        </div>
-        <div class="mast__crumb" id="md-crumb">framed / media</div>
-      </header>
-
+      <span id="md-crumb" hidden></span>
       <div class="media-detail">
         <div class="media-detail__poster" id="md-poster" role="img" aria-label="Poster"></div>
         <div class="media-detail__info">
@@ -155,12 +122,6 @@
           <div class="status" id="md-status" aria-live="polite"></div>
         </div>
       </div>
-
-      <footer class="hints">
-        <span class="hint"><kbd>▴ ▾</kbd> stream</span>
-        <span class="hint"><kbd>OK</kbd> play</span>
-        <span class="hint"><kbd>Back</kbd> catalog</span>
-      </footer>
     </section>
 
     <!-- ============ MEDIA: PLAYBACK ============ -->
@@ -169,73 +130,28 @@
         <video class="media-player__video" id="mp-video" playsinline></video>
         <div class="media-player__status" id="mp-status" aria-live="polite"></div>
       </div>
-
-      <footer class="hints">
-        <span class="hint"><kbd>OK</kbd> play / pause</span>
-        <span class="hint"><kbd>Back</kbd> stop</span>
-      </footer>
     </section>
 
     <!-- ============ SETTINGS ============ -->
     <section id="screen-settings" class="screen screen--settings" data-screen="settings" hidden>
-      <header class="mast mast--compact">
-        <div class="mast__brand">
-          <span class="mast__word">Settings</span>
-        </div>
-        <div class="mast__crumb">framed / settings</div>
+      <header class="mast">
+        <span class="mast__word">Settings</span>
       </header>
 
       <div class="settings">
         <div class="settings__col">
-          <section class="block">
-            <h2 class="block__title">Brightness</h2>
-            <p class="block__lede">Panel brightness for the launcher and apps.</p>
-            <div id="settings-brightness"></div>
-          </section>
-
-          <section class="block">
-            <h2 class="block__title">Art Mode floor</h2>
-            <p class="block__lede">How dark art may go when the room is dark. Stock Art Mode stops above black; this floor lets dimming go all the way down.</p>
-            <div id="settings-floor"></div>
-            <div class="floor-preview" id="floor-preview" aria-hidden="true">
-              <div class="floor-preview__swatch" id="floor-swatch"></div>
-              <div class="floor-preview__caption" id="floor-caption"></div>
-            </div>
-          </section>
+          <div id="settings-brightness"></div>
+          <div id="settings-floor"></div>
+          <div class="floor-preview" id="floor-swatch" aria-hidden="true"></div>
         </div>
-
         <div class="settings__col">
-          <section class="block">
-            <h2 class="block__title">Slideshow</h2>
-            <p class="block__lede">Rotate the picture library while art is shown.</p>
-            <div id="settings-slideshow"></div>
-            <div class="status" id="slideshow-status" aria-live="polite"></div>
-          </section>
-
-          </div>
-        <div class="settings__col">
-          <section class="block">
-            <h2 class="block__title">Theme</h2>
-            <div id="settings-theme"></div>
-          </section>
-
-          <section class="block">
-            <h2 class="block__title">About</h2>
-            <dl class="about" id="about">
-              <dt>App</dt><dd>framed 0.1.0 · com.framed.launcher · placeholder theme (css/theme-placeholder.css)</dd>
-              <dt>Bridge</dt><dd id="about-bridge">—</dd>
-              <dt>Runtime</dt><dd id="about-runtime">—</dd>
-              <dt>Library</dt><dd id="about-library">—</dd>
-            </dl>
-          </section>
+          <div id="settings-slideshow"></div>
+          <div id="settings-home"></div>
+          <div id="settings-theme"></div>
         </div>
       </div>
 
-      <footer class="hints">
-        <span class="hint"><kbd>▴ ▾</kbd> setting</span>
-        <span class="hint"><kbd>◂ ▸</kbd> adjust</span>
-        <span class="hint"><kbd>Back</kbd> home</span>
-      </footer>
+      <div class="about">framed 0.1.0 · <span id="about-bridge">—</span> · <span id="about-library">—</span></div>
     </section>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

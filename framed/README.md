@@ -1,5 +1,9 @@
 # framed — design-agnostic skeleton
 
+> **Design: Mhach** — see HANDBACK.md beside this folder. Visual decisions live in `css/theme.css`
+> (tokens + fonts) and `css/frames.css` (art frames); `css/app.css` is layout. The notes below about
+> `theme-placeholder.css` describe the pre-design scaffold.
+
 A launcher + art-mode web app for a Samsung Frame TV (2024 · Tizen 8.0 · 4K panel), delivered as
 a **mechanics-complete, unstyled scaffold**. Plain HTML/CSS/JS — no build step, no framework, no
 CDN, no webfonts; runs offline in the TV web runtime and opens as-is in a desktop browser.
@@ -42,7 +46,7 @@ framed/
 |---|---|---|
 | Routing | Hash routes, default = launcher, Back semantics (home = no-op; panel closes first) | — |
 | D-pad | Geometric focus engine, focus never lost, `Left/Right` adjust rows, pointer-remote hover, Tizen RETURN (10009) | Focus **look** (ring colour/width/scale are tokens) |
-| Launcher | 6 tiles (Stremio, YouTube, Stream, Art, Media, Settings), external → `__tvBridge.launch`, clock | All visuals: tile art, iconography, typography, layout rhythm |
+| Launcher | app list (Watch, YouTube, PC, Art, Settings; Mhach vertical list + art miniature), external → `__tvBridge.launch` via `EXTERNAL_APP_IDS`, clock+date | shipped: Mhach design |
 | Art | Matte width/bottom-weight/colour (8 presets + custom HSL), 5 frame styles, frame weight/tone, contain/cover with frame hugging the image, caption slot, persistence, panel focus-trap, `s` key, corner affordance reveal | Preset palette values, frame-style rendering refinement, caption typography, panel chrome, any motion |
 | Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / 30 s / hourly / daily, sequential / seeded shuffle, daily = day-of-epoch pick on open, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, "n of N" indicator in panel + Settings only, persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
 | Settings | Brightness + Art-floor ranges wired to the bridge and persisted, floor preview thumbnail, theme chooser with disabled "coming soon" slots, About | Real theme list and token blocks, all visuals |
@@ -53,7 +57,7 @@ framed/
 
 | Route | What | Keys |
 |---|---|---|
-| `#/launcher` (default, home) | Tiles: Stremio · YouTube · Stream · Art · Media · Settings | ◂ ▸ move · OK open · Back does nothing |
+| `#/launcher` (default, home) | Tiles: Stremio · YouTube · Art · Settings | ◂ ▸ move · OK open · Back does nothing |
 | `#/art` | Fullscreen picture on a matte with a frame; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
 | `#/settings` | Brightness · Art Mode floor · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
 | `#/media` | Media browse: catalog picker + poster grid across the configured addons | ◂ ▸ switch catalog · ▴ ▾ browse grid · OK open item · Back → home |
@@ -113,7 +117,7 @@ var MEDIA_ADDONS = [
   URLs — so Media works with zero network. Its one playable stream is `assets/media/demo.mp4`;
   it also advertises a torrent row to exercise the unplayable-source path.
 - Streams are normalized to `{ name, label, sub, url, playable, kind }`. Anything that isn't a
-  direct `http(s)` URL (torrent `infoHash`, `externalUrl`, `ytId`) comes back `playable:false`
+  direct `http(s)` URL (`infoHash` torrent, `externalUrl`, `ytId`) comes back `playable:false`
   and the detail screen refuses it with a toast — the TV has no torrent engine.
 - Persisted state is one key, `localStorage["framed.media"]` = `{ catalog: <index> }` (the last
   selected catalog). Nothing heavier is cached; addon data is fetched fresh per visit.
@@ -225,10 +229,11 @@ functions — to point at a USB mount (`tizen.filesystem`), a TV photo API, or a
 
 ## Stream from PC (Moonlight + Sunshine)
 
-The **Stream** tile launches the Moonlight game-streaming client installed on the TV.
+The **PC** launcher item launches the Moonlight game-streaming client installed on the TV.
 
-- **Tile → launch:** `data-app="gamestream"` resolves to `GAMESTREAM_APP_ID` — a marked
-  `CONFIG — edit here` constant at the top of `js/screens/launcher.js` — and calls
+- **Tile → launch:** `data-app="moonlight"` resolves through the `EXTERNAL_APP_IDS` map — a
+  marked `CONFIG — edit here` block at the top of `js/screens/launcher.js` — to
+  `MoonLightS.MoonlightWasm` and calls
   `__tvBridge.launch(...)`. The real bridge maps that to
   `tizen.application.launch('MoonLightS.MoonlightWasm')` (the `application.launch`
   privilege is already declared in `config.xml`).
@@ -279,7 +284,7 @@ and set the same values in the app's Settings — use the standard `Moonlight.wg
    **Download & Install**. On Tizen 7+/8 it will ask for your Samsung account sign-in to
    generate the certificate — that is the re-signing step doing its job.
 4. "Moonlight has been successfully installed!" → the app appears under **Recent Apps**.
-   The Stream tile can now launch it.
+   The PC tile can now launch it.
 
 Alternative for advanced users: Tizen Studio (deprecated but working) — create a Samsung
 certificate profile (author + distributor cert that includes the TV's DUID) and install
