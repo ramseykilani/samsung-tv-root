@@ -231,3 +231,74 @@ button:focus { outline: none; }      /* focus is drawn explicitly below, never l
 }
 .toast[data-tone="ok"] { border-left-color: var(--fr-color-ok); }
 .toast[data-tone="error"] { border-left-color: var(--fr-color-error); }
+
+/* ---------- media: browse grid ---------- */
+.media-browse { flex: 1; overflow-y: auto; padding: 2.4rem 12rem 4rem; scrollbar-width: none; }
+.media-browse::-webkit-scrollbar { display: none; }
+.media-cats { max-width: 96rem; }
+.media-status { margin-top: 1.2rem; }
+.media-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 3.2rem;
+  margin-top: 2.4rem;
+}
+.media-card {
+  display: flex; flex-direction: column; padding: 0; text-align: left;
+  border: var(--fr-border-width) solid var(--fr-color-border);
+  border-radius: var(--fr-radius);
+  background: var(--fr-color-surface);
+  transition: transform var(--fr-motion), box-shadow var(--fr-motion), border-color var(--fr-motion);
+}
+.media-card__poster {
+  width: 100%; aspect-ratio: 2 / 3;
+  background: var(--fr-color-surface-sunken) center / cover no-repeat;
+}
+.media-card__title { padding: 1.6rem 1.6rem 0.4rem; font-size: var(--fr-font-size-body); font-weight: var(--fr-font-weight-heading); line-height: 1.15; }
+.media-card__sub { padding: 0 1.6rem 1.6rem; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+.media-card:focus, .media-card.is-focused {
+  transform: scale(var(--fr-focus-scale));
+  border-color: var(--fr-color-focus);
+  box-shadow: 0 0 0 var(--fr-focus-ring-width) var(--fr-color-focus);
+  z-index: 1;
+}
+
+/* ---------- media: detail ---------- */
+.media-detail {
+  flex: 1; overflow-y: auto; scrollbar-width: none;
+  display: flex; gap: 6.4rem; padding: 2.4rem 12rem 4rem; align-items: flex-start;
+}
+.media-detail::-webkit-scrollbar { display: none; }
+.media-detail__poster {
+  flex: none; width: 32rem; aspect-ratio: 2 / 3;
+  background: var(--fr-color-surface-sunken) center / cover no-repeat;
+  border: var(--fr-border-width) solid var(--fr-color-border);
+}
+.media-detail__info { flex: 1; min-width: 0; }
+.media-detail__title { margin: 0; font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-heading); line-height: 1.1; }
+.media-detail__meta { margin-top: 0.8rem; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+.media-detail__desc { margin: 1.6rem 0 0; max-width: 96rem; color: var(--fr-color-text); }
+.media-detail__streams-head { margin: 3.2rem 0 0.8rem; font-size: var(--fr-font-size-label); letter-spacing: var(--fr-letter-spacing-label); color: var(--fr-color-text-muted); font-weight: var(--fr-font-weight-heading); }
+.media-stream {
+  display: flex; flex-direction: column; gap: 0.4rem; width: 100%;
+  padding: 1.6rem 2.4rem; margin: 0 -2.4rem; text-align: left;
+  border-top: var(--fr-border-width) solid var(--fr-color-border);
+  border-radius: var(--fr-radius);
+  transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
+}
+.media-stream:last-child { border-bottom: var(--fr-border-width) solid var(--fr-color-border); }
+.media-stream__name { font-size: var(--fr-font-size-body); font-weight: var(--fr-font-weight-heading); }
+.media-stream__sub { font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+.media-stream:focus, .media-stream.is-focused { background: var(--fr-color-surface-raised); box-shadow: inset 0 0 0 var(--fr-focus-ring-width) var(--fr-color-focus); }
+.media-stream--dead .media-stream__name, .media-stream--dead .media-stream__sub { color: var(--fr-color-disabled); }
+
+/* ---------- media: playback ---------- */
+.media-player { position: relative; flex: 1; background: var(--fr-color-surface-sunken); }
+.media-player__video { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; background: var(--fr-color-surface-sunken); }
+.media-player__status {
+  position: absolute; left: 50%; bottom: 8rem; transform: translateX(-50%);
+  padding: 1.2rem 2.4rem; font-size: var(--fr-font-size-label);
+  color: var(--fr-color-text); background: var(--fr-color-surface-raised);
+  border: var(--fr-border-width) solid var(--fr-color-border-strong);
+  border-radius: var(--fr-radius);
+}
+.media-player__status:empty { display: none; }
+.media-player:focus, .media-player.is-focused { box-shadow: inset 0 0 0 var(--fr-focus-ring-width) var(--fr-color-focus); }

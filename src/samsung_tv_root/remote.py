@@ -250,6 +250,8 @@ RemoteActionHandler = Callable[
     [RootAgentConnection, str, dict[str, Any]],
     Awaitable[dict[str, Any]],
 ]
+RootReacquirer = Callable[[], Awaitable[RootAgentConnection]]
+REACQUIRE_TIMEOUT = 45.0
 
 
 class RemoteInputCoordinator:
@@ -259,11 +261,13 @@ class RemoteInputCoordinator:
         publisher: RemoteEventPublisher,
         action_handler: RemoteActionHandler,
         retry_delays: tuple[float, ...],
+        reacquire: RootReacquirer | None = None,
     ) -> None:
         self.television = television
         self.publisher = publisher
         self.action_handler = action_handler
         self.retry_delays = retry_delays
+        self.reacquire = reacquire
         self.root_connection: RootAgentConnection | None = None
         self.host = television.host
         self.sessions: dict[str, RemoteInputSession] = {}
@@ -506,6 +510,24 @@ class RemoteInputCoordinator:
                     if rule.action == "suppress":
                         action_results.append({"action": "suppress", "ok": True})
                         continue
+                    if (
+                        root_connection is None or root_connection.closed
+                    ) and self.reacquire is not None:
+                        try:
+                            root_connection = await asyncio.wait_for(
+                                self.reacquire(), REACQUIRE_TIMEOUT
+                            )
+                            action_results.append(
+                                {"action": "root.reacquire", "ok": True}
+                            )
+                        except Exception as error:
+                            action_results.append(
+                                {
+                                    "action": "root.reacquire",
+                                    "ok": False,
+                                    "error": f"{type(error).__name__}: {error}",
+                                }
+                            )
                     if root_connection is None or root_connection.closed:
                         action_results.append(
                             {

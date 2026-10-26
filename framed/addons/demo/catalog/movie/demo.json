@@ -1,0 +1,8 @@
+{
+  "metas": [
+    { "id": "demo1", "type": "movie", "name": "Landscape test card", "poster": "assets/art/demo-landscape.png", "releaseInfo": "2024", "description": "Bundled demo item served by the local addon. The Media section talks to it over the plain Stremio addon protocol, exactly like a remote addon." },
+    { "id": "demo2", "type": "movie", "name": "Portrait test card", "poster": "assets/art/demo-portrait.png", "releaseInfo": "2024", "description": "Second bundled demo item." },
+    { "id": "demo3", "type": "movie", "name": "Bands test card", "poster": "assets/art/demo-bands.png", "releaseInfo": "2024", "description": "Third bundled demo item." },
+    { "id": "demo4", "type": "movie", "name": "Rings test card", "poster": "assets/art/demo-rings.png", "releaseInfo": "2024", "description": "Fourth bundled demo item." }
+  ]
+}

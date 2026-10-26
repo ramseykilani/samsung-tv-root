@@ -47,6 +47,7 @@ class SamsungTvRootDaemon:
                 self._publish_event,
                 self.capabilities[television.name].handle,
                 configuration.retry.delays,
+                self.lifecycles[television.name].acquire_now,
             )
             for television in configuration.televisions
         }
