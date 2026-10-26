@@ -97,15 +97,17 @@ if [ "$killed" -eq 0 ]; then
     echo "[voice] no matching voice processes found (nothing to stop)"
 fi
 
-# Disable voice packages when the package manager supports it. pkgcmd -d is
-# available on most retail builds; absence of a package is not an error.
+# Disable voice packages when the package manager supports it. On Tizen 8
+# pkgcmd uses -D/--deactivate to disable a package (rollback: pkgcmd -A);
+# lowercase -d is --descriptor, an unrelated query flag. Absence of a
+# package is not an error.
 if command -v pkgcmd >/dev/null 2>&1; then
     for pkg in $(pkginfo --listpkg 2>/dev/null | tr -d '[]' | tr ',' '\n' |
         grep -iE 'bixby|voice|alexa|googleassistant'); do
-        if pkgcmd -d "$pkg" >/dev/null 2>&1; then
+        if pkgcmd -D "$pkg" >/dev/null 2>&1; then
             echo "[voice] disabled package $pkg"
         else
-            echo "[voice] found package $pkg (pkgcmd -d not supported; left installed)"
+            echo "[voice] found package $pkg (pkgcmd -D not supported; left installed)"
         fi
     done
 fi
@@ -131,6 +133,33 @@ for pattern in dlog crash samsung-analytics diagnostics coredump; do
         fi
     done
 done
+
+# Deactivate the ad/ACR/telemetry/voice packages the user approved. pkgcmd -D
+# is the Tizen 8 deactivate flag (rollback: pkgcmd -A <pkg>); only packages
+# on the approved list are touched — names absent on this build are skipped.
+if command -v pkgcmd >/dev/null 2>&1; then
+    for pkg in \
+        com.samsung.tv.acr-service-app \
+        com.samsung.tv.adplayer \
+        adplatform \
+        com.samsung.tv.targeted-ad-service \
+        com.samsung.tv.coba.adagent \
+        com.samsung.tizen.samsung-analytics \
+        com.samsung.tv.farfieldvoice; do
+        if pkgcmd -D "$pkg" >/dev/null 2>&1; then
+            echo "[packages] deactivated $pkg"
+        else
+            echo "[packages] $pkg not present or deactivate unsupported (skipped)"
+        fi
+    done
+    # Wake-word engine package names vary by build; deactivate whatever exists.
+    for pkg in $(pkginfo --listpkg 2>/dev/null | tr -d '[]' | tr ',' '\n' |
+        grep -i 'wakeup-engine'); do
+        if pkgcmd -D "$pkg" >/dev/null 2>&1; then
+            echo "[packages] deactivated $pkg"
+        fi
+    done
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Audit summary — what is still installed
