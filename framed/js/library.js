@@ -23,7 +23,7 @@
 window.framed = window.framed || {};
 (function (F) {
   /* ======== CONFIG — edit here ======== */
-  var REMOTE_ART_BASE = '';          // e.g. 'http://192.168.1.20:8080/art/'  ('' = remote disabled)
+  var REMOTE_ART_BASE = '';          // e.g. 'http://<desktop-ip>:8080/art/'  ('' = remote disabled)
   var REMOTE_TIMEOUT_MS = 4000;      // manifest fetch budget before falling back to bundled
   /* =================================== */
 
