@@ -42,7 +42,7 @@ framed/
 |---|---|---|
 | Routing | Hash routes, default = launcher, Back semantics (home = no-op; panel closes first) | — |
 | D-pad | Geometric focus engine, focus never lost, `Left/Right` adjust rows, pointer-remote hover, Tizen RETURN (10009) | Focus **look** (ring colour/width/scale are tokens) |
-| Launcher | 5 tiles (Stremio, YouTube, Art, Media, Settings), external → `__tvBridge.launch`, clock | All visuals: tile art, iconography, typography, layout rhythm |
+| Launcher | 6 tiles (Stremio, YouTube, Stream, Art, Media, Settings), external → `__tvBridge.launch`, clock | All visuals: tile art, iconography, typography, layout rhythm |
 | Art | Matte width/bottom-weight/colour (8 presets + custom HSL), 5 frame styles, frame weight/tone, contain/cover with frame hugging the image, caption slot, persistence, panel focus-trap, `s` key, corner affordance reveal | Preset palette values, frame-style rendering refinement, caption typography, panel chrome, any motion |
 | Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / 30 s / hourly / daily, sequential / seeded shuffle, daily = day-of-epoch pick on open, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, "n of N" indicator in panel + Settings only, persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
 | Settings | Brightness + Art-floor ranges wired to the bridge and persisted, floor preview thumbnail, theme chooser with disabled "coming soon" slots, About | Real theme list and token blocks, all visuals |
@@ -53,7 +53,7 @@ framed/
 
 | Route | What | Keys |
 |---|---|---|
-| `#/launcher` (default, home) | Tiles: Stremio · YouTube · Art · Settings | ◂ ▸ move · OK open · Back does nothing |
+| `#/launcher` (default, home) | Tiles: Stremio · YouTube · Stream · Art · Media · Settings | ◂ ▸ move · OK open · Back does nothing |
 | `#/art` | Fullscreen picture on a matte with a frame; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
 | `#/settings` | Brightness · Art Mode floor · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
 | `#/media` | Media browse: catalog picker + poster grid across the configured addons | ◂ ▸ switch catalog · ▴ ▾ browse grid · OK open item · Back → home |
@@ -235,6 +235,99 @@ shows the active source and count.
 
 Replace **this one file** — keep the item shape and the `list / get / set / source`
 functions — to point at a USB mount (`tizen.filesystem`), a TV photo API, or anything else.
+
+## Stream from PC (Moonlight + Sunshine)
+
+The **Stream** tile launches the Moonlight game-streaming client installed on the TV.
+
+- **Tile → launch:** `data-app="gamestream"` resolves to `GAMESTREAM_APP_ID` — a marked
+  `CONFIG — edit here` constant at the top of `js/screens/launcher.js` — and calls
+  `__tvBridge.launch(...)`. The real bridge maps that to
+  `tizen.application.launch('MoonLightS.MoonlightWasm')` (the `application.launch`
+  privilege is already declared in `config.xml`).
+- **Client app:** [Moonlight Tizen](https://github.com/brightcraft/moonlight-tizen) —
+  package id `MoonLightS`, Tizen app id `MoonLightS.MoonlightWasm`.
+- **Host app:** [Sunshine](https://app.lizardbyte.dev/Sunshine) on the gaming PC
+  (NVIDIA's own GameStream service is discontinued; Sunshine is the host).
+
+### The .wgt artifact
+
+Use `Moonlight-Frame.wgt` — upstream **v1.19.0** repackaged with defaults tuned for the
+LS03D setup (1440p host display, 120 Hz PC + 120 Hz panel, Wi-Fi 5 GHz to the TV):
+
+- **2560×1440** stream resolution (native match to the PC's display; the TV upscales to 4K)
+- **120 FPS** (both the PC display and the Frame's panel are 120 Hz; `Unlock all FPS`
+  defaults to ON so the option is selectable)
+- **HEVC** video codec (~40% less bitrate than the stock H.264 default at equal quality;
+  the Frame's decoder and Sunshine/NVENC both prefer it)
+- **50 Mbps** bitrate (vs stock 10 Mbps — far below Wi-Fi 5 GHz capacity)
+- **Game Mode** (Ultra-Low Latency) already defaults to ON on Tizen 8 in upstream code —
+  unchanged.
+
+Stock upstream defaults (720p / 60 fps / H.264 / 10 Mbps) are very conservative for this
+hardware. To rebuild the tuned package: unpack `Moonlight.wgt`, patch the
+`data-value`/`value` attributes in `index.html` and the `defaultResolution` /
+`defaultFramerate` / `defaultBitrate` / `defaultVideoCodec` / `defaultUnlockAllFps`
+constants in `platform/index.js`, drop the stale `signature1.xml`/`author-signature.xml`,
+re-zip. Alternatively download the standard `Moonlight.wgt` from
+[brightcraft/moonlight-tizen releases](https://github.com/brightcraft/moonlight-tizen/releases)
+and set the same values in the app's Settings — use the standard `Moonlight.wgt`, **not**
+`Moonlight-ForceGM.wgt` (that variant only exists for a Tizen 9.0 Game Mode regression).
+
+- **Tizen 8.0 caveat — signature, not code:** 2024-model TVs reject the prebuilt
+  signature with `[118, -12] Invalid certificate chain`. The package must be **re-signed
+  during install**; this is automatic with Apps2Samsung (below) and asks you to sign in
+  with a Samsung account once. The older Docker installer does *not* work on Tizen 8 —
+  it ships bundled certificates the TV rejects.
+
+### Install Moonlight on the TV (easiest path — Apps2Samsung)
+
+1. TV: **Apps → App Settings**, type `1 2 3 4 5` on the remote (use the `123` on-screen
+   keypad if the remote has no number pad) → **Developer mode = ON** → enter the PC's LAN
+   IP in `Host PC IP` → hold the power button ~5 s to fully reboot.
+2. PC: install [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung/releases) and
+   open it — it finds the TV on the LAN automatically.
+3. Settings (gear icon): keep the default **Jelly2Sams** certificate and pick your active
+   network connection. Back on the main window choose **Moonlight-Tizen** →
+   **Download & Install**. On Tizen 7+/8 it will ask for your Samsung account sign-in to
+   generate the certificate — that is the re-signing step doing its job.
+4. "Moonlight has been successfully installed!" → the app appears under **Recent Apps**.
+   The Stream tile can now launch it.
+
+Alternative for advanced users: Tizen Studio (deprecated but working) — create a Samsung
+certificate profile (author + distributor cert that includes the TV's DUID) and install
+the `.wgt` with `tizen install`. Same signing requirement, more manual steps.
+
+### Sunshine on the gaming PC (Windows, NVIDIA)
+
+1. Download the Windows installer from
+   [Sunshine releases](https://github.com/LizardByte/Sunshine/releases)
+   (`sunshine-windows-installer.exe`) and run it — accept the defaults, including the
+   firewall prompts.
+2. Open the Sunshine web UI at `https://localhost:47990` (the browser warns about a
+   self-signed certificate — proceed). Create a username/password on first launch.
+3. On the TV, open Moonlight → your PC should appear automatically; if not, choose
+   **Add PC manually** and type the PC's LAN IP (e.g. `<pc-ip>`).
+4. Moonlight shows a **4-digit PIN** on the TV. In the Sunshine web UI go to
+   **PIN** (top nav), enter it, submit — the TV is paired. Pick an app/desktop tile in
+   Moonlight to start streaming.
+
+### Input & performance notes
+
+- **Gamepad:** connect to the TV (Bluetooth/USB). Moonlight reads it through the Tizen
+  Gamepad API and forwards input to the host over its control stream; pairing/menu
+  navigation is d-pad driven. Rumble requires the gamepad to be attached to the TV.
+- **Remote/d-pad:** navigates the Moonlight UI; a click on the remote's touch surface
+  acts as pointer input.
+- **Network:** the Frame's built-in Ethernet port is only 100 Mbps and can drop bursts at
+  high bitrates. Keep the Moonlight bitrate ≤ ~50 Mbps on wired, or use 5 GHz Wi-Fi for
+  4K/60. On the host, wired gigabit is strongly recommended.
+- **Game Mode:** Tizen 8 has no Game Mode regression (that is Tizen 9+); the tuned build
+  defaults Game Mode (Ultra-Low Latency) to ON — turn it off in Settings if the image
+  looks different than expected.
+- Not verified on real hardware in this repo — the tuned build only changes settings
+  defaults on top of upstream v1.19.0; report functional issues upstream on their
+  Discord/issue tracker.
 
 ## Preview on a desktop
 
