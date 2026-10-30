@@ -1,9 +1,10 @@
 /*
- * framed — Art screen. Fullscreen image on a matte, with a frame style; the slideshow
- * sequencer (js/slideshow.js) decides which library picture is current.
+ * framed — Art screen. Fullscreen picture in a drawn frame (finish × profile × liner) on an
+ * optional matte; the slideshow sequencer (js/slideshow.js) decides which library picture is current.
  * No chrome while art is shown; the corner affordance (or the `s` key) opens the settings panel.
  * While the panel is closed: Left/Right = previous/next picture, `p` / MediaPlayPause = slideshow
- * on/off. Matte/frame settings persist under "framed.art"; slideshow prefs under "framed.slideshow".
+ * on/off. Frame/matte settings persist under "framed.art"; slideshow prefs under "framed.slideshow".
+ * Rendering of mounts and mouldings lives in css/frames.css; this file sets their geometry.
  */
 window.framed = window.framed || {};
 (function (F) {
@@ -20,37 +21,47 @@ window.framed = window.framed || {};
   var panelStatus = document.getElementById('art-panel-status');
   var controlsEl = document.getElementById('art-controls');
 
-  // 8 matte presets + custom. DESIGN SURFACE: the preset palette is a placeholder neutral ramp;
-  // the designer replaces values/labels here (the mechanics only need value/label/color).
+  // 8 matte presets + custom, light to dark. Mhach's bone and stone, kept quiet enough to sit
+  // behind any work; Black is lifted a hair off #000 for the panel, still black in a dark room.
   var MATTES = [
-    { value: 'white', label: 'White', color: '#FFFFFF' },
-    { value: 'warm-white', label: 'Warm white', color: '#F2EDE4' },
-    { value: 'light-gray', label: 'Light gray', color: '#E6E6E6' },
-    { value: 'mid-gray', label: 'Mid gray', color: '#BFBFBF' },
-    { value: 'gray', label: 'Gray', color: '#808080' },
-    { value: 'dark-gray', label: 'Dark gray', color: '#404040' },
-    { value: 'near-black', label: 'Near black', color: '#202020' },
-    { value: 'black', label: 'Black', color: '#000000' },
+    { value: 'paper', label: 'Paper', color: '#EDEAE1' },
+    { value: 'bone', label: 'Bone', color: '#E0DFD7' },
+    { value: 'salt', label: 'Salt', color: '#C9CCC4' },
+    { value: 'lichen', label: 'Lichen', color: '#8E9A93' },
+    { value: 'stone', label: 'Stone', color: '#3A4548' },
+    { value: 'moor', label: 'Moor', color: '#242F32' },
+    { value: 'deep', label: 'Deep water', color: '#12191C' },
+    { value: 'black', label: 'Black', color: '#070909' },
     { value: 'custom', label: 'Custom' }
   ];
 
+  // Mount and moulding geometry, in hundredths of the stage's shorter edge (see css/frames.css).
+  var MOUNT_DEPTH = { flat: 0, bevel: 0.7, double: 2.6, shadowbox: 2.4, float: 0, linen: 3.4, fillet: 1.0, slip: 1.5 };
+  var BEVEL = 0.7, REVEAL = 1.2; // double mat: bevel, contrasting reveal, bevel
+  var FLOAT_GAP = 2.8;          // float only shows a gap when a moulding surrounds it
+  var MOULDING_STEP = 0.8;      // moulding width per Frame width step (1–10)
+
+  // The owner's look: no mat, the picture fills the screen, and a drawn frame at the screen's
+  // edges pairs with the TV's own bezel as a double frame.
   var DEFAULTS = {
-    fit: 'contain',
-    matte: 8,
-    matteBottom: 2,
-    matteColor: 'light-gray',
+    fit: 'cover',
+    matte: 0,
+    matteBottom: 0,
+    matteColor: 'paper',
     customHue: 30,
     customSat: 20,
     customLight: 85,
-    frame: 'thin',
-    frameWeight: 2,
-    frameTone: 'auto',
-    label: 'on'
+    mount: 'fillet',
+    moulding: 'walnut',
+    profile: 'scoop',
+    frameWeight: 5,
+    label: 'off'
   };
 
   var s = F.store.merge('art', {}, DEFAULTS);
   var api = null;
   var natural = { w: 3, h: 2 };
+  var naturals = {};         // src -> { w, h }, for the launcher's miniature
   var active = 0;            // index into layers[]
   var shownSrc = null;
   var panelOpen = false;
@@ -62,7 +73,7 @@ window.framed = window.framed || {};
   function matteHex() {
     if (s.matteColor === 'custom') return hsl(s.customHue, s.customSat, s.customLight);
     for (var i = 0; i < MATTES.length; i++) if (MATTES[i].value === s.matteColor) return MATTES[i].color;
-    return '#E6E6E6';
+    return MATTES[0].color;
   }
   function hsl(hue, sat, light) { return 'hsl(' + hue + ', ' + sat + '%, ' + light + '%)'; }
 
@@ -76,30 +87,62 @@ window.framed = window.framed || {};
     return hm ? parseFloat(hm[1]) > 48 : true;
   }
 
-  function frameColor() {
-    switch (s.frameTone) {
-      case 'dark': return '#111111';
-      case 'light': return '#F0F0F0';
-      default: return isLight(matteHex()) ? '#111111' : '#F0F0F0';
+  function tone(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // caption ink: auto-contrast against the matte
+  function captionColor() {
+    return isLight(matteHex()) ? tone('--fr-frame-dark') : tone('--fr-frame-light');
+  }
+
+  // Dress any stage (the Art screen, or the launcher's miniature) in the current settings and
+  // size the picture so picture + mount + moulding fit inside the matte opening.
+  // n = the picture's natural size (only used for Contain).
+  function dress(st, fr, im, n) {
+    var r = st.getBoundingClientRect();
+    var u = Math.min(r.width, r.height) / 100;
+    var framed = s.moulding !== 'none';
+    var mw = (s.mount === 'float' ? (framed ? FLOAT_GAP : 0) : (MOUNT_DEPTH[s.mount] || 0)) * u;
+    var fw = framed ? s.frameWeight * MOULDING_STEP * u : 0;
+    var pad = s.matte * u, padB = (s.matte + s.matteBottom) * u;
+
+    st.style.padding = pad + 'px ' + pad + 'px ' + padB + 'px';
+    st.style.setProperty('--u', u + 'px');
+    st.style.setProperty('--mw', mw + 'px');
+    st.style.setProperty('--fw', fw + 'px');
+    st.style.setProperty('--b', BEVEL * u + 'px');
+    st.style.setProperty('--r', REVEAL * u + 'px');
+    st.style.setProperty('--mat-grain', s.matteColor === 'black' ? 0 : isLight(matteHex()) ? 0.55 : 0.35);
+    st.style.setProperty('--matte', s.matte);
+    st.style.setProperty('--matte-color', matteHex());
+    st.style.setProperty('--frame-color', captionColor());
+    fr.setAttribute('data-mount', s.mount);
+    fr.setAttribute('data-moulding', s.moulding);
+    fr.setAttribute('data-profile', s.profile);
+    fr.setAttribute('data-core', isLight(matteHex()) ? 'light' : 'dark');
+    im.setAttribute('data-fit', s.fit);
+
+    var ring = 2 * (mw + fw);
+    var aw = Math.max(1, r.width - pad * 2 - ring), ah = Math.max(1, r.height - pad - padB - ring);
+    var w = aw, h = ah;
+    if (s.fit === 'contain') {
+      var k = Math.min(aw / n.w, ah / n.h);
+      w = Math.round(n.w * k); h = Math.round(n.h * k);
     }
+    fr.style.width = w + 'px';
+    fr.style.height = h + 'px';
   }
 
   function apply() {
-    stage.style.setProperty('--matte', s.matte);
-    stage.style.setProperty('--matte-bottom', s.matteBottom);
-    stage.style.setProperty('--matte-color', matteHex());
-    stage.style.setProperty('--frame-color', frameColor());
-    stage.style.setProperty('--frame-weight', s.frameWeight + 'px');
-    frame.setAttribute('data-frame', s.frame);
-    image.setAttribute('data-fit', s.fit);
     label.hidden = s.label !== 'on';
     showPicture(F.slideshow.current());
     layout();
   }
 
-  // Paint the picture on the inactive layer, then flip — the opacity transition is --fr-motion.
+  // Paint the picture on the inactive layer, then flip — the opacity transition is --fr-motion-art.
   function showPicture(item) {
-    if (!item) { labelTitle.textContent = 'No pictures in library'; labelMeta.textContent = 'see js/library.js'; return; }
+    if (!item) { labelTitle.textContent = 'No pictures in library'; labelMeta.textContent = ''; return; }
     image.setAttribute('aria-label', item.title);
     labelTitle.textContent = item.title;
     labelMeta.textContent = item.meta || '';
@@ -110,6 +153,7 @@ window.framed = window.framed || {};
     img.onload = function () {
       if (shownSrc !== item.src) return; // superseded by a faster advance
       natural = { w: img.naturalWidth || 3, h: img.naturalHeight || 2 };
+      naturals[item.src] = natural;
       var nextLayer = layers[1 - active];
       nextLayer.style.backgroundImage = 'url("' + item.src + '")';
       layout();
@@ -128,21 +172,7 @@ window.framed = window.framed || {};
     if (api) api.set('picture', p.index + 1);
   }
 
-  // Size the frame to hug the image (contain) or fill the matte opening (cover).
-  function layout() {
-    var r = stage.getBoundingClientRect();
-    var vmin = Math.min(window.innerWidth, window.innerHeight) / 100;
-    var pad = s.matte * vmin;
-    var aw = Math.max(1, r.width - pad * 2);
-    var ah = Math.max(1, r.height - pad * 2 - s.matteBottom * vmin);
-    var w = aw, h = ah;
-    if (s.fit === 'contain') {
-      var k = Math.min(aw / natural.w, ah / natural.h);
-      w = Math.round(natural.w * k); h = Math.round(natural.h * k);
-    }
-    frame.style.width = w + 'px';
-    frame.style.height = h + 'px';
-  }
+  function layout() { dress(stage, frame, image, natural); }
 
   function showChrome(ms) {
     el.classList.add('show-chrome');
@@ -171,31 +201,35 @@ window.framed = window.framed || {};
 
   function buildControls() {
     var ss = F.slideshow.get(), pos = F.slideshow.position();
+    var none = s.moulding === 'none';
     var specs = [
-      { id: 'cadence', name: 'Slideshow', type: 'choice', value: ss.cadence, options: F.slideshow.CADENCES,
-        help: 'Daily picks a new picture each day the app is opened.' },
-      { id: 'order', name: 'Order', type: 'choice', value: ss.order, options: F.slideshow.ORDERS },
       { id: 'picture', name: 'Picture', type: 'range', value: pos.index + 1, min: 1, max: Math.max(1, pos.count), step: 1,
-        format: function (v) { return v + ' of ' + pos.count; },
-        help: 'Left/Right on the art screen also step through pictures.' },
+        format: function (v) { return v + ' of ' + pos.count; } },
+      { id: 'cadence', name: 'Slideshow', type: 'choice', value: ss.cadence, options: F.slideshow.CADENCES },
+      { id: 'order', name: 'Order', type: 'choice', value: ss.order, options: F.slideshow.ORDERS },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
+      { id: 'moulding', name: 'Frame', type: 'choice', value: s.moulding, options: [
+        { value: 'none', label: 'None' }, { value: 'black', label: 'Black' }, { value: 'ebony', label: 'Ebony' },
+        { value: 'walnut', label: 'Walnut' }, { value: 'oak', label: 'Oak' }, { value: 'gilt', label: 'Gilt' },
+        { value: 'silver', label: 'Silver' }, { value: 'white', label: 'White' }] },
+      { id: 'profile', name: 'Profile', type: 'choice', value: s.profile, hidden: none, options: [
+        { value: 'flat', label: 'Flat' }, { value: 'scoop', label: 'Scoop' },
+        { value: 'cushion', label: 'Cushion' }, { value: 'ornate', label: 'Ornate' }] },
+      { id: 'frameWeight', name: 'Frame width', type: 'range', value: s.frameWeight, min: 1, max: 10, step: 1, hidden: none },
+      { id: 'mount', name: 'Liner', type: 'choice', value: s.mount, options: [
+        { value: 'flat', label: 'None' }, { value: 'fillet', label: 'Gold fillet' }, { value: 'linen', label: 'Linen' },
+        { value: 'slip', label: 'Black slip' }, { value: 'bevel', label: 'Bevel' }, { value: 'double', label: 'Double mat' },
+        { value: 'shadowbox', label: 'Shadowbox' }, { value: 'float', label: 'Float' }] },
       { id: 'matte', name: 'Matte width', type: 'range', value: s.matte, min: 0, max: 30, step: 1, unit: '%', fastStep: 3 },
-      { id: 'matteBottom', name: 'Bottom weight', type: 'range', value: s.matteBottom, min: 0, max: 10, step: 1, unit: '%',
-        help: 'Gallery mattes sit slightly heavier below the work.' },
-      { id: 'matteColor', name: 'Matte colour', type: 'swatch', value: s.matteColor, options: MATTES },
+      { id: 'matteBottom', name: 'Bottom weight', type: 'range', value: s.matteBottom, min: 0, max: 10, step: 1, unit: '%' },
+      { id: 'matteColor', name: 'Matte', type: 'swatch', value: s.matteColor, options: MATTES },
       { id: 'customHue', name: 'Custom hue', type: 'range', value: s.customHue, min: 0, max: 360, step: 5, unit: '°', fastStep: 4, hidden: s.matteColor !== 'custom' },
       { id: 'customSat', name: 'Custom saturation', type: 'range', value: s.customSat, min: 0, max: 100, step: 2, unit: '%', fastStep: 4, hidden: s.matteColor !== 'custom' },
       { id: 'customLight', name: 'Custom lightness', type: 'range', value: s.customLight, min: 0, max: 100, step: 2, unit: '%', fastStep: 4, hidden: s.matteColor !== 'custom' },
-      { id: 'frame', name: 'Frame', type: 'choice', value: s.frame, options: [
-        { value: 'none', label: 'None' }, { value: 'thin', label: 'Hairline' }, { value: 'gallery', label: 'Double line' },
-        { value: 'shadowbox', label: 'Shadow box' }, { value: 'corners', label: 'Corner marks' }] },
-      { id: 'frameWeight', name: 'Frame weight', type: 'range', value: s.frameWeight, min: 1, max: 6, step: 1, unit: 'px' },
-      { id: 'frameTone', name: 'Frame tone', type: 'choice', value: s.frameTone, options: [
-        { value: 'auto', label: 'Auto contrast' }, { value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }] },
       { id: 'label', name: 'Caption', type: 'choice', value: s.label, options: [
         { value: 'on', label: 'Shown' }, { value: 'off', label: 'Hidden' }] },
-      { id: 'reset', name: 'Reset', type: 'action', label: 'Restore defaults' }
+      { id: 'reset', name: 'Reset', type: 'action' }
     ];
     api = F.controls.render(controlsEl, specs, function (id, value) {
       if (id === 'reset') {
@@ -203,7 +237,7 @@ window.framed = window.framed || {};
         F.slideshow.set({ cadence: F.slideshow.DEFAULTS.cadence, order: F.slideshow.DEFAULTS.order });
         buildControls();
         F.nav.setScope(panel, { remember: false, initial: api.el('reset') });
-        F.toast('Art settings restored', 'ok');
+        F.toast('Reset', 'ok');
       } else if (id === 'cadence' || id === 'order') {
         var sp = {}; sp[id] = value; F.slideshow.set(sp);
       } else if (id === 'picture') {
@@ -214,10 +248,30 @@ window.framed = window.framed || {};
           var custom = value === 'custom';
           api.setHidden('customHue', !custom); api.setHidden('customSat', !custom); api.setHidden('customLight', !custom);
         }
+        if (id === 'moulding') { api.setHidden('frameWeight', value === 'none'); api.setHidden('profile', value === 'none'); }
       }
       apply();
     });
   }
+
+  // The launcher's miniature uses the same renderer, painting the current picture directly.
+  F.art = {
+    paintInto: function (st, fr, im) {
+      var item = F.slideshow.current();
+      if (!item) return;
+      im.style.backgroundImage = 'url("' + item.src + '")';
+      var n = naturals[item.src];
+      dress(st, fr, im, n || natural);
+      if (!n) {
+        var img = new Image();
+        img.onload = function () {
+          naturals[item.src] = { w: img.naturalWidth || 3, h: img.naturalHeight || 2 };
+          dress(st, fr, im, naturals[item.src]);
+        };
+        img.src = item.src;
+      }
+    }
+  };
 
   // the sequencer advanced (timer, catch-up, manual, or from the Settings screen)
   F.slideshow.subscribe(function () { if (!el.hidden) apply(); });

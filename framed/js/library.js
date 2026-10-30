@@ -27,13 +27,10 @@ window.framed = window.framed || {};
   var REMOTE_TIMEOUT_MS = 4000;      // manifest fetch budget before falling back to bundled
   /* =================================== */
 
+  // Sample works (generated stand-ins until the owner's own pictures are added here or served remotely).
   var BUNDLED = [
-    { id: 'demo-landscape', src: 'assets/art/demo-landscape.png', title: 'Demo landscape (3:2)', meta: 'placeholder test card' },
-    { id: 'demo-portrait',  src: 'assets/art/demo-portrait.png',  title: 'Demo portrait (4:5)',  meta: 'placeholder test card' },
-    { id: 'demo-bands',     src: 'assets/art/demo-bands.png',     title: 'Demo bands (16:9)',     meta: 'placeholder test card' },
-    { id: 'demo-rings',     src: 'assets/art/demo-rings.png',     title: 'Demo rings (3:4)',      meta: 'placeholder test card' },
-    { id: 'demo-diagonal',  src: 'assets/art/demo-diagonal.png',  title: 'Demo diagonal (3:2)',   meta: 'placeholder test card' },
-    { id: 'demo-triangles', src: 'assets/art/demo-triangles.png', title: 'Demo triangles (1:1)',  meta: 'placeholder test card' }
+    { id: 'marsh',      src: 'assets/art/landscape.jpg', title: 'Marsh at dusk',              meta: 'Sample' },
+    { id: 'still-life', src: 'assets/art/portrait.jpg',  title: 'Still life with pewter jug', meta: 'Sample' }
   ];
 
   var ITEMS = BUNDLED.slice();

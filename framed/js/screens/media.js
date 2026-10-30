@@ -23,6 +23,8 @@ window.framed = window.framed || {};
       F.media.pick(v);
       loadGrid(v);
     });
+    // async catalogs landed after enter()'s setScope — claim focus if the screen has none
+    if (!F.nav.current()) F.nav.setScope(el, { remember: true });
     loadGrid(cur);
   }
 
@@ -58,6 +60,7 @@ window.framed = window.framed || {};
         });
         gridEl.appendChild(card);
       });
+      if (!F.nav.current()) F.nav.setScope(el, { remember: true });
     });
   }
 
