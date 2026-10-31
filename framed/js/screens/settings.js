@@ -5,7 +5,7 @@
 window.framed = window.framed || {};
 (function (F) {
   var el = document.getElementById('screen-settings');
-  var DEFAULTS = { brightness: 100, artFloor: 10, theme: 'mhach', homeTv: 'on' };
+  var DEFAULTS = { brightness: 100, artFloor: 10, theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
   var s = F.store.merge('settings', {}, DEFAULTS);
 
   var floorSwatch = document.getElementById('floor-swatch');
@@ -70,12 +70,17 @@ window.framed = window.framed || {};
 
     buildSlideshow();
 
-    // home miniature: drawn inside the TV's own bezel, or the art alone (read by launcher.js)
+    // home miniature: drawn inside the TV's own bezel, or the art alone (read by launcher.js).
+    // Start in: which screen a fresh launch shows — with "Art", a remote rule that launches
+    // framed (docs/user/FRAME_LS03D.md) becomes a dedicated show-the-art button.
     F.controls.render(document.getElementById('settings-home'), [
       { id: 'homeTv', name: 'Home art', type: 'choice', value: s.homeTv, options: [
-        { value: 'on', label: 'TV frame' }, { value: 'off', label: 'Art only' }] }
+        { value: 'on', label: 'TV frame' }, { value: 'off', label: 'Art only' }] },
+      { id: 'startScreen', name: 'Start in', type: 'choice', value: s.startScreen, options: [
+        { value: 'launcher', label: 'Launcher' }, { value: 'art', label: 'Art' }] }
     ], function (id, v) {
-      s = F.store.merge('settings', { homeTv: v }, DEFAULTS);
+      var patch = {}; patch[id] = v;
+      s = F.store.merge('settings', patch, DEFAULTS);
     });
 
     F.controls.render(document.getElementById('settings-theme'), [
