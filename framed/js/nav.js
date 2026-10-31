@@ -58,8 +58,14 @@ window.framed = window.framed || {};
     if (el.getAttribute('tabindex') == null) el.setAttribute('tabindex', '-1');
     try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
     if (document.activeElement !== el) return false;
+    // scrollIntoView on every d-pad step forces a layout + scroll pass on the TV's
+    // WebKit and reads as input lag; only pay for it when the target is off-screen.
     if (!opts.noScroll && el.scrollIntoView) {
-      try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e2) { /* old engines */ }
+      var r = el.getBoundingClientRect();
+      var off = r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth;
+      if (off) {
+        try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e2) { /* old engines */ }
+      }
     }
     return true;
   }
@@ -207,7 +213,7 @@ window.framed = window.framed || {};
     // Tizen: register additional remote keys we care about (optional; arrows/Enter/Return are default).
     try {
       if (window.tizen && tizen.tvinputdevice) {
-        ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop'].forEach(function (k) {
+        ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaRewind', 'MediaFastForward', 'ColorF0Red', 'ColorF1Green'].forEach(function (k) {
           try { tizen.tvinputdevice.registerKey(k); } catch (e) { /* key not on this remote */ }
         });
       }

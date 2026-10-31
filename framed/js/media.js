@@ -14,8 +14,11 @@
  *   F.media.meta(cat, id, cb) -> cb(meta | null)    full metadata for one item
  *   F.media.streams(type, id, cb) -> cb(streams[])  normalized, every stream-capable addon
  *   F.media.open(cat, item) / F.media.item()        browse -> detail handoff
- *   F.media.start(stream)  / F.media.playing()      detail -> player handoff
+ *   F.media.start(stream, ctx) / F.media.playing()  detail -> player handoff (ctx = { cat, item, episodeId, episodeLabel })
  *   F.media.picked() / F.media.pick(i)              persisted catalog selection ("framed.media")
+ *   F.media.search(query, cb) -> cb(items)          addon `search` extra where offered, else a filtered catalog fetch
+ *   F.media.toggleSaved(cat, item) / isSaved / savedItems()   the viewer's own library ("framed.watch".saved)
+ *   F.media.recordProgress(pos, dur) / progressFor… / continueItems()  resume points ("framed.watch".progress)
  *
  * Streams are normalized to { name, label, sub, url, playable }. Anything that is not a
  * direct http(s) URL (infoHash torrents, ytId, externalUrl) comes back playable:false —
@@ -39,11 +42,23 @@ window.framed = window.framed || {};
    *   {"addons": [{"name": "Torrentio", "base": "<your configured url>"}]}
    * Local entries replace same-name defaults; unknown names are prepended.
    */
-  var MEDIA_ADDONS = [
+  var DEFAULT_ADDONS = [
     { name: 'Cinemeta', base: 'https://v3-cinemeta.strem.io' },
     { name: 'Torrentio', base: 'https://torrentio.strem.fun' },
     { name: 'Local demo', base: 'addons/demo' }
   ];
+  // Installed set = defaults (minus any the viewer disabled) + addons installed
+  // from the Addons shelf, persisted in "framed.media" { customAddons, disabledAddons }.
+  var MEDIA_ADDONS = DEFAULT_ADDONS.slice();
+
+  function applyAddonPrefs() {
+    var prefs = F.store.get('media', { catalog: 0 });
+    var disabled = prefs.disabledAddons || [];
+    var out = DEFAULT_ADDONS.filter(function (a) { return disabled.indexOf(a.name) === -1; });
+    (prefs.customAddons || []).forEach(function (a) { if (a && a.base && a.name) out.push(a); });
+    MEDIA_ADDONS = out;
+    manifests = {};
+  }
   var MEDIA_TIMEOUT_MS = 6000;      // per-request budget before an addon counts as unreachable
   var MEDIA_MAX_STREAMS = 40;       // stream rows offered per item
   /* ================================== */
@@ -51,7 +66,37 @@ window.framed = window.framed || {};
   var manifests = {};               // base -> manifest object | false (failed) | undefined (not asked)
   var current = null;               // { cat, item } handed from browse to detail
   var currentStream = null;         // stream handed from detail to player
+  var playingCtx = null;            // { cat, item, episodeId, episodeLabel } for resume bookkeeping
   var localAddonsLoaded = false;    // addons.local.json merge applied (or file absent)
+  var WATCH_DEFAULTS = { saved: [], progress: {}, watched: {}, searches: [],
+    prefs: { subLang: '', subSize: 100, speed: 1, autoplayNext: true } };
+
+  applyAddonPrefs();
+
+  function watch() { return F.store.get('watch', WATCH_DEFAULTS); }
+  function saveWatch(w) { return F.store.set('watch', w); }
+  function progressKey(type, id) { return (type || 'movie') + ':' + id; }
+
+  // Catalogs and items are handed around live ({ addon:{base}, … }); anything persisted
+  // (library, resume points) needs a plain, revivable snapshot instead.
+  function snapshotCat(cat) {
+    if (!cat) return null;
+    if (cat.addonBase) return { addonName: cat.addonName || '', addonBase: cat.addonBase, type: cat.type, id: cat.id, label: cat.label }; // already a snapshot
+    return { addonName: cat.addon ? cat.addon.name : '', addonBase: cat.addon ? cat.addon.base : '', type: cat.type, id: cat.id, label: cat.label };
+  }
+  function reviveCat(snap) {
+    if (!snap || !snap.addonBase) return null;
+    return { addon: { name: snap.addonName || snap.addonBase, base: snap.addonBase }, type: snap.type, id: snap.id, label: snap.label };
+  }
+  function snapshotItem(cat, item) {
+    if (!item) return null;
+    if (!cat && item.cat) return item; // already a snapshot
+    return {
+      id: item.id, type: item.type || (cat && cat.type) || 'movie', name: item.name,
+      poster: item.poster || null, year: item.year || item.releaseInfo || '',
+      description: item.description || '', cat: snapshotCat(cat)
+    };
+  }
 
   function note(msg) { console.info('[framed] media: ' + msg); }
 
@@ -147,7 +192,22 @@ window.framed = window.framed || {};
             per[ai] = [];
             m.catalogs.forEach(function (c) {
               if (!c || !c.type || !c.id) return;
-              per[ai].push({ addon: addon, type: c.type, id: c.id, label: (c.name || c.id) + ' · ' + c.type });
+              var extras = [], filters = [];
+              var ex = c.extra || [];
+              for (var k = 0; k < ex.length; k++) {
+                var name = typeof ex[k] === 'string' ? ex[k] : ex[k] && ex[k].name;
+                if (name) extras.push(name);
+                // Discover-style filters: any declared extra with options (genre, year…)
+                if (typeof ex[k] === 'object' && ex[k] && ex[k].name && ex[k].options && ex[k].options.length &&
+                    ex[k].name !== 'search' && ex[k].name !== 'skip') {
+                  filters.push({ name: ex[k].name, options: ex[k].options.slice() });
+                }
+              }
+              (c.extraSupported || []).forEach(function (n) { if (extras.indexOf(n) === -1) extras.push(n); });
+              if (!filters.length && c.genres && c.genres.length && extras.indexOf('genre') !== -1) {
+                filters.push({ name: 'genre', options: c.genres.slice() });
+              }
+              per[ai].push({ addon: addon, type: c.type, id: c.id, label: (c.name || c.id) + ' · ' + c.type, searchable: extras.indexOf('search') !== -1, pageable: extras.indexOf('skip') !== -1, filters: filters });
             });
           }
           if (--pending === 0) cb(flatten(per));
@@ -156,10 +216,12 @@ window.framed = window.framed || {};
     });
   }
 
-  // One catalog's metas -> normalized items.
-  function catalog(cat, cb) {
+  // One catalog's metas -> normalized items. `extra` is the protocol's optional
+  // trailing segment, e.g. "search=the%20matrix" on catalogs that declare it.
+  function catalog(cat, cb, extra) {
     if (!cat) return cb(null);
-    var path = 'catalog/' + encodeURIComponent(cat.type) + '/' + encodeURIComponent(cat.id) + '.json';
+    var path = 'catalog/' + encodeURIComponent(cat.type) + '/' + encodeURIComponent(cat.id) +
+      (extra ? '/' + extra : '') + '.json';
     getJSON(addonUrl(cat.addon.base, path), function (json) {
       var metas = json && json.metas;
       if (!metas || !metas.length) return cb(null);
@@ -200,7 +262,9 @@ window.framed = window.framed || {};
     var sub = title || (url ? url.replace(/^https?:\/\//, '').split('/')[0] : '');
     var playable = !!url && !hint.notWebReady;
     var kind = url ? 'http' : (s.infoHash ? 'torrent' : (s.externalUrl || s.ytId ? 'external' : 'unknown'));
-    return { addon: addon.name, name: name, label: name, sub: sub, url: url, playable: playable, kind: kind, raw: s };
+    var qm = /(\d{3,4}p|4k|2160|1080|720|480)/i.exec(title || '');
+    return { addon: addon.name, name: name, label: name, sub: sub, url: url, playable: playable, kind: kind,
+      quality: qm ? qm[1].toUpperCase() : '', binge: hint.bingeGroup || null, raw: s };
   }
 
   // Streams for an item, from every addon that declares the 'stream' resource.
@@ -232,16 +296,336 @@ window.framed = window.framed || {};
   // Persisted catalog pick: just the index, nothing worth more.
   function pick(i) { F.store.merge('media', { catalog: i }, { catalog: 0 }); }
 
+  /* ---------- the viewer's own library + resume points ("framed.watch") ---------- */
+
+  function isSaved(type, id) {
+    var list = watch().saved || [];
+    for (var i = 0; i < list.length; i++) if (list[i].type === type && list[i].id === id) return true;
+    return false;
+  }
+
+  // Returns true when the item is saved after the call.
+  function toggleSaved(cat, item) {
+    var snap = snapshotItem(cat, item);
+    if (!snap || !snap.id) return false;
+    var w = watch();
+    var list = w.saved || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].type === snap.type && list[i].id === snap.id) {
+        list.splice(i, 1);
+        w.saved = list; saveWatch(w);
+        return false;
+      }
+    }
+    list.unshift(snap);
+    w.saved = list.slice(0, 200);
+    saveWatch(w);
+    return true;
+  }
+
+  // Snapshots newest-first; cat is revived on open (see screens/media.js openSnapshot).
+  function savedItems() { return (watch().saved || []).slice(); }
+
+  // Called by the player (throttled there). Finished titles (>92% or <10 s left) drop
+  // off Continue Watching but stay in history-free oblivion — no separate watched list.
+  function recordProgress(pos, dur) {
+    if (!playingCtx || !playingCtx.item || !(dur > 0)) return;
+    var it = playingCtx.item;
+    var videoId = playingCtx.episodeId || it.id;
+    var w = watch();
+    var all = w.progress || {};
+    var finished = pos >= dur * 0.92 || dur - pos < 10;
+    if (pos < 5 && !finished) return; // a stray open is not a resume point
+    if (finished) {
+      delete all[progressKey(it.type, videoId)];
+      var watchedAll = w.watched || {};
+      watchedAll[progressKey(it.type, videoId)] = { at: Date.now(), item: snapshotItem(playingCtx.cat, it) };
+      w.watched = watchedAll;
+    }
+    else all[progressKey(it.type, videoId)] = {
+      pos: Math.floor(pos), dur: Math.floor(dur), at: Date.now(),
+      episodeId: playingCtx.episodeId || null, episodeLabel: playingCtx.episodeLabel || '',
+      item: snapshotItem(playingCtx.cat, it)
+    };
+    // keep the shelf small and fresh: newest 40
+    var keys = Object.keys(all).sort(function (a, b) { return (all[b].at || 0) - (all[a].at || 0); });
+    for (var i = 40; i < keys.length; i++) delete all[keys[i]];
+    w.progress = all; saveWatch(w);
+  }
+
+  function progressFor(type, id) {
+    var all = watch().progress || {};
+    if (id && all[progressKey(type, id)]) return all[progressKey(type, id)];
+    // latest entry belonging to this title (e.g. any episode of a series)
+    var best = null;
+    for (var k in all) {
+      if (all[k].item && all[k].item.id === id && (!best || (all[k].at || 0) > (best.at || 0))) best = all[k];
+    }
+    return best;
+  }
+
+  // [{ item(snapshot), progress }] newest first — the Continue Watching shelf.
+  function continueItems() {
+    var all = watch().progress || {};
+    return Object.keys(all).map(function (k) { return all[k]; })
+      .filter(function (p) { return p && p.item && p.dur > 0 && p.pos > 0; })
+      .sort(function (a, b) { return (b.at || 0) - (a.at || 0); })
+      .map(function (p) { return { item: p.item, progress: p }; });
+  }
+
+  function clearProgress(type, id) {
+    var w = watch();
+    if (w.progress) { delete w.progress[progressKey(type, id)]; saveWatch(w); }
+  }
+
+  // Drop every resume point belonging to a title (Continue Watching "dismiss").
+  function clearProgressForItem(type, id) {
+    var w = watch();
+    var all = w.progress || {};
+    for (var k in all) {
+      if (k === progressKey(type, id) || (all[k].item && all[k].item.id === id)) delete all[k];
+    }
+    w.progress = all; saveWatch(w);
+  }
+
+  /* ---------- watched state (Stremio's watched indicator / mark as watched) ---------- */
+
+  function isWatched(type, id) { return !!(watch().watched || {})[progressKey(type, id)]; }
+
+  function setWatched(cat, item, videoId, on) {
+    if (!item) return false;
+    var w = watch();
+    var all = w.watched || {};
+    var key = progressKey(item.type, videoId || item.id);
+    if (on) all[key] = { at: Date.now(), item: snapshotItem(cat, item) };
+    else delete all[key];
+    w.watched = all; saveWatch(w);
+    if (on) clearProgress(item.type, videoId || item.id);
+    return on;
+  }
+
+  function toggleWatched(cat, item, videoId) {
+    return setWatched(cat, item, videoId, !isWatched(item && item.type, videoId || (item && item.id)));
+  }
+
+  // Stremio adds anything you actually play to the library; My List doubles as it.
+  function ensureSaved(cat, item) {
+    var snap = snapshotItem(cat, item);
+    if (!snap || !snap.id || isSaved(snap.type, snap.id)) return;
+    var w = watch();
+    var list = w.saved || [];
+    list.unshift(snap);
+    w.saved = list.slice(0, 200);
+    saveWatch(w);
+  }
+
+  /* ---------- player prefs + search history ---------- */
+
+  function prefs() {
+    var p = (watch().prefs || {});
+    var out = { subLang: '', subSize: 100, speed: 1, autoplayNext: true };
+    for (var k in out) if (p[k] !== undefined) out[k] = p[k];
+    return out;
+  }
+  function setPrefs(patch) {
+    var w = watch();
+    var p = prefs();
+    for (var k in patch) p[k] = patch[k];
+    w.prefs = p; saveWatch(w);
+    return p;
+  }
+
+  function searches() { return (watch().searches || []).slice(); }
+  function pushSearch(q) {
+    q = String(q || '').trim();
+    if (!q) return;
+    var w = watch();
+    var list = (w.searches || []).filter(function (s) { return s.toLowerCase() !== q.toLowerCase(); });
+    list.unshift(q);
+    w.searches = list.slice(0, 8); saveWatch(w);
+  }
+
+  /* ---------- subtitles (addon `subtitles` resource) ---------- */
+
+  function subtitles(type, id, cb) {
+    var per = {};
+    var pending = MEDIA_ADDONS.length;
+    function done() { if (--pending === 0) cb(flatten(per)); }
+    if (!pending || !id) return cb([]);
+    MEDIA_ADDONS.forEach(function (addon, ai) {
+      loadManifest(addon, function (m) {
+        if (m && hasResource(m, 'subtitles')) {
+          var path = 'subtitles/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + '.json';
+          getJSON(addonUrl(addon.base, path), function (json) {
+            var ss = json && json.subtitles;
+            if (ss && ss.length) {
+              per[ai] = [];
+              for (var i = 0; i < ss.length; i++) {
+                if (ss[i] && ss[i].url) per[ai].push({ lang: ss[i].lang || '', url: ss[i].url, addon: addon.name });
+              }
+            }
+            done();
+          });
+        } else done();
+      });
+    });
+  }
+
+  /* ---------- addon management (Stremio's Addons page, TV edition) ---------- */
+
+  function resourceNames(m) {
+    return (m && m.resources || []).map(function (r) { return typeof r === 'string' ? r : r && r.name; }).filter(Boolean);
+  }
+
+  // Active addons with manifest detail, for the Addons shelf.
+  function addonList(cb) {
+    withLocalAddons(function () {
+      var out = [], pending = MEDIA_ADDONS.length;
+      if (!pending) return cb([]);
+      MEDIA_ADDONS.forEach(function (addon, ai) {
+        loadManifest(addon, function (m) {
+          out[ai] = {
+            name: addon.name, base: addon.base,
+            custom: !(function () { for (var i = 0; i < DEFAULT_ADDONS.length; i++) if (DEFAULT_ADDONS[i].base === addon.base) return false; return true; })(),
+            version: (m && m.version) || '', description: (m && m.description) || '',
+            resources: resourceNames(m), types: (m && m.types) || [],
+            reachable: !!m
+          };
+          if (--pending === 0) cb(out.filter(Boolean));
+        });
+      });
+    });
+  }
+
+  function disabledAddons() { return (F.store.get('media', { catalog: 0 }).disabledAddons || []).slice(); }
+
+  // Install by manifest/base URL. cb(ok, nameOrWhy).
+  function addAddon(input, cb) {
+    var base = String(input || '').trim().replace(/\s+/g, '').replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) return cb(false, 'That does not look like an addon URL');
+    getJSON(addonUrl(base, 'manifest.json'), function (m) {
+      if (!m || !m.id) return cb(false, 'No addon answered at that URL');
+      var name = m.name || base.replace(/^https?:\/\//, '').split('/')[0];
+      var prefs = F.store.get('media', { catalog: 0 });
+      var customs = (prefs.customAddons || []).filter(function (a) { return a.base !== base; });
+      customs.push({ name: name, base: base });
+      var disabled = (prefs.disabledAddons || []).filter(function (n) { return n !== name; });
+      F.store.set('media', { catalog: prefs.catalog || 0, view: prefs.view, customAddons: customs, disabledAddons: disabled });
+      applyAddonPrefs();
+      cb(true, name);
+    });
+  }
+
+  // Custom addons are removed; bundled defaults are disabled (restorable).
+  function removeAddon(descriptor) {
+    var prefs = F.store.get('media', { catalog: 0 });
+    var customs = (prefs.customAddons || []).filter(function (a) { return a.base !== descriptor.base; });
+    var disabled = prefs.disabledAddons || [];
+    if (customs.length === (prefs.customAddons || []).length && disabled.indexOf(descriptor.name) === -1) disabled.push(descriptor.name);
+    F.store.set('media', { catalog: prefs.catalog || 0, view: prefs.view, customAddons: customs, disabledAddons: disabled });
+    applyAddonPrefs();
+  }
+
+  function restoreAddon(name) {
+    var prefs = F.store.get('media', { catalog: 0 });
+    var disabled = (prefs.disabledAddons || []).filter(function (n) { return n !== name; });
+    F.store.set('media', { catalog: prefs.catalog || 0, view: prefs.view, customAddons: prefs.customAddons || [], disabledAddons: disabled });
+    applyAddonPrefs();
+  }
+
+  /* ---------- search ---------- */
+
+  // Every catalog is asked. Catalogs declaring the `search` extra get the protocol
+  // request; the rest (including the bundled demo, whose JSON is static) are fetched
+  // whole and filtered by title here, so search works with zero network too.
+  function search(query, cb) {
+    var q = String(query || '').trim().toLowerCase();
+    if (!q) return cb([]);
+    catalogs(function (cats) {
+      if (!cats.length) return cb([]);
+      // One searchable catalog per addon+type is enough (the rest are genre/year
+      // re-sorts of the same titles); every non-searchable catalog is filtered locally.
+      var asked = {}, ask = [];
+      cats.forEach(function (c) {
+        var key = (c.addon.base || c.addon.name) + '|' + c.type;
+        if (c.searchable && asked[key]) return;
+        asked[key] = true;
+        ask.push(c);
+      });
+      cats = ask;
+      var per = {}, pending = cats.length, seen = {};
+      function keep(cat, items, filterLocal) {
+        var out = [];
+        (items || []).forEach(function (it) {
+          if (filterLocal && it.name.toLowerCase().indexOf(q) === -1) return;
+          var key = progressKey(it.type, it.id);
+          if (seen[key]) return;
+          seen[key] = true;
+          out.push({ cat: cat, item: it });
+        });
+        return out;
+      }
+      cats.forEach(function (cat, ci) {
+        function done(items, filterLocal) {
+          per[ci] = keep(cat, items, filterLocal);
+          if (--pending === 0) { // per-catalog buckets, in catalog order (not flatten(): that is per-addon)
+            var out = [];
+            cats.forEach(function (c, i) { (per[i] || []).forEach(function (e) { out.push(e); }); });
+            cb(out);
+          }
+        }
+        if (cat.searchable) {
+          catalog(cat, function (items) {
+            if (items) done(items, false);
+            else catalog(cat, function (all) { done(all, true); }); // addon ignored the extra: fall back
+          }, 'search=' + encodeURIComponent(q));
+        } else {
+          catalog(cat, function (all) { done(all, true); });
+        }
+      });
+    });
+  }
+
   F.media = {
     catalogs: catalogs,
     catalog: catalog,
     meta: meta,
     streams: streams,
+    search: search,
     addonCount: function () { return MEDIA_ADDONS.length; },
-    open: function (cat, item) { current = { cat: cat, item: item }; },
+    // hand a live (cat,item) or a persisted snapshot to the detail screen
+    open: function (cat, item) {
+      if (!cat && item && item.cat) { cat = reviveCat(item.cat); item = snapshotItem(null, item); }
+      current = { cat: cat, item: item };
+    },
     item: function () { return current; },
-    start: function (stream) { currentStream = stream; },
+    start: function (stream, ctx) { currentStream = stream; playingCtx = ctx || playingCtx; },
     playing: function () { return currentStream; },
+    playingContext: function () { return playingCtx; },
+    snapshotItem: snapshotItem,
+    reviveCat: reviveCat,
+    isSaved: isSaved,
+    toggleSaved: toggleSaved,
+    savedItems: savedItems,
+    ensureSaved: ensureSaved,
+    recordProgress: recordProgress,
+    progressFor: progressFor,
+    continueItems: continueItems,
+    clearProgress: clearProgress,
+    clearProgressForItem: clearProgressForItem,
+    isWatched: isWatched,
+    setWatched: setWatched,
+    toggleWatched: toggleWatched,
+    subtitles: subtitles,
+    prefs: prefs,
+    setPrefs: setPrefs,
+    searches: searches,
+    pushSearch: pushSearch,
+    addonList: addonList,
+    disabledAddons: disabledAddons,
+    addAddon: addAddon,
+    removeAddon: removeAddon,
+    restoreAddon: restoreAddon,
     pick: pick,
     picked: function () { return F.store.get('media', { catalog: 0 }).catalog || 0; }
   };

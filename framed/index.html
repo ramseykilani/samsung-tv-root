@@ -102,21 +102,44 @@
       </header>
 
       <div class="media-browse">
+        <div class="media-tools">
+          <button class="media-search-open" id="media-search-open" data-focusable tabindex="-1">Search</button>
+          <div class="media-view" id="media-view"></div>
+        </div>
         <div class="media-cats" id="media-cats"></div>
+        <div class="media-cats" id="media-filter"></div>
+        <div class="media-cats" id="media-libtools"></div>
         <div class="status media-status" id="media-status" aria-live="polite"></div>
         <div class="media-grid" id="media-grid"></div>
+        <button class="media-more" id="media-more" data-focusable tabindex="-1" hidden>More titles</button>
+      </div>
+
+      <!-- on-screen keyboard: the remote has no text entry, so search is typed by d-pad -->
+      <div class="media-keys" id="media-keys" hidden>
+        <div class="media-keys__query" id="media-query" aria-live="polite"></div>
+        <div class="media-keys__grid" id="media-keys-grid"></div>
+        <div class="media-keys__history" id="media-key-history"></div>
       </div>
     </section>
 
     <!-- ============ MEDIA: DETAIL ============ -->
     <section id="screen-media-item" class="screen screen--media-item" data-screen="media-item" hidden>
       <span id="md-crumb" hidden></span>
+      <div class="media-detail__backdrop" id="md-backdrop" aria-hidden="true"></div>
       <div class="media-detail">
         <div class="media-detail__poster" id="md-poster" role="img" aria-label="Poster"></div>
         <div class="media-detail__info">
           <h2 class="media-detail__title" id="md-title"></h2>
           <div class="media-detail__meta" id="md-meta"></div>
+          <div class="media-detail__cast" id="md-cast"></div>
           <p class="media-detail__desc" id="md-desc"></p>
+          <div class="media-actions">
+            <button class="media-action" id="md-save" data-focusable tabindex="-1">Save to My List</button>
+            <button class="media-action" id="md-resume" data-focusable tabindex="-1" hidden>Resume</button>
+            <button class="media-action" id="md-watched" data-focusable tabindex="-1">Mark watched</button>
+            <button class="media-action" id="md-dismiss" data-focusable tabindex="-1" hidden>Remove from Continue Watching</button>
+          </div>
+          <div class="media-episodes" id="md-episodes"></div>
           <h3 class="media-detail__streams-head">Streams</h3>
           <div class="media-streams" id="md-streams"></div>
           <div class="status" id="md-status" aria-live="polite"></div>
@@ -129,6 +152,13 @@
       <div class="media-player" id="mp-surface" data-focusable tabindex="-1" role="button" aria-label="Play or pause">
         <video class="media-player__video" id="mp-video" playsinline></video>
         <div class="media-player__status" id="mp-status" aria-live="polite"></div>
+        <div class="media-next" id="mp-next" hidden>
+          <button class="media-action" id="mp-next-btn" data-focusable tabindex="-1">Next episode</button>
+        </div>
+        <div class="media-panel" id="mp-panel" hidden>
+          <div class="media-panel__title">Playback · green button or C closes</div>
+          <div id="mp-panel-list"></div>
+        </div>
       </div>
     </section>
 

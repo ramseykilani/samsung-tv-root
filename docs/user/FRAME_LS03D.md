@@ -91,6 +91,7 @@ devices = [
 rules = [
   { device = "Smart Control", key = "XF86Netflix", action = "app.launch", app = "org.stremio.one" },
   { device = "Smart Control", key = "XF86Amazon", action = "app.launch", app = "<youtube-pkgid>" },
+  { device = "Smart Control", key = "XF86Home", action = "app.launch", app = "cmfrmdlnch" },
 ]
 
 [televisions.frame.events]
@@ -109,7 +110,20 @@ Notes:
   writing rules.
 - **App ids**: run `samsung-tv-root apps list frame` after rooting and
   pick the real package ids for Stremio/YouTube on your firmware —
-  they vary by region.
+  they vary by region. `app.launch` takes the **package id** from that
+  list: for `framed` it is `cmfrmdlnch` (not the widget id
+  `com.framed.launcher`, and not the Tizen app id `cmfrmdlnch.framed`).
+- **Home button → framed**: the last rule above is that mapping. A web
+  app cannot claim the Home key itself — Samsung takes it to Smart Hub
+  before any app sees it — so this only works host-side: with a rule
+  present the remote agent grabs the remote, withholds the matched
+  `XF86Home` keypress from the TV, and the daemon launches `framed`
+  instead. Confirm the key name first with `remote events` in observe
+  mode (most Samsung remotes emit `XF86Home`, evdev code 63; a few emit
+  `Home` — match `key` to what you see, or match `code = 63`). It is
+  live only while the daemon is running and the TV is rooted; if the
+  desktop is off, Home falls back to stock Smart Hub. Pressing Home
+  while `framed` is already in front simply re-launches it.
 - `disable_native_execution_policy = false` leaves UEP alone — the
   archive route doesn't need it disabled.
 
@@ -152,8 +166,10 @@ sdb push framed.wgt /home/owner/share/tmp/framed.wgt
 samsung-tv-root execute frame "pkgcmd -i -t wgt -p /home/owner/share/tmp/framed.wgt" --timeout 60
 ```
 
-The launcher appears in the app list; bind a spare remote button to it
-with another `app.launch` rule pointed at `com.framed.launcher`.
+The launcher appears in the app list (`apps list` shows its package id
+as `cmfrmdlnch` — confirm it is there). The `XF86Home` rule from Part 4
+already points Home at it; a spare remote button can carry the same
+`app.launch` rule with `app = "cmfrmdlnch"`.
 
 ## Part 8 — LAN bridge: art share + voice intents
 
