@@ -18,8 +18,8 @@ window.framed = window.framed || {};
   var catsEl = document.getElementById('media-cats');
   var filterEl = document.getElementById('media-filter');
   var libEl = document.getElementById('media-libtools');
-  var viewEl = document.getElementById('media-view');
-  var searchBtn = document.getElementById('media-search-open');
+  var shelvesEl = document.getElementById('media-shelves');
+  var shelfBtns = shelvesEl.querySelectorAll('[data-shelf]');
   var statusEl = document.getElementById('media-status');
   var gridEl = document.getElementById('media-grid');
   var moreBtn = document.getElementById('media-more');
@@ -345,20 +345,39 @@ window.framed = window.framed || {};
     });
   }
 
+  // The shelf strip is static HTML: Search + shelves as peer buttons, so ◂ ▸ moves
+  // along it (a choice control would consume ◂ ▸ and strand Search). Switching
+  // shelf also clears any active search — the results belong to no shelf.
+  function setView(v) {
+    view = v;
+    query = '';
+    F.store.merge('media', { view: v }, { catalog: 0 });
+    paintShelves();
+    applyView();
+  }
+
+  function paintShelves() {
+    for (var i = 0; i < shelfBtns.length; i++) {
+      var b = shelfBtns[i];
+      var shelf = b.getAttribute('data-shelf');
+      b.setAttribute('data-selected', String(shelf === view));
+      if (shelf === 'saved') b.textContent = 'My List (' + savedCount() + ')';
+      if (shelf === 'continue') b.textContent = 'Continue (' + continueCount() + ')';
+    }
+  }
+
+  for (var si = 0; si < shelfBtns.length; si++) {
+    (function (btn) {
+      btn.addEventListener('click', function () {
+        var shelf = btn.getAttribute('data-shelf');
+        if (shelf === 'search') openKeyboard('search');
+        else setView(shelf);
+      });
+    })(shelfBtns[si]);
+  }
+
   function buildTools() {
-    F.controls.render(viewEl, [
-      { id: 'view', name: 'Shelf', type: 'choice', value: view, options: [
-        { value: 'board', label: 'Board' },
-        { value: 'browse', label: 'Browse' },
-        { value: 'saved', label: 'My List (' + savedCount() + ')' },
-        { value: 'continue', label: 'Continue (' + continueCount() + ')' },
-        { value: 'addons', label: 'Addons' }
-      ] }
-    ], function (id, v) {
-      view = v;
-      F.store.merge('media', { view: v }, { catalog: 0 });
-      applyView();
-    });
+    paintShelves();
     var opts = cats.map(function (c, i) { return { value: i, label: c.label }; });
     var cur = F.media.picked();
     if (cur >= cats.length) cur = 0;
@@ -458,7 +477,6 @@ window.framed = window.framed || {};
     } else runSearch(text);
   }
 
-  searchBtn.addEventListener('click', function () { openKeyboard('search'); });
   moreBtn.addEventListener('click', function () {
     if (view === 'board') { loadBoardCats(loadToken); return; }
     if (rendered < entries.length) { paintPage(); return; }
@@ -493,7 +511,7 @@ window.framed = window.framed || {};
     if (f.card._subEl) f.card._subEl.textContent = cardSub(f.entry.item);
     F.toast(now ? 'Saved to My List' : 'Removed from My List', now ? 'ok' : 'info');
     if (view === 'saved' && !now) loadShelf();
-    buildTools(); // shelf counts in the labels
+    paintShelves(); // shelf counts in the labels
     return true;
   }
 

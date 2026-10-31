@@ -245,23 +245,21 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
 .media-grid:focus-within .media-card { opacity: var(--fr-recede); }
 .media-grid .media-card:focus, .media-grid .media-card.is-focused { opacity: 1; }
 
-/* browse toolbar: search + shelf switch sit above the catalog row */
-.media-tools { display: flex; align-items: flex-start; gap: var(--fr-space-6); }
-.media-search-open, .media-more, .media-key {
+/* browse toolbar: Search + shelves as one strip of peer buttons above the catalog row */
+.media-shelves { display: flex; flex-wrap: wrap; gap: var(--fr-space-2) var(--fr-space-6); }
+.shelf-btn, .media-more, .media-key {
   padding: var(--fr-space-2) var(--fr-space-5);
   font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
   border-radius: var(--fr-radius);
   transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
 }
-.media-search-open:focus, .media-search-open.is-focused,
+.shelf-btn[data-selected="true"] { color: var(--fr-color-text); box-shadow: inset 0 -0.3rem 0 0 var(--fr-color-selected); }
+.shelf-btn:focus, .shelf-btn.is-focused,
 .media-more:focus, .media-more.is-focused,
 .media-key:focus, .media-key.is-focused {
   background: var(--fr-color-surface-raised); color: var(--fr-color-text);
   box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus);
 }
-.media-view { display: inline-block; min-width: 48rem; }
-.media-view .control { grid-template-areas: "track track"; padding-top: var(--fr-space-2); padding-bottom: var(--fr-space-2); }
-.media-view .control__name { display: none; }
 .media-more { margin-top: var(--fr-space-6); }
 
 /* Board: stacked horizontal rows (Continue / My List / one per catalog) */
