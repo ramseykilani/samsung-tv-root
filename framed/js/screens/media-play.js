@@ -187,6 +187,13 @@ window.framed = window.framed || {};
   function loadSubtitles() {
     addonSubs = [];
     subTrackEls = {};
+    // drop <track> elements from the previous video, or its subtitles (and the
+    // auto-select language match) leak into whatever plays next
+    var old = video.querySelectorAll('track');
+    for (var i = 0; i < old.length; i++) {
+      if (old[i].src && old[i].src.indexOf('blob:') === 0) { try { URL.revokeObjectURL(old[i].src); } catch (e) { /* ignore */ } }
+      if (old[i].parentElement) old[i].parentElement.removeChild(old[i]);
+    }
     var ctx = F.media.playingContext();
     if (!ctx || !ctx.item) return;
     F.media.subtitles(ctx.item.type, ctx.episodeId || ctx.item.id, function (subs) {
@@ -210,6 +217,7 @@ window.framed = window.framed || {};
     s.textContent = state || '';
     b.appendChild(n);
     b.appendChild(s);
+    b._label = label;
     b.addEventListener('click', function (e) { e.stopPropagation(); onOk(); });
     return b;
   }
@@ -222,6 +230,10 @@ window.framed = window.framed || {};
   }
 
   function buildPanel() {
+    // rows that change a setting rebuild the panel (speed/size/autoplay): keep
+    // the cursor on the same row instead of restarting at the top of the panel
+    var prevLabel = null;
+    if (document.activeElement && panelList.contains(document.activeElement)) prevLabel = document.activeElement._label;
     panelList.innerHTML = '';
     var p = prefs();
     panelList.appendChild(panelHead('Speed'));
@@ -272,6 +284,13 @@ window.framed = window.framed || {};
       F.media.setPrefs({ autoplayNext: !prefs().autoplayNext });
       buildPanel();
     }, p.autoplayNext ? 'on' : 'off'));
+    // 'Subtitle size' rows change label as they cycle; match on the stable prefix
+    if (prevLabel && (!document.activeElement || document.activeElement === document.body || !panelList.contains(document.activeElement))) {
+      var rows = panelList.querySelectorAll('.media-stream');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i]._label === prevLabel || rows[i]._label.split(':')[0] === prevLabel.split(':')[0]) { F.nav.focus(rows[i]); break; }
+      }
+    }
   }
 
   function openPanel() {

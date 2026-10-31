@@ -63,6 +63,7 @@ window.framed = window.framed || {};
   function paintActions() {
     if (!cur) return;
     var it = cur.item;
+    var focusBefore = document.activeElement; // hiding a focused button drops focus to <body> at once
     saveBtn.textContent = F.media.isSaved(it.type, it.id) ? 'Saved to My List — remove' : 'Save to My List';
     var p = F.media.progressFor(it.type, it.id);
     resumeBtn.hidden = !p;
@@ -72,6 +73,9 @@ window.framed = window.framed || {};
     var watched = F.media.isWatched(it.type, videoId);
     watchedBtn.textContent = (watched ? 'Watched ✓ — mark unwatched' : 'Mark watched') +
       (selectedVideo ? ' (' + episodeLabel(selectedVideo) + ')' : '');
+    // if the button under the cursor just hid itself (Resume/Dismiss after use),
+    // park the cursor somewhere sensible instead of the top of the screen
+    if (focusBefore && (focusBefore === resumeBtn || focusBefore === dismissBtn) && focusBefore.hidden) F.nav.focus(watchedBtn);
   }
 
   watchedBtn.addEventListener('click', function () {

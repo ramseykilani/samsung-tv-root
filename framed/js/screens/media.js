@@ -97,11 +97,21 @@ window.framed = window.framed || {};
   /* ---------- paged grid (Browse / shelves / search) ---------- */
 
   function paintPage() {
+    var firstNew = null;
     var end = Math.min(rendered + PAGE, entries.length);
-    for (var i = rendered; i < end; i++) gridEl.appendChild(paintCard(entries[i]));
+    for (var i = rendered; i < end; i++) {
+      var card = paintCard(entries[i]);
+      if (!firstNew) firstNew = card;
+      gridEl.appendChild(card);
+    }
     rendered = end;
     var cat = cats[F.media.picked()];
     moreBtn.hidden = !(rendered < entries.length || (view === 'browse' && !query && cat && cat.pageable));
+    // the More button was just used and hid itself: keep the cursor in the grid
+    if (moreBtn.hidden && firstNew && document.activeElement !== firstNew &&
+        (!document.activeElement || document.activeElement === document.body || document.activeElement === moreBtn)) {
+      F.nav.focus(firstNew);
+    }
     if (!F.nav.current()) {
       // focus was on a card this paint replaced: land on the first card, not the toolbar
       var firstCard = gridEl.querySelector('[data-focusable]');
@@ -138,12 +148,14 @@ window.framed = window.framed || {};
   }
 
   function buildFilter(cat) {
-    filterEl.innerHTML = '';
+    // do not clear filterEl here: controls.render wipes the container itself,
+    // and clearing first would destroy the focused row before render can
+    // capture and restore it
     var filters = (cat && cat.filters) || [];
     var genreFilter = null;
     filters.forEach(function (f) { if (f.name === 'genre') genreFilter = f; });
     filterEl.hidden = !genreFilter || view !== 'browse';
-    if (!genreFilter) { genre = ''; return; }
+    if (!genreFilter) { genre = ''; filterEl.innerHTML = ''; return; }
     var opts = [{ value: '', label: 'All genres' }].concat(genreFilter.options.map(function (g) { return { value: g, label: g }; }));
     if (!genreFilter.options.length || (genre && genreFilter.options.indexOf(genre) === -1)) genre = '';
     F.controls.render(filterEl, [
@@ -197,6 +209,10 @@ window.framed = window.framed || {};
     });
     moreBtn.hidden = boardCatsLoaded >= cats.length;
     moreBtn.textContent = 'More catalogs';
+    if (moreBtn.hidden && (!document.activeElement || document.activeElement === document.body || document.activeElement === moreBtn)) {
+      var cards = gridEl.querySelectorAll('.media-card');
+      if (cards.length) F.nav.focus(cards[cards.length - 1]);
+    }
   }
 
   function loadBoard() {
@@ -215,9 +231,8 @@ window.framed = window.framed || {};
   /* ---------- library shelves ---------- */
 
   function buildLibTools() {
-    libEl.innerHTML = '';
     libEl.hidden = view !== 'saved';
-    if (view !== 'saved') return;
+    if (view !== 'saved') { libEl.innerHTML = ''; return; }
     F.controls.render(libEl, [
       { id: 'sort', name: 'Sort', type: 'choice', value: libSort, options: [
         { value: 'added', label: 'Recently added' }, { value: 'name', label: 'Name' }, { value: 'watched', label: 'Last watched' }] },
@@ -260,6 +275,7 @@ window.framed = window.framed || {};
     b.className = 'media-addon';
     b.setAttribute('data-focusable', '');
     b.setAttribute('tabindex', '-1');
+    b._title = title;
     var n = document.createElement('span');
     n.className = 'media-addon__name';
     n.textContent = title;
@@ -272,7 +288,7 @@ window.framed = window.framed || {};
     return b;
   }
 
-  function loadAddons() {
+  function loadAddons(focusTitle) {
     var token = ++loadToken;
     gridEl.classList.add('is-board');
     gridEl.innerHTML = '';
@@ -290,16 +306,28 @@ window.framed = window.framed || {};
           function () {
             F.media.removeAddon(a);
             F.toast(a.custom ? 'Removed ' + a.name : 'Disabled ' + a.name, 'info');
-            refreshCats(function () { loadAddons(); });
+            refreshCats(function () { loadAddons(a.name); });
           }));
       });
       F.media.disabledAddons().forEach(function (name) {
         gridEl.appendChild(addonRow(name + ' (disabled)', 'OK re-enables this built-in addon', function () {
           F.media.restoreAddon(name);
           F.toast('Enabled ' + name, 'ok');
-          refreshCats(function () { loadAddons(); });
+          refreshCats(function () { loadAddons(name); });
         }));
       });
+      // after a remove/restore the clicked row is gone: land on its replacement
+      // (or the first addon row), not back at the top of the screen
+      if (focusTitle) {
+        var rows = gridEl.querySelectorAll('.media-addon');
+        var target = null;
+        for (var ri = 0; ri < rows.length; ri++) {
+          if (rows[ri]._title === focusTitle || rows[ri]._title.indexOf(focusTitle) === 0) { target = rows[ri]; break; }
+        }
+        if (target) F.nav.focus(target);
+        else if (rows.length > 1) F.nav.focus(rows[1]);
+        else if (rows.length) F.nav.focus(rows[0]);
+      }
       focusFirstCard();
       if (!F.nav.current()) F.nav.setScope(el, { remember: true });
     });
@@ -475,7 +503,7 @@ window.framed = window.framed || {};
       setStatus('Contacting addon…');
       F.media.addAddon(text, function (ok, msg) {
         F.toast(ok ? 'Installed ' + msg : msg, ok ? 'ok' : 'error');
-        if (ok) refreshCats(function () { if (view === 'addons') loadAddons(); });
+        if (ok) refreshCats(function () { if (view === 'addons') loadAddons(msg); });
         else if (view === 'addons') loadAddons();
       });
     } else runSearch(text);
@@ -493,7 +521,16 @@ window.framed = window.framed || {};
     F.media.catalog(cat, function (items) {
       fetchingMore = false;
       if (el.hidden || token !== loadToken) return;
-      if (!items || !items.length) { moreBtn.hidden = true; setStatus('That is everything in this catalog.'); return; }
+      if (!items || !items.length) {
+        moreBtn.hidden = true;
+        setStatus('That is everything in this catalog.');
+        // the button just hid itself under the cursor: keep focus in the grid
+        if (!document.activeElement || document.activeElement === document.body || document.activeElement === moreBtn) {
+          var cards = gridEl.querySelectorAll('.media-card');
+          if (cards.length) F.nav.focus(cards[cards.length - 1]);
+        }
+        return;
+      }
       var seen = {};
       entries.forEach(function (e) { seen[e.item.type + ':' + e.item.id] = true; });
       dedupe(items).forEach(function (it) { if (!seen[it.type + ':' + it.id]) entries.push({ cat: cat, item: it }); });
