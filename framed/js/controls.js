@@ -15,6 +15,14 @@ window.framed = window.framed || {};
   }
 
   function render(container, specs, onChange) {
+    // Rebuilding rows destroys the focused element (e.g. changing a filter
+    // re-renders its own control). Remember which control held the cursor and
+    // put it back on the replacement row, or focus recovery dumps the viewer
+    // at the top of the screen.
+    var prevFocusId = null;
+    if (document.activeElement && container.contains(document.activeElement)) {
+      prevFocusId = document.activeElement.getAttribute('data-control-id');
+    }
     container.innerHTML = '';
     var rows = {};
 
@@ -144,6 +152,11 @@ window.framed = window.framed || {};
           state.optEls[i].setAttribute('data-selected', String(spec.options[i].value === state.value));
         }
       }
+    }
+
+    if (prevFocusId && rows[prevFocusId] && !rows[prevFocusId].row.hidden &&
+        (!document.activeElement || document.activeElement === document.body || !container.contains(document.activeElement))) {
+      F.nav.focus(rows[prevFocusId].row);
     }
 
     return {

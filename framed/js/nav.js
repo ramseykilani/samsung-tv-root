@@ -58,12 +58,27 @@ window.framed = window.framed || {};
     if (el.getAttribute('tabindex') == null) el.setAttribute('tabindex', '-1');
     try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
     if (document.activeElement !== el) return false;
-    // scrollIntoView on every d-pad step forces a layout + scroll pass on the TV's
-    // WebKit and reads as input lag; only pay for it when the target is off-screen.
+    // Reveal the target whenever it is not *fully* in view. Anything less (only
+    // scrolling when a row is completely off-screen) leaves half-cut rows that
+    // never snap into place on the next keypress, which reads as broken scrolling.
+    // Fully-visible targets still skip the call, so plain steps stay cheap.
     if (!opts.noScroll && el.scrollIntoView) {
       var r = el.getBoundingClientRect();
-      var off = r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth;
-      if (off) {
+      var fully = r.top >= 4 && r.left >= 4 && r.bottom <= window.innerHeight - 4 && r.right <= window.innerWidth - 4;
+      // Also clipped is hidden: a target can sit inside the window yet be scrolled
+      // out of the one container that clips it (rows above the fold), in which case
+      // the window test alone never scrolls and the cursor appears stuck.
+      if (fully) {
+        var n = el.parentElement;
+        while (n && n !== document.body) {
+          if (n.scrollHeight > n.clientHeight || n.scrollWidth > n.clientWidth) {
+            var c = n.getBoundingClientRect();
+            if (r.top < c.top + 4 || r.bottom > c.bottom - 4 || r.left < c.left + 4 || r.right > c.right - 4) { fully = false; break; }
+          }
+          n = n.parentElement;
+        }
+      }
+      if (!fully) {
         try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e2) { /* old engines */ }
       }
     }

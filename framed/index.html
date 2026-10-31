@@ -102,9 +102,18 @@
       </header>
 
       <div class="media-browse">
+        <!-- one strip of peers: Search is an action, the rest are shelves. All are plain
+             buttons so ◂ ▸ walks the strip; a choice control here would eat ◂ ▸ to
+             change shelf and strand the cursor away from Search. -->
         <div class="media-tools">
-          <button class="media-search-open" id="media-search-open" data-focusable tabindex="-1">Search</button>
-          <div class="media-view" id="media-view"></div>
+          <div class="media-shelves" id="media-shelves">
+            <button class="shelf-btn" data-focusable data-shelf="search" tabindex="-1">Search</button>
+            <button class="shelf-btn" data-focusable data-shelf="board" tabindex="-1">Board</button>
+            <button class="shelf-btn" data-focusable data-shelf="browse" tabindex="-1">Browse</button>
+            <button class="shelf-btn" data-focusable data-shelf="saved" data-label="My List" tabindex="-1">My List</button>
+            <button class="shelf-btn" data-focusable data-shelf="continue" data-label="Continue" tabindex="-1">Continue</button>
+            <button class="shelf-btn" data-focusable data-shelf="addons" tabindex="-1">Addons</button>
+          </div>
         </div>
         <div class="media-cats" id="media-cats"></div>
         <div class="media-cats" id="media-filter"></div>

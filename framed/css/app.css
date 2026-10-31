@@ -218,7 +218,8 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
  * Title, then the catalog tabs on the left (so ▾ lands on the first poster), then posters six
  * across with no card chrome. The focused poster takes a charge rule held off its edge like a
  * frame's reveal; the rest of the wall dims slightly while the grid has the cursor. */
-.mast--tight { padding-top: var(--fr-space-7); }
+.mast--tight { padding-top: var(--fr-space-4); }
+.screen--media .mast__word, .screen--media-item .mast__word { font-size: var(--fr-font-size-heading); }
 .media-cats { display: inline-block; min-width: 48rem; max-width: 100%; }
 .media-cats .control { grid-template-areas: "track track"; padding-top: var(--fr-space-2); padding-bottom: var(--fr-space-2); }
 .media-cats .control__name { display: none; }
@@ -237,31 +238,30 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   outline: var(--fr-focus-ring-width) solid transparent; outline-offset: var(--fr-focus-gap);
   transition: outline-color var(--fr-motion);
 }
+.media-card, .media-stream, .media-addon, .control, .media-action, .shelf-btn { scroll-margin-top: var(--fr-space-4); scroll-margin-bottom: var(--fr-space-4); }
 .media-card__title {
   margin-top: var(--fr-space-3); font-size: var(--fr-font-size-body); line-height: 1.2; color: var(--fr-color-text-muted);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
 }
 .media-card__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-faint); }
 .media-grid:focus-within .media-card { opacity: var(--fr-recede); }
 .media-grid .media-card:focus, .media-grid .media-card.is-focused { opacity: 1; }
 
-/* browse toolbar: search + shelf switch sit above the catalog row */
-.media-tools { display: flex; align-items: flex-start; gap: var(--fr-space-6); }
-.media-search-open, .media-more, .media-key {
+/* browse toolbar: Search + shelves as one strip of peer buttons above the catalog row */
+.media-shelves { display: flex; flex-wrap: wrap; gap: var(--fr-space-2) var(--fr-space-6); }
+.shelf-btn, .media-more, .media-key {
   padding: var(--fr-space-2) var(--fr-space-5);
   font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
   border-radius: var(--fr-radius);
   transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
 }
-.media-search-open:focus, .media-search-open.is-focused,
+.shelf-btn[data-selected="true"] { color: var(--fr-color-text); box-shadow: inset 0 -0.3rem 0 0 var(--fr-color-selected); }
+.shelf-btn:focus, .shelf-btn.is-focused,
 .media-more:focus, .media-more.is-focused,
 .media-key:focus, .media-key.is-focused {
   background: var(--fr-color-surface-raised); color: var(--fr-color-text);
   box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus);
 }
-.media-view { display: inline-block; min-width: 48rem; }
-.media-view .control { grid-template-areas: "track track"; padding-top: var(--fr-space-2); padding-bottom: var(--fr-space-2); }
-.media-view .control__name { display: none; }
 .media-more { margin-top: var(--fr-space-6); }
 
 /* Board: stacked horizontal rows (Continue / My List / one per catalog) */
