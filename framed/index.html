@@ -102,9 +102,20 @@
       </header>
 
       <div class="media-browse">
+        <div class="media-tools">
+          <button class="media-search-open" id="media-search-open" data-focusable tabindex="-1">Search</button>
+          <div class="media-view" id="media-view"></div>
+        </div>
         <div class="media-cats" id="media-cats"></div>
         <div class="status media-status" id="media-status" aria-live="polite"></div>
         <div class="media-grid" id="media-grid"></div>
+        <button class="media-more" id="media-more" data-focusable tabindex="-1" hidden>More titles</button>
+      </div>
+
+      <!-- on-screen keyboard: the remote has no text entry, so search is typed by d-pad -->
+      <div class="media-keys" id="media-keys" hidden>
+        <div class="media-keys__query" id="media-query" aria-live="polite"></div>
+        <div class="media-keys__grid" id="media-keys-grid"></div>
       </div>
     </section>
 
@@ -117,6 +128,11 @@
           <h2 class="media-detail__title" id="md-title"></h2>
           <div class="media-detail__meta" id="md-meta"></div>
           <p class="media-detail__desc" id="md-desc"></p>
+          <div class="media-actions">
+            <button class="media-action" id="md-save" data-focusable tabindex="-1">Save to My List</button>
+            <button class="media-action" id="md-resume" data-focusable tabindex="-1" hidden>Resume</button>
+          </div>
+          <div class="media-episodes" id="md-episodes"></div>
           <h3 class="media-detail__streams-head">Streams</h3>
           <div class="media-streams" id="md-streams"></div>
           <div class="status" id="md-status" aria-live="polite"></div>

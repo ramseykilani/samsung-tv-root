@@ -60,9 +60,9 @@ framed/
 | `#/launcher` (default, home) | App list: Watch · YouTube · PC · Art · Settings (+ art miniature) | ▴ ▾ move · OK open · Back does nothing |
 | `#/art` | Fullscreen picture on a matte with a frame; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
 | `#/settings` | Brightness · Art Mode floor · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
-| `#/media` | Media browse: catalog picker + poster grid across the configured addons | ◂ ▸ switch catalog · ▴ ▾ browse grid · OK open item · Back → home |
-| `#/media-item` | Detail: poster, title, year/genres/rating, description, stream list | ▴ ▾ stream · OK play (or quiet refusal for unplayable sources) · Back → catalog |
-| `#/media-play` | Playback on the native HTML5 `<video>` | OK play/pause · Back → detail |
+| `#/media` | Media browse: Search, shelves (Browse · My List · Continue Watching), catalog picker + poster grid across the configured addons | ▴ ▾ browse · ◂ ▸ switch catalog/shelf · OK open item · red button (or `s`) save/remove focused poster · Back clears search, then → home |
+| `#/media-item` | Detail: poster, title, year/genres/rating, description, Save/Resume actions, episodes (series), stream list | ▴ ▾ move · OK save / resume / play (or quiet refusal for unplayable sources) · Back → catalog |
+| `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · media keys · Back → detail (position kept) |
 
 Art options (persisted in `localStorage["framed.art"]`): artwork, image fit (contain hugs the image
 with the frame; cover fills the matte opening), matte width 0–30 % (of the shorter screen edge, each
@@ -132,13 +132,30 @@ var MEDIA_ADDONS = [
   default entry replace its `base`, unknown names are prepended. Absent file → quiet no-op.
   With a debrid-backed base, `stream/` responses become HTTPS `…/resolve/…` URLs the TV's
   `<video>` can play directly.
-- Persisted state is one key, `localStorage["framed.media"]` = `{ catalog: <index> }` (the last
-  selected catalog). Nothing heavier is cached; addon data is fetched fresh per visit.
+- Persisted state: `localStorage["framed.media"]` = `{ catalog, view }` (last catalog and
+  shelf), and `localStorage["framed.watch"]` = the viewer's own data — `saved[]` (My List
+  snapshots: item + a revivable catalog reference, newest first, cap 200) and `progress{}`
+  (resume points keyed `type:id`, cap 40; a title past 92 % / the final 10 s counts as
+  finished and drops off). Addon data itself is fetched fresh per visit.
+- **My List:** Save from the detail screen, or the remote's red button (`s` on a desktop
+  keyboard) on a focused poster. Saved titles open again without their catalog being
+  browsed — the snapshot revives its addon reference for meta/streams.
+- **Continue Watching:** the player writes its position (throttled, and on pause/Back) and
+  seeks back to it on entry; the shelf lists in-progress titles newest first, cards and
+  episode rows show % watched, and series reopen on the episode holding the resume point.
+  Series detail lists `meta.videos` as episodes in season/episode order and loads streams
+  per episode id.
+- **Search:** the Search button opens an on-screen keyboard (typed by d-pad; a physical
+  keyboard works too). `F.media.search()` asks one `search`-capable catalog per addon+type
+  via the protocol extra (`/catalog/<type>/<id>/search=<q>.json`) and fetches + title-filters
+  the rest locally — including the bundled demo — so search works offline. Back clears it.
 - **Degraded path is identical to `library.js`:** every request is XHR with a timeout
   (`MEDIA_TIMEOUT_MS`); unreachable hosts, non-2xx, malformed JSON → one `console.info` line
   and a quiet status line / empty grid. No error UI, never blocks the rest of the app.
-- Search is not implemented (the protocol supports `extra` params and `search` catalogs — a
-  later pass can add an on-screen keyboard if wanted).
+- **Grid size is bounded on purpose:** posters paint 24 at a time (More titles, which also
+  follows the protocol `skip` extra on catalogs that declare it). The d-pad engine measures
+  every focusable on every keypress, so an unbounded wall of posters reads as remote lag;
+  `nav.js` likewise only calls `scrollIntoView` when the target is actually off-screen.
 
 ### Tizen playback constraints
 
@@ -333,6 +350,16 @@ the `.wgt` with `tizen install`. Same signing requirement, more manual steps.
 - Not verified on real hardware in this repo — the tuned build only changes settings
   defaults on top of upstream v1.19.0; report functional issues upstream on their
   Discord/issue tracker.
+
+## Home button → framed
+
+A Tizen web app cannot claim the remote's Home key (Samsung routes it to Smart Hub before
+any app sees it), so this is a host-side mapping, not an app setting: with the daemon from
+the LS03D runbook running, a remote rule
+`{ key = "XF86Home", action = "app.launch", app = "cmfrmdlnch" }` grabs the remote,
+withholds Home from the TV, and launches framed instead. See
+`docs/user/FRAME_LS03D.md` Part 4 for the full config and caveats (it is only live while
+the TV is rooted and the daemon is up; `apps list` confirms the `cmfrmdlnch` package id).
 
 ## Preview on a desktop
 

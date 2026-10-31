@@ -229,7 +229,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
 .media-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--fr-space-6) var(--fr-space-5); }
 .media-card {
   display: flex; flex-direction: column; padding: 0; text-align: left; min-width: 0;
-  transition: opacity var(--fr-motion);
+  /* no transition: animating opacity on every card made each d-pad step repaint the wall */
 }
 .media-card__poster {
   width: 100%; padding-top: 150%;            /* 2:3 */
@@ -244,6 +244,39 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
 .media-card__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-faint); }
 .media-grid:focus-within .media-card { opacity: var(--fr-recede); }
 .media-grid .media-card:focus, .media-grid .media-card.is-focused { opacity: 1; }
+
+/* browse toolbar: search + shelf switch sit above the catalog row */
+.media-tools { display: flex; align-items: flex-start; gap: var(--fr-space-6); }
+.media-search-open, .media-more, .media-key {
+  padding: var(--fr-space-2) var(--fr-space-5);
+  font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
+  border-radius: var(--fr-radius);
+  transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
+}
+.media-search-open:focus, .media-search-open.is-focused,
+.media-more:focus, .media-more.is-focused,
+.media-key:focus, .media-key.is-focused {
+  background: var(--fr-color-surface-raised); color: var(--fr-color-text);
+  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus);
+}
+.media-view { display: inline-block; min-width: 48rem; }
+.media-view .control { grid-template-areas: "track track"; padding-top: var(--fr-space-2); padding-bottom: var(--fr-space-2); }
+.media-view .control__name { display: none; }
+.media-more { margin-top: var(--fr-space-6); }
+
+/* on-screen keyboard overlay (search typed by d-pad) */
+.media-keys {
+  position: absolute; left: 50%; bottom: var(--fr-space-8); transform: translateX(-50%);
+  padding: var(--fr-space-5) var(--fr-space-6); background: var(--fr-color-bg);
+  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-border-strong);
+}
+.media-keys__query {
+  min-height: var(--fr-space-7); margin-bottom: var(--fr-space-4);
+  font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); color: var(--fr-color-text);
+}
+.media-keys__grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: var(--fr-space-2); }
+.media-key { min-width: 7.2rem; text-align: center; }
+.media-key--wide { grid-column: span 2; }
 .media-card:focus .media-card__poster, .media-card.is-focused .media-card__poster { outline-color: var(--fr-color-focus); }
 .media-card:focus .media-card__title, .media-card.is-focused .media-card__title { color: var(--fr-color-text); }
 
@@ -264,6 +297,23 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical;
 }
 .media-detail__streams-head { display: none; }
+.media-actions { display: flex; gap: var(--fr-space-4); margin-top: var(--fr-space-6); }
+.media-action {
+  padding: var(--fr-space-2) var(--fr-space-5);
+  font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
+  border-radius: var(--fr-radius);
+  transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
+}
+.media-action:focus, .media-action.is-focused {
+  background: var(--fr-color-surface-raised); color: var(--fr-color-text);
+  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus);
+}
+.media-episodes { margin-top: var(--fr-space-6); max-width: 112rem; }
+.media-episodes__head {
+  margin-bottom: var(--fr-space-3);
+  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
+}
+.media-stream--selected .media-stream__name { color: var(--fr-color-text); box-shadow: inset 0 -0.3rem 0 0 var(--fr-color-selected); }
 .media-streams { margin-top: var(--fr-space-6); max-width: 112rem; }
 .media-stream {
   display: flex; flex-direction: column; gap: var(--fr-space-1); width: 100%; text-align: left;
