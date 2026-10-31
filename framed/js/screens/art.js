@@ -57,8 +57,35 @@ window.framed = window.framed || {};
     moulding: 'walnut',
     profile: 'scoop',
     frameWeight: 5,
-    label: 'off'
+    label: 'off',
+    drift: 'on'
   };
+
+  // Anti-burn-in drift: the whole stage is oversized by DRIFT_MAX px on every side and nudged
+  // within that overscan once per hour, so the art shifts a few pixels without ever revealing
+  // an edge — the same idea as Samsung's periodic image shift, derived from the hour-of-epoch
+  // so it survives reloads and needs no stored state.
+  var DRIFT_MAX = 10; // logical px each way (~20 px on the 4K panel)
+  function driftAxis(h, salt) {
+    var a = (h ^ salt) >>> 0;
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) % (2 * DRIFT_MAX + 1) - DRIFT_MAX;
+  }
+  function applyDrift() {
+    if (s.drift === 'off') {
+      stage.style.top = stage.style.bottom = stage.style.left = stage.style.right = stage.style.transform = '';
+      return;
+    }
+    var h = Math.floor(Date.now() / 3600000);
+    stage.style.top = -DRIFT_MAX + 'px';
+    stage.style.bottom = -DRIFT_MAX + 'px';
+    stage.style.left = -DRIFT_MAX + 'px';
+    stage.style.right = panelOpen ? '' : -DRIFT_MAX + 'px'; // while the panel is open, CSS owns right
+    stage.style.transform = 'translate(' + driftAxis(h, 0x9E3779B1) + 'px,' + driftAxis(h, 0x85EBCA6B) + 'px)';
+  }
 
   var s = globalLook();
   F.store.set('art', s);
@@ -69,6 +96,8 @@ window.framed = window.framed || {};
   var shownSrc = null;
   var panelOpen = false;
   var chromeTimer;
+  var driftTimer = null;
+  var driftHour = 0;
   var KEY = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, PLAY_PAUSE: 179, TIZEN_PLAY_PAUSE: 10252 };
 
   function mix() {
@@ -223,7 +252,7 @@ window.framed = window.framed || {};
     return v + ' ' + (c === 'days' ? (v === 1 ? 'day' : 'days') : (v === 1 ? 'hour' : 'hours'));
   }
 
-  function layout() { dress(stage, frame, image, natural, s); }
+  function layout() { dress(stage, frame, image, natural, s); applyDrift(); }
 
   function showChrome(ms) {
     el.classList.add('show-chrome');
@@ -281,6 +310,9 @@ window.framed = window.framed || {};
       { id: 'customLight', name: 'Custom lightness', type: 'range', value: s.customLight, min: 0, max: 100, step: 2, unit: '%', fastStep: 4, hidden: s.matteColor !== 'custom' },
       { id: 'label', name: 'Caption', type: 'choice', value: s.label, options: [
         { value: 'on', label: 'Shown' }, { value: 'off', label: 'Hidden' }] },
+      { id: 'drift', name: 'Pixel shift', type: 'choice', value: s.drift, options: [
+        { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }],
+        help: 'Nudges the art a few pixels each hour against burn-in' },
       { id: 'reset', name: 'Reset', type: 'action' }
     ];
     api = F.controls.render(controlsEl, specs, function (id, value) {
@@ -345,13 +377,19 @@ window.framed = window.framed || {};
   F.router.register('art', {
     el: el,
     enter: function () {
-      F.slideshow.start();   // catch up (daily / elapsed periods) and tick while art is shown
+      F.slideshow.start();   // catch up on elapsed periods and tick while art is shown
       buildControls();
       apply();
+      driftHour = Math.floor(Date.now() / 3600000);
+      clearInterval(driftTimer);
+      driftTimer = setInterval(function () {
+        var h = Math.floor(Date.now() / 3600000);
+        if (h !== driftHour) { driftHour = h; applyDrift(); }
+      }, 60000);
       F.nav.setScope(el, { initial: corner, remember: false });
       showChrome(3000);
     },
-    leave: function () { F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); },
+    leave: function () { F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); },
     back: function () {
       if (panelOpen) { closePanel(); return true; }
       return false;
