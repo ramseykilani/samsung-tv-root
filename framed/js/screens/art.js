@@ -167,9 +167,14 @@ window.framed = window.framed || {};
   function paintStatus() {
     var p = F.slideshow.position(), ss = F.slideshow.get();
     panelStatus.textContent = p.item
-      ? (p.index + 1) + ' of ' + p.count + ' · ' + p.item.title + ' · ' + F.slideshow.cadenceLabel(ss.cadence) + (ss.cadence === 'off' ? '' : ', ' + ss.order)
+      ? (p.index + 1) + ' of ' + p.count + ' · ' + p.item.title + ' · ' + F.slideshow.cadenceLabel(ss) + (ss.cadence === 'off' ? '' : ', ' + ss.order)
       : 'Library is empty';
     if (api) api.set('picture', p.index + 1);
+  }
+
+  function everyLabel(v) {
+    var c = F.slideshow.get().cadence;
+    return v + ' ' + (c === 'days' ? (v === 1 ? 'day' : 'days') : (v === 1 ? 'hour' : 'hours'));
   }
 
   function layout() { dress(stage, frame, image, natural); }
@@ -206,6 +211,7 @@ window.framed = window.framed || {};
       { id: 'picture', name: 'Picture', type: 'range', value: pos.index + 1, min: 1, max: Math.max(1, pos.count), step: 1,
         format: function (v) { return v + ' of ' + pos.count; } },
       { id: 'cadence', name: 'Slideshow', type: 'choice', value: ss.cadence, options: F.slideshow.CADENCES },
+      { id: 'every', name: 'Every', type: 'range', value: ss.every, min: 1, max: F.slideshow.everyMax(ss), step: 1, hidden: ss.cadence === 'off', format: everyLabel },
       { id: 'order', name: 'Order', type: 'choice', value: ss.order, options: F.slideshow.ORDERS },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
@@ -238,7 +244,10 @@ window.framed = window.framed || {};
         buildControls();
         F.nav.setScope(panel, { remember: false, initial: api.el('reset') });
         F.toast('Reset', 'ok');
-      } else if (id === 'cadence' || id === 'order') {
+      } else if (id === 'cadence') {
+        F.slideshow.set({ cadence: value });
+        buildControls();   // the Every row hides on Off and re-ranges to the unit
+      } else if (id === 'every' || id === 'order') {
         var sp = {}; sp[id] = value; F.slideshow.set(sp);
       } else if (id === 'picture') {
         F.slideshow.goTo(value - 1);
@@ -302,7 +311,7 @@ window.framed = window.framed || {};
       if (e.keyCode === KEY.LEFT) { F.slideshow.prev(); return true; }
       if (e.key === 'p' || e.key === 'P' || e.keyCode === KEY.PLAY_PAUSE || e.keyCode === KEY.TIZEN_PLAY_PAUSE) {
         var c = F.slideshow.toggle();
-        F.toast(c === 'off' ? 'Slideshow off' : 'Slideshow: ' + F.slideshow.cadenceLabel(c), 'info');
+        F.toast(c === 'off' ? 'Slideshow off' : 'Slideshow: ' + F.slideshow.cadenceLabel(F.slideshow.get()), 'info');
         return true;
       }
       if (e.keyCode === KEY.UP || e.keyCode === KEY.DOWN) {

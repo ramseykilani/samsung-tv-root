@@ -14,6 +14,28 @@ window.framed = window.framed || {};
 
   function pct(v) { return v + '%'; }
 
+  // Rotate Off / Hours / Days, with an "Every N" interval row that hides on Off and
+  // re-ranges to the unit (1–48 hours, 1–30 days). Rebuilt on unit change.
+  function buildSlideshow() {
+    var g = F.slideshow.get();
+    F.controls.render(document.getElementById('settings-slideshow'), [
+      { id: 'cadence', name: 'Slideshow', type: 'choice', value: g.cadence, options: F.slideshow.CADENCES },
+      { id: 'every', name: 'Every', type: 'range', value: g.every, min: 1, max: F.slideshow.everyMax(g), step: 1, hidden: g.cadence === 'off',
+        format: function (v) {
+          var c = F.slideshow.get().cadence;
+          return v + ' ' + (c === 'days' ? (v === 1 ? 'day' : 'days') : (v === 1 ? 'hour' : 'hours'));
+        } },
+      { id: 'order', name: 'Order', type: 'choice', value: g.order, options: F.slideshow.ORDERS }
+    ], function (id, v) {
+      if (id === 'cadence') {
+        F.slideshow.set({ cadence: v });
+        buildSlideshow();
+        return;
+      }
+      var patch = {}; patch[id] = v; F.slideshow.set(patch);
+    });
+  }
+
   function paintFloor() {
     floorSwatch.style.setProperty('--floor-dim', String(1 - s.artFloor / 100));
   }
@@ -44,12 +66,7 @@ window.framed = window.framed || {};
       paintAbout();
     });
 
-    F.controls.render(document.getElementById('settings-slideshow'), [
-      { id: 'cadence', name: 'Slideshow', type: 'choice', value: F.slideshow.get().cadence, options: F.slideshow.CADENCES },
-      { id: 'order', name: 'Order', type: 'choice', value: F.slideshow.get().order, options: F.slideshow.ORDERS }
-    ], function (id, v) {
-      var patch = {}; patch[id] = v; F.slideshow.set(patch);
-    });
+    buildSlideshow();
 
     // home miniature: drawn inside the TV's own bezel, or the art alone (read by launcher.js)
     F.controls.render(document.getElementById('settings-home'), [
