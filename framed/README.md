@@ -60,9 +60,9 @@ framed/
 | `#/launcher` (default, home) | App list: Watch · YouTube · PC · Art · Settings (+ art miniature) | ▴ ▾ move · OK open · Back does nothing |
 | `#/art` | Fullscreen picture on a matte with a frame; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
 | `#/settings` | Brightness · Art Mode floor · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
-| `#/media` | Media browse: Search, shelves (Browse · My List · Continue Watching), catalog picker + poster grid across the configured addons | ▴ ▾ browse · ◂ ▸ switch catalog/shelf · OK open item · red button (or `s`) save/remove focused poster · Back clears search, then → home |
-| `#/media-item` | Detail: poster, title, year/genres/rating, description, Save/Resume actions, episodes (series), stream list | ▴ ▾ move · OK save / resume / play (or quiet refusal for unplayable sources) · Back → catalog |
-| `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · media keys · Back → detail (position kept) |
+| `#/media` | Watch home, modelled on Stremio: **Board** (Continue + My List rows, then a row per catalog), Browse (one catalog, paged, with its genre filter), My List (sortable, type-filtered), Continue, Addons; Search over all of it | ▴ ▾ browse · ◂ ▸ switch catalog/shelf/filter · OK open · red (`s`) save · green (`w`) mark watched · Back clears search, then → home |
+| `#/media-item` | Detail: backdrop, poster, title, year/genres/rating/cert/country, cast & director, description, Save/Resume/Mark watched/Dismiss actions, episodes (series), stream list with quality tags | ▴ ▾ move · OK act / play (or quiet refusal for unplayable sources) · Back → browse |
+| `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back → detail (position kept) |
 
 Art options (persisted in `localStorage["framed.art"]`): artwork, image fit (contain hugs the image
 with the frame; cover fills the matte opening), matte width 0–30 % (of the shorter screen edge, each
@@ -137,9 +137,33 @@ var MEDIA_ADDONS = [
   snapshots: item + a revivable catalog reference, newest first, cap 200) and `progress{}`
   (resume points keyed `type:id`, cap 40; a title past 92 % / the final 10 s counts as
   finished and drops off). Addon data itself is fetched fresh per visit.
+- **Board / Discover:** Watch opens on the Board — Continue Watching and My List rows
+  first, then one horizontal row per catalog (four catalogs at a time under More). The
+  Browse shelf is the Discover view: one catalog as a paged grid plus the filters the
+  catalog itself declares (`extra` options such as genre, sent back as protocol extras).
+  Catalog results are de-duplicated by `type:id`.
 - **My List:** Save from the detail screen, or the remote's red button (`s` on a desktop
-  keyboard) on a focused poster. Saved titles open again without their catalog being
-  browsed — the snapshot revives its addon reference for meta/streams.
+  keyboard) on a focused poster. Like Stremio's library, anything you actually play is
+  added automatically. Saved titles open again without their catalog being browsed — the
+  snapshot revives its addon reference for meta/streams. The shelf sorts by recently
+  added / name / last watched and filters by movie vs series.
+- **Watched state:** green button (`w`) on a poster, or Mark watched on the detail screen
+  (per episode for series), sets the ✓ Watched indicator; finishing a title (>92 %) marks
+  it automatically, and "Remove from Continue Watching" dismisses a resume point without
+  un-saving the title.
+- **Addons shelf:** Stremio's Addons page, TV edition — installed addons with manifest
+  version/resources, install by manifest URL (typed on the same on-screen keyboard),
+  remove customs, disable/restore built-ins. The installed set persists in
+  `framed.media { customAddons, disabledAddons }`; `addons.local.json` still works for
+  secret-bearing URLs and is applied on top.
+- **Player panel (green / `c`):** playback speed (persisted), subtitles — embedded tracks
+  plus the addon `subtitles` resource, with SRT files converted to WebVTT in-app because
+  `<video>` only speaks VTT — subtitle size, audio-track choice where the engine exposes
+  `audioTracks`, and the autoplay-next-episode toggle. Preferred subtitle language, size
+  and speed persist in `framed.watch.prefs` and are re-applied per title. Series get a
+  next-episode popup in the final minute; at the end it autoplays (toggleable), preferring
+  a stream from the same `bingeGroup`, and choosing Next marks the current episode watched.
+- **Search history:** the last eight searches sit under the keyboard as one-click chips.
 - **Continue Watching:** the player writes its position (throttled, and on pause/Back) and
   seeks back to it on entry; the shelf lists in-progress titles newest first, cards and
   episode rows show % watched, and series reopen on the episode holding the resume point.

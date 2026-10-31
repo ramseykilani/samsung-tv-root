@@ -13,8 +13,12 @@ window.framed = window.framed || {};
   var titleEl = document.getElementById('md-title');
   var metaEl = document.getElementById('md-meta');
   var descEl = document.getElementById('md-desc');
+  var backdropEl = document.getElementById('md-backdrop');
+  var castEl = document.getElementById('md-cast');
   var saveBtn = document.getElementById('md-save');
   var resumeBtn = document.getElementById('md-resume');
+  var watchedBtn = document.getElementById('md-watched');
+  var dismissBtn = document.getElementById('md-dismiss');
   var episodesEl = document.getElementById('md-episodes');
   var streamsEl = document.getElementById('md-streams');
   var statusEl = document.getElementById('md-status');
@@ -41,9 +45,18 @@ window.framed = window.framed || {};
     var genres = m.genres || m.genre;
     if (genres && genres.length) bits.push(genres.slice(0, 3).join(' · '));
     if (m.imdbRating) bits.push('★ ' + m.imdbRating);
+    if (m.certification) bits.push(m.certification);
+    if (m.country) bits.push(m.country);
     metaEl.textContent = bits.join('  ·  ');
+    var people = [];
+    var cast = m.cast || m.actors;
+    if (cast && cast.length) people.push('Cast: ' + (cast.join ? cast.slice(0, 5).join(', ') : cast));
+    var directors = m.director || m.directors;
+    if (directors && directors.length) people.push('Directed by ' + (directors.join ? directors.join(', ') : directors));
+    castEl.textContent = people.join('   ·   ');
     if (m.description) descEl.textContent = m.description;
     if (m.poster) posterEl.style.backgroundImage = 'url("' + String(m.poster).replace(/"/g, '') + '")';
+    if (m.background) backdropEl.style.backgroundImage = 'url("' + String(m.background).replace(/"/g, '') + '")';
   }
 
   function paintActions() {
@@ -52,8 +65,28 @@ window.framed = window.framed || {};
     saveBtn.textContent = F.media.isSaved(it.type, it.id) ? 'Saved to My List — remove' : 'Save to My List';
     var p = F.media.progressFor(it.type, it.id);
     resumeBtn.hidden = !p;
+    dismissBtn.hidden = !p;
     if (p) resumeBtn.textContent = 'Resume from ' + fmt(p.pos) + (p.episodeLabel ? ' · ' + p.episodeLabel : '');
+    var videoId = selectedVideo ? selectedVideo.id : it.id;
+    var watched = F.media.isWatched(it.type, videoId);
+    watchedBtn.textContent = (watched ? 'Watched ✓ — mark unwatched' : 'Mark watched') +
+      (selectedVideo ? ' (' + episodeLabel(selectedVideo) + ')' : '');
   }
+
+  watchedBtn.addEventListener('click', function () {
+    if (!cur) return;
+    var now = F.media.toggleWatched(cur.cat, cur.item, selectedVideo ? selectedVideo.id : null);
+    paintActions();
+    renderEpisodes();
+    F.toast(now ? 'Marked as watched' : 'Marked as unwatched', now ? 'ok' : 'info');
+  });
+
+  dismissBtn.addEventListener('click', function () {
+    if (!cur) return;
+    F.media.clearProgressForItem(cur.item.type, cur.item.id);
+    paintActions();
+    F.toast('Removed from Continue Watching', 'info');
+  });
 
   saveBtn.addEventListener('click', function () {
     if (!cur) return;
@@ -71,7 +104,9 @@ window.framed = window.framed || {};
     F.media.start(s, {
       cat: cur.cat, item: cur.item,
       episodeId: selectedVideo ? selectedVideo.id : null,
-      episodeLabel: selectedVideo ? episodeLabel(selectedVideo) : ''
+      episodeLabel: selectedVideo ? episodeLabel(selectedVideo) : '',
+      episodes: episodes,
+      streamName: s.name
     });
     F.router.go('media-play');
   }
@@ -99,7 +134,8 @@ window.framed = window.framed || {};
       var p = F.media.progressFor(cur.item.type, v.id);
       var sub = document.createElement('span');
       sub.className = 'media-stream__sub';
-      sub.textContent = p && p.dur > 0 ? Math.round(p.pos / p.dur * 100) + '% watched' : (v.released ? String(v.released).slice(0, 10) : '');
+      sub.textContent = F.media.isWatched(cur.item.type, v.id) ? '✓ Watched'
+        : (p && p.dur > 0 ? Math.round(p.pos / p.dur * 100) + '% watched' : (v.released ? String(v.released).slice(0, 10) : ''));
       row.appendChild(name);
       row.appendChild(sub);
       row.addEventListener('click', function () { selectEpisode(v, true); });
@@ -143,7 +179,7 @@ window.framed = window.framed || {};
       name.textContent = s.label;
       var sub = document.createElement('span');
       sub.className = 'media-stream__sub';
-      sub.textContent = s.sub + (s.playable ? '' : (s.sub ? '  ·  ' : '') + 'not playable on TV');
+      sub.textContent = (s.quality ? s.quality + '  ·  ' : '') + s.sub + (s.playable ? '' : (s.sub ? '  ·  ' : '') + 'not playable on TV');
       row.appendChild(name);
       row.appendChild(sub);
       row.addEventListener('click', function () {
@@ -173,6 +209,8 @@ window.framed = window.framed || {};
       descEl.textContent = it.description || '';
       streamsEl.innerHTML = '';
       episodesEl.innerHTML = '';
+      castEl.textContent = '';
+      backdropEl.style.backgroundImage = 'none';
       posterEl.style.backgroundImage = it.poster ? 'url("' + String(it.poster).replace(/"/g, '') + '")' : 'none';
       paintMeta(it.raw || it);
       paintActions();

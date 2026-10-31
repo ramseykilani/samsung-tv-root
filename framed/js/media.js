@@ -42,11 +42,23 @@ window.framed = window.framed || {};
    *   {"addons": [{"name": "Torrentio", "base": "<your configured url>"}]}
    * Local entries replace same-name defaults; unknown names are prepended.
    */
-  var MEDIA_ADDONS = [
+  var DEFAULT_ADDONS = [
     { name: 'Cinemeta', base: 'https://v3-cinemeta.strem.io' },
     { name: 'Torrentio', base: 'https://torrentio.strem.fun' },
     { name: 'Local demo', base: 'addons/demo' }
   ];
+  // Installed set = defaults (minus any the viewer disabled) + addons installed
+  // from the Addons shelf, persisted in "framed.media" { customAddons, disabledAddons }.
+  var MEDIA_ADDONS = DEFAULT_ADDONS.slice();
+
+  function applyAddonPrefs() {
+    var prefs = F.store.get('media', { catalog: 0 });
+    var disabled = prefs.disabledAddons || [];
+    var out = DEFAULT_ADDONS.filter(function (a) { return disabled.indexOf(a.name) === -1; });
+    (prefs.customAddons || []).forEach(function (a) { if (a && a.base && a.name) out.push(a); });
+    MEDIA_ADDONS = out;
+    manifests = {};
+  }
   var MEDIA_TIMEOUT_MS = 6000;      // per-request budget before an addon counts as unreachable
   var MEDIA_MAX_STREAMS = 40;       // stream rows offered per item
   /* ================================== */
@@ -56,7 +68,10 @@ window.framed = window.framed || {};
   var currentStream = null;         // stream handed from detail to player
   var playingCtx = null;            // { cat, item, episodeId, episodeLabel } for resume bookkeeping
   var localAddonsLoaded = false;    // addons.local.json merge applied (or file absent)
-  var WATCH_DEFAULTS = { saved: [], progress: {} };
+  var WATCH_DEFAULTS = { saved: [], progress: {}, watched: {}, searches: [],
+    prefs: { subLang: '', subSize: 100, speed: 1, autoplayNext: true } };
+
+  applyAddonPrefs();
 
   function watch() { return F.store.get('watch', WATCH_DEFAULTS); }
   function saveWatch(w) { return F.store.set('watch', w); }
@@ -177,10 +192,22 @@ window.framed = window.framed || {};
             per[ai] = [];
             m.catalogs.forEach(function (c) {
               if (!c || !c.type || !c.id) return;
-              var extras = [];
-              var ex = c.extra || c.extraSupported || [];
-              for (var k = 0; k < ex.length; k++) extras.push(typeof ex[k] === 'string' ? ex[k] : ex[k] && ex[k].name);
-              per[ai].push({ addon: addon, type: c.type, id: c.id, label: (c.name || c.id) + ' · ' + c.type, searchable: extras.indexOf('search') !== -1, pageable: extras.indexOf('skip') !== -1 });
+              var extras = [], filters = [];
+              var ex = c.extra || [];
+              for (var k = 0; k < ex.length; k++) {
+                var name = typeof ex[k] === 'string' ? ex[k] : ex[k] && ex[k].name;
+                if (name) extras.push(name);
+                // Discover-style filters: any declared extra with options (genre, year…)
+                if (typeof ex[k] === 'object' && ex[k] && ex[k].name && ex[k].options && ex[k].options.length &&
+                    ex[k].name !== 'search' && ex[k].name !== 'skip') {
+                  filters.push({ name: ex[k].name, options: ex[k].options.slice() });
+                }
+              }
+              (c.extraSupported || []).forEach(function (n) { if (extras.indexOf(n) === -1) extras.push(n); });
+              if (!filters.length && c.genres && c.genres.length && extras.indexOf('genre') !== -1) {
+                filters.push({ name: 'genre', options: c.genres.slice() });
+              }
+              per[ai].push({ addon: addon, type: c.type, id: c.id, label: (c.name || c.id) + ' · ' + c.type, searchable: extras.indexOf('search') !== -1, pageable: extras.indexOf('skip') !== -1, filters: filters });
             });
           }
           if (--pending === 0) cb(flatten(per));
@@ -235,7 +262,9 @@ window.framed = window.framed || {};
     var sub = title || (url ? url.replace(/^https?:\/\//, '').split('/')[0] : '');
     var playable = !!url && !hint.notWebReady;
     var kind = url ? 'http' : (s.infoHash ? 'torrent' : (s.externalUrl || s.ytId ? 'external' : 'unknown'));
-    return { addon: addon.name, name: name, label: name, sub: sub, url: url, playable: playable, kind: kind, raw: s };
+    var qm = /(\d{3,4}p|4k|2160|1080|720|480)/i.exec(title || '');
+    return { addon: addon.name, name: name, label: name, sub: sub, url: url, playable: playable, kind: kind,
+      quality: qm ? qm[1].toUpperCase() : '', binge: hint.bingeGroup || null, raw: s };
   }
 
   // Streams for an item, from every addon that declares the 'stream' resource.
@@ -307,7 +336,12 @@ window.framed = window.framed || {};
     var all = w.progress || {};
     var finished = pos >= dur * 0.92 || dur - pos < 10;
     if (pos < 5 && !finished) return; // a stray open is not a resume point
-    if (finished) delete all[progressKey(it.type, videoId)];
+    if (finished) {
+      delete all[progressKey(it.type, videoId)];
+      var watchedAll = w.watched || {};
+      watchedAll[progressKey(it.type, videoId)] = { at: Date.now(), item: snapshotItem(playingCtx.cat, it) };
+      w.watched = watchedAll;
+    }
     else all[progressKey(it.type, videoId)] = {
       pos: Math.floor(pos), dur: Math.floor(dur), at: Date.now(),
       episodeId: playingCtx.episodeId || null, episodeLabel: playingCtx.episodeLabel || '',
@@ -342,6 +376,161 @@ window.framed = window.framed || {};
   function clearProgress(type, id) {
     var w = watch();
     if (w.progress) { delete w.progress[progressKey(type, id)]; saveWatch(w); }
+  }
+
+  // Drop every resume point belonging to a title (Continue Watching "dismiss").
+  function clearProgressForItem(type, id) {
+    var w = watch();
+    var all = w.progress || {};
+    for (var k in all) {
+      if (k === progressKey(type, id) || (all[k].item && all[k].item.id === id)) delete all[k];
+    }
+    w.progress = all; saveWatch(w);
+  }
+
+  /* ---------- watched state (Stremio's watched indicator / mark as watched) ---------- */
+
+  function isWatched(type, id) { return !!(watch().watched || {})[progressKey(type, id)]; }
+
+  function setWatched(cat, item, videoId, on) {
+    if (!item) return false;
+    var w = watch();
+    var all = w.watched || {};
+    var key = progressKey(item.type, videoId || item.id);
+    if (on) all[key] = { at: Date.now(), item: snapshotItem(cat, item) };
+    else delete all[key];
+    w.watched = all; saveWatch(w);
+    if (on) clearProgress(item.type, videoId || item.id);
+    return on;
+  }
+
+  function toggleWatched(cat, item, videoId) {
+    return setWatched(cat, item, videoId, !isWatched(item && item.type, videoId || (item && item.id)));
+  }
+
+  // Stremio adds anything you actually play to the library; My List doubles as it.
+  function ensureSaved(cat, item) {
+    var snap = snapshotItem(cat, item);
+    if (!snap || !snap.id || isSaved(snap.type, snap.id)) return;
+    var w = watch();
+    var list = w.saved || [];
+    list.unshift(snap);
+    w.saved = list.slice(0, 200);
+    saveWatch(w);
+  }
+
+  /* ---------- player prefs + search history ---------- */
+
+  function prefs() {
+    var p = (watch().prefs || {});
+    var out = { subLang: '', subSize: 100, speed: 1, autoplayNext: true };
+    for (var k in out) if (p[k] !== undefined) out[k] = p[k];
+    return out;
+  }
+  function setPrefs(patch) {
+    var w = watch();
+    var p = prefs();
+    for (var k in patch) p[k] = patch[k];
+    w.prefs = p; saveWatch(w);
+    return p;
+  }
+
+  function searches() { return (watch().searches || []).slice(); }
+  function pushSearch(q) {
+    q = String(q || '').trim();
+    if (!q) return;
+    var w = watch();
+    var list = (w.searches || []).filter(function (s) { return s.toLowerCase() !== q.toLowerCase(); });
+    list.unshift(q);
+    w.searches = list.slice(0, 8); saveWatch(w);
+  }
+
+  /* ---------- subtitles (addon `subtitles` resource) ---------- */
+
+  function subtitles(type, id, cb) {
+    var per = {};
+    var pending = MEDIA_ADDONS.length;
+    function done() { if (--pending === 0) cb(flatten(per)); }
+    if (!pending || !id) return cb([]);
+    MEDIA_ADDONS.forEach(function (addon, ai) {
+      loadManifest(addon, function (m) {
+        if (m && hasResource(m, 'subtitles')) {
+          var path = 'subtitles/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + '.json';
+          getJSON(addonUrl(addon.base, path), function (json) {
+            var ss = json && json.subtitles;
+            if (ss && ss.length) {
+              per[ai] = [];
+              for (var i = 0; i < ss.length; i++) {
+                if (ss[i] && ss[i].url) per[ai].push({ lang: ss[i].lang || '', url: ss[i].url, addon: addon.name });
+              }
+            }
+            done();
+          });
+        } else done();
+      });
+    });
+  }
+
+  /* ---------- addon management (Stremio's Addons page, TV edition) ---------- */
+
+  function resourceNames(m) {
+    return (m && m.resources || []).map(function (r) { return typeof r === 'string' ? r : r && r.name; }).filter(Boolean);
+  }
+
+  // Active addons with manifest detail, for the Addons shelf.
+  function addonList(cb) {
+    withLocalAddons(function () {
+      var out = [], pending = MEDIA_ADDONS.length;
+      if (!pending) return cb([]);
+      MEDIA_ADDONS.forEach(function (addon, ai) {
+        loadManifest(addon, function (m) {
+          out[ai] = {
+            name: addon.name, base: addon.base,
+            custom: !(function () { for (var i = 0; i < DEFAULT_ADDONS.length; i++) if (DEFAULT_ADDONS[i].base === addon.base) return false; return true; })(),
+            version: (m && m.version) || '', description: (m && m.description) || '',
+            resources: resourceNames(m), types: (m && m.types) || [],
+            reachable: !!m
+          };
+          if (--pending === 0) cb(out.filter(Boolean));
+        });
+      });
+    });
+  }
+
+  function disabledAddons() { return (F.store.get('media', { catalog: 0 }).disabledAddons || []).slice(); }
+
+  // Install by manifest/base URL. cb(ok, nameOrWhy).
+  function addAddon(input, cb) {
+    var base = String(input || '').trim().replace(/\s+/g, '').replace(/\/manifest\.json$/i, '').replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) return cb(false, 'That does not look like an addon URL');
+    getJSON(addonUrl(base, 'manifest.json'), function (m) {
+      if (!m || !m.id) return cb(false, 'No addon answered at that URL');
+      var name = m.name || base.replace(/^https?:\/\//, '').split('/')[0];
+      var prefs = F.store.get('media', { catalog: 0 });
+      var customs = (prefs.customAddons || []).filter(function (a) { return a.base !== base; });
+      customs.push({ name: name, base: base });
+      var disabled = (prefs.disabledAddons || []).filter(function (n) { return n !== name; });
+      F.store.set('media', { catalog: prefs.catalog || 0, view: prefs.view, customAddons: customs, disabledAddons: disabled });
+      applyAddonPrefs();
+      cb(true, name);
+    });
+  }
+
+  // Custom addons are removed; bundled defaults are disabled (restorable).
+  function removeAddon(descriptor) {
+    var prefs = F.store.get('media', { catalog: 0 });
+    var customs = (prefs.customAddons || []).filter(function (a) { return a.base !== descriptor.base; });
+    var disabled = prefs.disabledAddons || [];
+    if (customs.length === (prefs.customAddons || []).length && disabled.indexOf(descriptor.name) === -1) disabled.push(descriptor.name);
+    F.store.set('media', { catalog: prefs.catalog || 0, view: prefs.view, customAddons: customs, disabledAddons: disabled });
+    applyAddonPrefs();
+  }
+
+  function restoreAddon(name) {
+    var prefs = F.store.get('media', { catalog: 0 });
+    var disabled = (prefs.disabledAddons || []).filter(function (n) { return n !== name; });
+    F.store.set('media', { catalog: prefs.catalog || 0, view: prefs.view, customAddons: prefs.customAddons || [], disabledAddons: disabled });
+    applyAddonPrefs();
   }
 
   /* ---------- search ---------- */
@@ -418,10 +607,25 @@ window.framed = window.framed || {};
     isSaved: isSaved,
     toggleSaved: toggleSaved,
     savedItems: savedItems,
+    ensureSaved: ensureSaved,
     recordProgress: recordProgress,
     progressFor: progressFor,
     continueItems: continueItems,
     clearProgress: clearProgress,
+    clearProgressForItem: clearProgressForItem,
+    isWatched: isWatched,
+    setWatched: setWatched,
+    toggleWatched: toggleWatched,
+    subtitles: subtitles,
+    prefs: prefs,
+    setPrefs: setPrefs,
+    searches: searches,
+    pushSearch: pushSearch,
+    addonList: addonList,
+    disabledAddons: disabledAddons,
+    addAddon: addAddon,
+    removeAddon: removeAddon,
+    restoreAddon: restoreAddon,
     pick: pick,
     picked: function () { return F.store.get('media', { catalog: 0 }).catalog || 0; }
   };
