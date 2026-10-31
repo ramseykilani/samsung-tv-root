@@ -28,6 +28,7 @@ window.framed = window.framed || {};
   var selectedVideo = null;  // episode object, or null for movies (streams key off the item id)
   var firstPlayable = null;
   var streamsRequested = false;
+  var wantStreamFocus = false; // focus should follow the viewer into the stream list
 
   function setStatus(t) { statusEl.textContent = t || ''; }
 
@@ -117,6 +118,10 @@ window.framed = window.framed || {};
   }
 
   function renderEpisodes() {
+    // Rebuilding these rows destroys the focused button; remember where the
+    // cursor was so it lands on the same episode again, not the top of the page.
+    var active = document.activeElement;
+    var focusedVideoId = active && episodesEl.contains(active) ? active._videoId : null;
     episodesEl.innerHTML = '';
     if (!episodes.length) return;
     var head = document.createElement('div');
@@ -138,20 +143,20 @@ window.framed = window.framed || {};
         : (p && p.dur > 0 ? Math.round(p.pos / p.dur * 100) + '% watched' : (v.released ? String(v.released).slice(0, 10) : ''));
       row.appendChild(name);
       row.appendChild(sub);
+      row._videoId = v.id;
       row.addEventListener('click', function () { selectEpisode(v, true); });
       episodesEl.appendChild(row);
+      if (focusedVideoId && focusedVideoId === v.id) F.nav.focus(row);
     });
   }
 
   function selectEpisode(v, focusStreams) {
     selectedVideo = v;
     streamsRequested = false;
+    wantStreamFocus = !!focusStreams; // applied in renderStreams, once rows exist
     renderEpisodes();
+    paintActions();
     loadStreams();
-    if (focusStreams) {
-      var first = streamsEl.querySelector('[data-focusable]');
-      if (first) F.nav.focus(first);
-    }
   }
 
   function loadStreams() {
@@ -166,7 +171,9 @@ window.framed = window.framed || {};
 
   function renderStreams(streams) {
     streamsEl.innerHTML = '';
-    if (!streams.length) { setStatus('No streams reported. Add a stream addon in js/media.js.'); return; }
+    // playable sources first (stable within each group) — what you can watch is the point
+    streams = streams.filter(function (s) { return s.playable; }).concat(streams.filter(function (s) { return !s.playable; }));
+    if (!streams.length) { setStatus('No streams reported. Add a stream addon from the Addons shelf.'); return; }
     setStatus('');
     streams.forEach(function (s) {
       if (s.playable && !firstPlayable) firstPlayable = s;
@@ -189,8 +196,19 @@ window.framed = window.framed || {};
       streamsEl.appendChild(row);
     });
     paintActions();
-    // streams landed after enter()'s setScope — claim focus if the screen has none
-    if (!F.nav.current()) F.nav.setScope(el, { remember: true });
+    if (!firstPlayable) {
+      setStatus('Nothing playable here — the addons returned only torrent/external sources, which this TV can\'t play. A debrid-backed stream addon (Addons shelf) makes titles like this playable.');
+    }
+    // Follow the viewer into the list: on entry, and after picking an episode.
+    // Don't yank focus from the action buttons if the viewer deliberately went up.
+    var curEl = F.nav.current();
+    if (wantStreamFocus && (!curEl || curEl === saveBtn || episodesEl.contains(curEl) || !el.contains(curEl))) {
+      wantStreamFocus = false;
+      var target = streamsEl.querySelector('.media-stream:not(.media-stream--dead)') || streamsEl.querySelector('[data-focusable]');
+      if (target) F.nav.focus(target);
+    } else if (!curEl) {
+      F.nav.setScope(el, { remember: true });
+    }
   }
 
   F.router.register('media-item', {
@@ -203,6 +221,7 @@ window.framed = window.framed || {};
       selectedVideo = null;
       firstPlayable = null;
       streamsRequested = false;
+      wantStreamFocus = true; // opening a title means watching it: land on the streams
       crumb.textContent = 'framed / media / ' + it.name;
       titleEl.textContent = it.name;
       metaEl.textContent = '';
@@ -215,6 +234,7 @@ window.framed = window.framed || {};
       paintMeta(it.raw || it);
       paintActions();
       setStatus('Loading…');
+      F.nav.setScope(el, { remember: true }); // scope first: renderStreams may move focus to the streams when they land
       F.media.meta(cur.cat, it.id, function (m) {
         if (el.hidden) return;
         if (!m) { loadStreams(); return; }
@@ -238,7 +258,6 @@ window.framed = window.framed || {};
       // meta may never arrive (addon without the meta resource): streams must still load
       if (!cur.cat) loadStreams();
       else setTimeout(function () { if (!el.hidden && !streamsEl.children.length && !firstPlayable) loadStreams(); }, 1200);
-      F.nav.setScope(el, { remember: true });
     },
     back: function () {
       F.router.go('media');

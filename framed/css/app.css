@@ -218,7 +218,8 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
  * Title, then the catalog tabs on the left (so ▾ lands on the first poster), then posters six
  * across with no card chrome. The focused poster takes a charge rule held off its edge like a
  * frame's reveal; the rest of the wall dims slightly while the grid has the cursor. */
-.mast--tight { padding-top: var(--fr-space-7); }
+.mast--tight { padding-top: var(--fr-space-4); }
+.screen--media .mast__word, .screen--media-item .mast__word { font-size: var(--fr-font-size-heading); }
 .media-cats { display: inline-block; min-width: 48rem; max-width: 100%; }
 .media-cats .control { grid-template-areas: "track track"; padding-top: var(--fr-space-2); padding-bottom: var(--fr-space-2); }
 .media-cats .control__name { display: none; }
@@ -237,9 +238,10 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   outline: var(--fr-focus-ring-width) solid transparent; outline-offset: var(--fr-focus-gap);
   transition: outline-color var(--fr-motion);
 }
+.media-card, .media-stream, .media-addon, .control, .media-action, .shelf-btn { scroll-margin-top: var(--fr-space-4); scroll-margin-bottom: var(--fr-space-4); }
 .media-card__title {
   margin-top: var(--fr-space-3); font-size: var(--fr-font-size-body); line-height: 1.2; color: var(--fr-color-text-muted);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
 }
 .media-card__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-faint); }
 .media-grid:focus-within .media-card { opacity: var(--fr-recede); }

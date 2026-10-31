@@ -102,7 +102,11 @@ window.framed = window.framed || {};
     rendered = end;
     var cat = cats[F.media.picked()];
     moreBtn.hidden = !(rendered < entries.length || (view === 'browse' && !query && cat && cat.pageable));
-    if (!F.nav.current()) F.nav.setScope(el, { remember: true });
+    if (!F.nav.current()) {
+      // focus was on a card this paint replaced: land on the first card, not the toolbar
+      var firstCard = gridEl.querySelector('[data-focusable]');
+      if (firstCard) F.nav.focus(firstCard); else F.nav.setScope(el, { remember: true });
+    }
     focusFirstCard();
   }
 
