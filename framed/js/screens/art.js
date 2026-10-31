@@ -221,11 +221,11 @@ window.framed = window.framed || {};
     syncPanel();
   }
 
-  // When the picture changes under an open panel (slideshow tick, Picture row), every settings
-  // row must show the new picture's own look — not the previous picture's values.
+  // When the picture changes (slideshow tick, Picture row), every settings row must show the new
+  // picture's own look — not the previous picture's values. Runs whether or not the panel is open.
   var SYNC_IDS = ['fit', 'moulding', 'profile', 'frameWeight', 'mount', 'matte', 'matteBottom', 'matteColor', 'customHue', 'customSat', 'customLight', 'label', 'drift'];
   function syncPanel() {
-    if (!api || !panelOpen) return;
+    if (!api) return;
     for (var i = 0; i < SYNC_IDS.length; i++) api.set(SYNC_IDS[i], s[SYNC_IDS[i]]);
     var none = s.moulding === 'none';
     api.setHidden('frameWeight', none); api.setHidden('profile', none);
@@ -403,8 +403,8 @@ window.framed = window.framed || {};
     el: el,
     enter: function () {
       F.slideshow.start();   // catch up on elapsed periods and tick while art is shown
+      apply();               // load this picture's own look first — the panel rows are built from it
       buildControls();
-      apply();
       driftHour = Math.floor(Date.now() / 3600000);
       clearInterval(driftTimer);
       driftTimer = setInterval(function () {
