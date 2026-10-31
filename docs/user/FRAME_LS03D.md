@@ -124,6 +124,23 @@ Notes:
   live only while the daemon is running and the TV is rooted; if the
   desktop is off, Home falls back to stock Smart Hub. Pressing Home
   while `framed` is already in front simply re-launches it.
+- **A dedicated "show art" button**: map any spare key to the framed
+  package the same way Home is mapped, then set **Settings → Start in →
+  Art** inside framed. A fresh launch then opens on the piece of art
+  itself (Back still reaches the launcher), so the key behaves like
+  Samsung's Art-mode toggle. Example:
+  `{ device = "Smart Control", key = "XF86Red", action = "app.launch", app = "cmfrmdlnch" }`.
+- **Power button → art ("tri-state")**: the same trick works for the
+  power key — `{ key = "XF86PowerOff", action = "app.launch", app = "cmfrmdlnch" }`
+  makes a short press show art instead of standing by. Confirm the
+  emitted key name with `remote events` in observe mode first (Samsung
+  remotes have used several names), and note two caveats: the rule
+  withholds *every* press from the TV, so long-press standby from the
+  remote stops working while it is active (use the TV's own button or
+  `display.picture_off` for a real screen-off); and there is no
+  "press again to return to TV" toggle yet — that needs a
+  foreground-app-conditional rule, which the rule engine does not
+  currently support.
 - `disable_native_execution_policy = false` leaves UEP alone — the
   archive route doesn't need it disabled.
 
