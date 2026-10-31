@@ -54,6 +54,7 @@ window.framed = window.framed || {};
     ], function (id, v) {
       s = F.store.merge('settings', { brightness: v }, DEFAULTS);
       window.__tvBridge.setBrightness(v);
+      window.dispatchEvent(new CustomEvent('framed:settings'));   // the art stage dims live
       paintAbout();
     });
 
@@ -62,6 +63,7 @@ window.framed = window.framed || {};
     ], function (id, v) {
       s = F.store.merge('settings', { artFloor: v }, DEFAULTS);
       window.__tvBridge.setArtFloor(v);
+      window.dispatchEvent(new CustomEvent('framed:settings'));
       paintFloor();
       paintAbout();
     });

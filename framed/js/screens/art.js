@@ -193,6 +193,24 @@ window.framed = window.framed || {};
     fr.style.height = h + 'px';
   }
 
+  // Software dimming: the Settings brightness (same row in this panel) dims the whole stage
+  // through a CSS filter, down to near-black — far below Samsung's Art Mode minimum, which is
+  // the point of the feature. Tone warms as it dims, standing in for adaptive tone until a
+  // sensor path exists. The panel and corner chrome are siblings of the stage, so the UI
+  // stays readable while the art goes dark.
+  function applyDim() {
+    var b = brightness();
+    var k = 0.02 + 0.98 * (b / 100);
+    var warm = b < 50 ? ((50 - b) / 50) * 0.28 : 0;
+    stage.style.filter = 'brightness(' + k.toFixed(3) + ')' + (warm > 0.005 ? ' sepia(' + warm.toFixed(3) + ')' : '');
+  }
+  function brightness() {
+    var b = F.store.get('settings', {}).brightness;
+    return typeof b === 'number' ? Math.max(0, Math.min(100, b)) : 100;
+  }
+  applyDim();
+  window.addEventListener('framed:settings', applyDim);
+
   // (Re)apply state: load the current picture's own look (or the default), repaint, resync panel.
   function apply() {
     var item = F.slideshow.current();
@@ -288,6 +306,9 @@ window.framed = window.framed || {};
       { id: 'cadence', name: 'Slideshow', type: 'choice', value: ss.cadence, options: F.slideshow.CADENCES },
       { id: 'every', name: 'Every', type: 'range', value: ss.every, min: 1, max: F.slideshow.everyMax(ss), step: 1, hidden: ss.cadence === 'off', format: everyLabel },
       { id: 'order', name: 'Order', type: 'choice', value: ss.order, options: F.slideshow.ORDERS },
+      { id: 'brightness', name: 'Brightness', type: 'range', value: brightness(), min: 0, max: 100, step: 1, fastStep: 5,
+        format: function (v) { return v + '%'; },
+        help: 'Software dimming; 0 is near-black, below the panel minimum' },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
       { id: 'moulding', name: 'Frame', type: 'choice', value: s.moulding, options: [
@@ -331,6 +352,10 @@ window.framed = window.framed || {};
         buildControls();   // the Every row hides on Off and re-ranges to the unit
       } else if (id === 'every' || id === 'order') {
         var sp = {}; sp[id] = value; F.slideshow.set(sp);
+      } else if (id === 'brightness') {
+        F.store.merge('settings', { brightness: value }, {});
+        window.__tvBridge.setBrightness(value);
+        window.dispatchEvent(new CustomEvent('framed:settings'));
       } else if (id === 'picture') {
         F.slideshow.goTo(value - 1);
       } else {
