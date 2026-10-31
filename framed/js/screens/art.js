@@ -3,7 +3,9 @@
  * optional matte; the slideshow sequencer (js/slideshow.js) decides which library picture is current.
  * No chrome while art is shown; the corner affordance (or the `s` key) opens the settings panel.
  * While the panel is closed: Left/Right = previous/next picture, `p` / MediaPlayPause = slideshow
- * on/off. Frame/matte settings persist under "framed.art"; slideshow prefs under "framed.slideshow".
+ * on/off. Frame/matte settings persist under "framed.art" (the default look) and per picture under
+ * "framed.artPer": editing dials in the current picture's own look, which wins on every revisit;
+ * pictures without their own memory inherit the most recent look. Slideshow prefs: "framed.slideshow".
  * Rendering of mounts and mouldings lives in css/frames.css; this file sets their geometry.
  */
 window.framed = window.framed || {};
@@ -58,7 +60,8 @@ window.framed = window.framed || {};
     label: 'off'
   };
 
-  var s = F.store.merge('art', {}, DEFAULTS);
+  var s = globalLook();
+  F.store.set('art', s);
   var api = null;
   var natural = { w: 3, h: 2 };
   var naturals = {};         // src -> { w, h }, for the launcher's miniature
@@ -68,11 +71,37 @@ window.framed = window.framed || {};
   var chromeTimer;
   var KEY = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, PLAY_PAUSE: 179, TIZEN_PLAY_PAUSE: 10252 };
 
-  function save(patch) { s = F.store.merge('art', patch, DEFAULTS); }
+  function mix() {
+    var out = {}, i, k;
+    for (i = 0; i < arguments.length; i++) {
+      var o = arguments[i] || {};
+      for (k in o) if (o.hasOwnProperty(k)) out[k] = o[k];
+    }
+    return out;
+  }
+  function globalLook() { return mix(DEFAULTS, F.store.get('art', {})); }
+  function effective(id) {
+    var per = F.store.get('artPer', {});
+    return id && per[id] ? mix(DEFAULTS, per[id]) : globalLook();
+  }
 
-  function matteHex() {
-    if (s.matteColor === 'custom') return hsl(s.customHue, s.customSat, s.customLight);
-    for (var i = 0; i < MATTES.length; i++) if (MATTES[i].value === s.matteColor) return MATTES[i].color;
+  // An edit dials in the current picture's own look AND becomes the default for
+  // pictures that don't have their own yet; other pictures' memories are untouched.
+  function save(patch) {
+    s = mix(s, patch);
+    F.store.set('art', s);
+    var item = F.slideshow.current();
+    if (item) {
+      var per = F.store.get('artPer', {});
+      per[item.id] = s;
+      F.store.set('artPer', per);
+    }
+  }
+
+  function matteHex(eff) {
+    eff = eff || s;
+    if (eff.matteColor === 'custom') return hsl(eff.customHue, eff.customSat, eff.customLight);
+    for (var i = 0; i < MATTES.length; i++) if (MATTES[i].value === eff.matteColor) return MATTES[i].color;
     return MATTES[0].color;
   }
   function hsl(hue, sat, light) { return 'hsl(' + hue + ', ' + sat + '%, ' + light + '%)'; }
@@ -92,20 +121,21 @@ window.framed = window.framed || {};
   }
 
   // caption ink: auto-contrast against the matte
-  function captionColor() {
-    return isLight(matteHex()) ? tone('--fr-frame-dark') : tone('--fr-frame-light');
+  function captionColor(eff) {
+    return isLight(matteHex(eff)) ? tone('--fr-frame-dark') : tone('--fr-frame-light');
   }
 
-  // Dress any stage (the Art screen, or the launcher's miniature) in the current settings and
+  // Dress any stage (the Art screen, or the launcher's miniature) in the given settings (eff) and
   // size the picture so picture + mount + moulding fit inside the matte opening.
   // n = the picture's natural size (only used for Contain).
-  function dress(st, fr, im, n) {
+  function dress(st, fr, im, n, eff) {
+    eff = eff || s;
     var r = st.getBoundingClientRect();
     var u = Math.min(r.width, r.height) / 100;
-    var framed = s.moulding !== 'none';
-    var mw = (s.mount === 'float' ? (framed ? FLOAT_GAP : 0) : (MOUNT_DEPTH[s.mount] || 0)) * u;
-    var fw = framed ? s.frameWeight * MOULDING_STEP * u : 0;
-    var pad = s.matte * u, padB = (s.matte + s.matteBottom) * u;
+    var framed = eff.moulding !== 'none';
+    var mw = (eff.mount === 'float' ? (framed ? FLOAT_GAP : 0) : (MOUNT_DEPTH[eff.mount] || 0)) * u;
+    var fw = framed ? eff.frameWeight * MOULDING_STEP * u : 0;
+    var pad = eff.matte * u, padB = (eff.matte + eff.matteBottom) * u;
 
     st.style.padding = pad + 'px ' + pad + 'px ' + padB + 'px';
     st.style.setProperty('--u', u + 'px');
@@ -113,20 +143,20 @@ window.framed = window.framed || {};
     st.style.setProperty('--fw', fw + 'px');
     st.style.setProperty('--b', BEVEL * u + 'px');
     st.style.setProperty('--r', REVEAL * u + 'px');
-    st.style.setProperty('--mat-grain', s.matteColor === 'black' ? 0 : isLight(matteHex()) ? 0.55 : 0.35);
-    st.style.setProperty('--matte', s.matte);
-    st.style.setProperty('--matte-color', matteHex());
-    st.style.setProperty('--frame-color', captionColor());
-    fr.setAttribute('data-mount', s.mount);
-    fr.setAttribute('data-moulding', s.moulding);
-    fr.setAttribute('data-profile', s.profile);
-    fr.setAttribute('data-core', isLight(matteHex()) ? 'light' : 'dark');
-    im.setAttribute('data-fit', s.fit);
+    st.style.setProperty('--mat-grain', eff.matteColor === 'black' ? 0 : isLight(matteHex(eff)) ? 0.55 : 0.35);
+    st.style.setProperty('--matte', eff.matte);
+    st.style.setProperty('--matte-color', matteHex(eff));
+    st.style.setProperty('--frame-color', captionColor(eff));
+    fr.setAttribute('data-mount', eff.mount);
+    fr.setAttribute('data-moulding', eff.moulding);
+    fr.setAttribute('data-profile', eff.profile);
+    fr.setAttribute('data-core', isLight(matteHex(eff)) ? 'light' : 'dark');
+    im.setAttribute('data-fit', eff.fit);
 
     var ring = 2 * (mw + fw);
     var aw = Math.max(1, r.width - pad * 2 - ring), ah = Math.max(1, r.height - pad - padB - ring);
     var w = aw, h = ah;
-    if (s.fit === 'contain') {
+    if (eff.fit === 'contain') {
       var k = Math.min(aw / n.w, ah / n.h);
       w = Math.round(n.w * k); h = Math.round(n.h * k);
     }
@@ -134,10 +164,26 @@ window.framed = window.framed || {};
     fr.style.height = h + 'px';
   }
 
+  // (Re)apply state: load the current picture's own look (or the default), repaint, resync panel.
   function apply() {
+    var item = F.slideshow.current();
+    s = effective(item && item.id);
     label.hidden = s.label !== 'on';
-    showPicture(F.slideshow.current());
+    showPicture(item);
     layout();
+    syncPanel();
+  }
+
+  // When the picture changes under an open panel (slideshow tick, Picture row), every settings
+  // row must show the new picture's own look — not the previous picture's values.
+  var SYNC_IDS = ['fit', 'moulding', 'profile', 'frameWeight', 'mount', 'matte', 'matteBottom', 'matteColor', 'customHue', 'customSat', 'customLight', 'label', 'drift'];
+  function syncPanel() {
+    if (!api || !panelOpen) return;
+    for (var i = 0; i < SYNC_IDS.length; i++) api.set(SYNC_IDS[i], s[SYNC_IDS[i]]);
+    var none = s.moulding === 'none';
+    api.setHidden('frameWeight', none); api.setHidden('profile', none);
+    var custom = s.matteColor === 'custom';
+    api.setHidden('customHue', !custom); api.setHidden('customSat', !custom); api.setHidden('customLight', !custom);
   }
 
   // Paint the picture on the inactive layer, then flip — the opacity transition is --fr-motion-art.
@@ -177,7 +223,7 @@ window.framed = window.framed || {};
     return v + ' ' + (c === 'days' ? (v === 1 ? 'day' : 'days') : (v === 1 ? 'hour' : 'hours'));
   }
 
-  function layout() { dress(stage, frame, image, natural); }
+  function layout() { dress(stage, frame, image, natural, s); }
 
   function showChrome(ms) {
     el.classList.add('show-chrome');
@@ -239,8 +285,12 @@ window.framed = window.framed || {};
     ];
     api = F.controls.render(controlsEl, specs, function (id, value) {
       if (id === 'reset') {
-        s = F.store.set('art', F.store.merge('art', DEFAULTS, DEFAULTS));
-        F.slideshow.set({ cadence: F.slideshow.DEFAULTS.cadence, order: F.slideshow.DEFAULTS.order });
+        var per = F.store.get('artPer', {});
+        var cur = F.slideshow.current();
+        if (cur && per[cur.id]) { delete per[cur.id]; F.store.set('artPer', per); }
+        s = mix(DEFAULTS);
+        F.store.set('art', s);
+        F.slideshow.set({ cadence: F.slideshow.DEFAULTS.cadence, every: F.slideshow.DEFAULTS.every, order: F.slideshow.DEFAULTS.order });
         buildControls();
         F.nav.setScope(panel, { remember: false, initial: api.el('reset') });
         F.toast('Reset', 'ok');
@@ -263,19 +313,21 @@ window.framed = window.framed || {};
     });
   }
 
-  // The launcher's miniature uses the same renderer, painting the current picture directly.
+  // The launcher's miniature uses the same renderer, painting the current picture directly
+  // in that picture's own remembered look.
   F.art = {
     paintInto: function (st, fr, im) {
       var item = F.slideshow.current();
       if (!item) return;
       im.style.backgroundImage = 'url("' + item.src + '")';
       var n = naturals[item.src];
-      dress(st, fr, im, n || natural);
+      var eff = effective(item.id);
+      dress(st, fr, im, n || natural, eff);
       if (!n) {
         var img = new Image();
         img.onload = function () {
           naturals[item.src] = { w: img.naturalWidth || 3, h: img.naturalHeight || 2 };
-          dress(st, fr, im, naturals[item.src]);
+          dress(st, fr, im, naturals[item.src], eff);
         };
         img.src = item.src;
       }
