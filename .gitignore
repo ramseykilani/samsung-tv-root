@@ -21,3 +21,5 @@ __pycache__/
 
 # Per-deployment addon secrets (API-key-bearing URLs, e.g. debrid-configured Torrentio)
 framed/addons.local.json
+framed/bridge.local.json
+/payloads/ls03d/out/

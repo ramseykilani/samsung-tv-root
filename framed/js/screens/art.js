@@ -193,16 +193,10 @@ window.framed = window.framed || {};
     fr.style.height = h + 'px';
   }
 
-  // Software dimming: the Settings brightness (same row in this panel) dims the whole stage
-  // through a CSS filter, down to near-black — far below Samsung's Art Mode minimum, which is
-  // the point of the feature. Tone warms as it dims, standing in for adaptive tone until a
-  // sensor path exists. The panel and corner chrome are siblings of the stage, so the UI
-  // stays readable while the art goes dark.
+  // Dimming and sensor-driven RGB gains affect only the art stage. The settings
+  // panel remains readable. Manual dimming no longer adds a synthetic sepia ramp.
   function applyDim() {
-    var b = brightness();
-    var k = 0.02 + 0.98 * (b / 100);
-    var warm = b < 50 ? ((50 - b) / 50) * 0.28 : 0;
-    stage.style.filter = 'brightness(' + k.toFixed(3) + ')' + (warm > 0.005 ? ' sepia(' + warm.toFixed(3) + ')' : '');
+    F.adaptive.apply();
   }
   function brightness() {
     var b = F.store.get('settings', {}).brightness;
@@ -309,6 +303,10 @@ window.framed = window.framed || {};
       { id: 'brightness', name: 'Brightness', type: 'range', value: brightness(), min: 0, max: 100, step: 1, fastStep: 5,
         format: function (v) { return v + '%'; },
         help: 'Software dimming; 0 is near-black, below the panel minimum' },
+      { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: F.store.get('settings', {}).adaptiveBrightness || 'off', options: [
+        { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
+      { id: 'adaptiveTone', name: 'Adaptive tone', type: 'choice', value: F.store.get('settings', {}).adaptiveTone || 'off', options: [
+        { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
       { id: 'moulding', name: 'Frame', type: 'choice', value: s.moulding, options: [
@@ -352,6 +350,10 @@ window.framed = window.framed || {};
         buildControls();   // the Every row hides on Off and re-ranges to the unit
       } else if (id === 'every' || id === 'order') {
         var sp = {}; sp[id] = value; F.slideshow.set(sp);
+      } else if (id === 'adaptiveBrightness' || id === 'adaptiveTone') {
+        var adaptivePatch = {}; adaptivePatch[id] = value;
+        F.store.merge('settings', adaptivePatch, {});
+        window.dispatchEvent(new CustomEvent('framed:settings'));
       } else if (id === 'brightness') {
         F.store.merge('settings', { brightness: value }, {});
         window.__tvBridge.setBrightness(value);
@@ -402,6 +404,7 @@ window.framed = window.framed || {};
   F.router.register('art', {
     el: el,
     enter: function () {
+      F.adaptive.start();
       F.slideshow.start();   // catch up on elapsed periods and tick while art is shown
       apply();               // load this picture's own look first — the panel rows are built from it
       buildControls();
@@ -414,7 +417,7 @@ window.framed = window.framed || {};
       F.nav.setScope(el, { initial: corner, remember: false });
       showChrome(3000);
     },
-    leave: function () { F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); },
+    leave: function () { F.adaptive.stop(); F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); },
     back: function () {
       if (panelOpen) { closePanel(); return true; }
       return false;

@@ -20,11 +20,13 @@ import json
 import re
 import secrets
 import stat
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Any
 
 from .controller import ControllerError, default_control_file, send_control_request
+from .ambient import AmbientSensorError, SENSOR_COMMAND, parse_ambient_result
 
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
@@ -121,12 +123,16 @@ class BridgeServer:
         token: str,
         television: str | None = None,
         timeout: float = 20.0,
+        sensor_token: str | None = None,
     ) -> None:
         self.art_directory = art_directory
         self.control_file = control_file
         self.token = token
         self.television = television
         self.timeout = timeout
+        self.sensor_token = sensor_token
+        self._sensor_lock = asyncio.Lock()
+        self._sensor_cache: tuple[float, dict[str, Any]] | None = None
         self.server: asyncio.AbstractServer | None = None
 
     async def start(self, host: str, port: int) -> None:
@@ -158,6 +164,10 @@ class BridgeServer:
             _status_line(status)
             + f"Content-Type: {content_type}\r\n".encode()
             + f"Content-Length: {len(body)}\r\n".encode()
+            + b"Access-Control-Allow-Origin: *\r\n"
+            + b"Access-Control-Allow-Headers: Authorization, Content-Type\r\n"
+            + b"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+            + b"Cache-Control: no-store\r\n"
             + b"Connection: close\r\n\r\n"
         )
         try:
@@ -189,6 +199,12 @@ class BridgeServer:
     async def _dispatch(self, reader: asyncio.StreamReader) -> tuple[int, bytes, str]:
         method, target, headers, body = await self._read_request(reader)
         path, _, _query = target.partition("?")
+        if method == "OPTIONS" and path == "/sensor/ambient":
+            return _json_response(200, {})
+        if path == "/sensor/ambient":
+            if method != "GET":
+                return _json_response(405, {"error": "GET required"})
+            return await self._ambient(headers)
         if path == "/" or path == "/health":
             return _json_response(
                 200, {"ok": True, "service": "samsung-tv-root bridge"}
@@ -206,6 +222,31 @@ class BridgeServer:
                 return _json_response(405, {"error": "POST required"})
             return await self._intent(headers, body)
         return _json_response(404, {"error": "not found"})
+
+    async def _ambient(self, headers: dict[str, str]) -> tuple[int, bytes, str]:
+        # This separate credential can only read the configured TV's sensor.
+        # Never put the privileged /intent token in a packaged web application.
+        if not self.sensor_token or not self.television:
+            return _json_response(404, {"error": "ambient sensor not configured"})
+        if not hmac.compare_digest(headers.get("authorization", ""), "Bearer " + self.sensor_token):
+            return _json_response(401, {"error": "unauthorized"})
+        async with self._sensor_lock:
+            now = time.monotonic()
+            if self._sensor_cache and now - self._sensor_cache[0] < 2:
+                return _json_response(200, {"sensor": self._sensor_cache[1]})
+            try:
+                # Compatibility with an already-running daemon: a fixed read-only
+                # command, never a command or television supplied by the web client.
+                result = await send_control_request(self.control_file, {
+                    "action": "execute", "television": self.television,
+                    "command": SENSOR_COMMAND, "timeout": 5.0,
+                }, timeout=8.0)
+                sensor = parse_ambient_result(result)
+            except (ControllerError, AmbientSensorError, TimeoutError) as error:
+                self._sensor_cache = None
+                return _json_response(502, {"error": str(error)})
+            self._sensor_cache = (time.monotonic(), sensor)
+            return _json_response(200, {"sensor": sensor})
 
     def _serve_image(self, name: str) -> tuple[int, bytes, str]:
         if SAFE_NAME.fullmatch(name) is None or ".." in name:
@@ -277,6 +318,7 @@ async def run_bridge(
     control_file: Path,
     television: str | None,
     timeout: float,
+    sensor_token: str | None = None,
 ) -> tuple[BridgeServer, str]:
     token = load_or_create_token(control_file)
     server = BridgeServer(
@@ -285,6 +327,7 @@ async def run_bridge(
         token=token,
         television=television,
         timeout=timeout,
+        sensor_token=sensor_token,
     )
     await server.start(host, port)
     return server, token

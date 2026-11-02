@@ -5,7 +5,7 @@
 window.framed = window.framed || {};
 (function (F) {
   var el = document.getElementById('screen-settings');
-  var DEFAULTS = { brightness: 100, artFloor: 10, theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
+  var DEFAULTS = { brightness: 100, artFloor: 10, adaptiveBrightness: 'off', adaptiveTone: 'off', theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
   var s = F.store.merge('settings', {}, DEFAULTS);
 
   var floorSwatch = document.getElementById('floor-swatch');
@@ -49,6 +49,16 @@ window.framed = window.framed || {};
   }
 
   function build() {
+    s = F.store.merge('settings', {}, DEFAULTS);
+    F.controls.render(document.getElementById('settings-adaptive'), [
+      { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: s.adaptiveBrightness, options: [
+        { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
+      { id: 'adaptiveTone', name: 'Adaptive tone', type: 'choice', value: s.adaptiveTone, options: [
+        { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] }
+    ], function (id, v) {
+      var patch = {}; patch[id] = v; s = F.store.merge('settings', patch, DEFAULTS);
+      window.dispatchEvent(new CustomEvent('framed:settings'));
+    });
     F.controls.render(document.getElementById('settings-brightness'), [
       { id: 'brightness', name: 'Brightness', type: 'range', value: s.brightness, min: 0, max: 100, step: 1, fastStep: 5, format: pct }
     ], function (id, v) {
