@@ -576,6 +576,19 @@ html[data-motion="reduced"] .wait__tick { -webkit-animation: none; animation: no
   font-family: var(--fr-cue-font); font-size: var(--cue-size, 100%);
   color: var(--fr-cue-ink); background: var(--fr-cue-ground);
 }
+/* AVPlay draws video on a plane behind the webview, so cues render in DOM.
+   The opaque player surface must also get out of the way for the plane to show. */
+.player[data-engine="avplay"], .player[data-engine="avplay"] .player__video { background: transparent; }
+.player__subs {
+  position: absolute; left: 0; right: 0; bottom: 6%; z-index: 1; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-family: var(--fr-cue-font); font-size: 28px;
+}
+.player__subs.is-lifted { bottom: 22%; }
+.player__sub-line {
+  max-width: 80%; text-align: center; line-height: 1.3;
+  color: var(--fr-cue-ink); background: var(--fr-cue-ground);
+}
 .player__dim {
   position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
   background: var(--fr-color-veil); opacity: 0; transition: opacity var(--fr-motion-reveal);

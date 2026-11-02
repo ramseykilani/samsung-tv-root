@@ -170,6 +170,7 @@
       <div class="player" id="mp" data-state="starting" data-chrome="shown" data-scrub="idle" data-slow="false" data-panel="closed" data-upnext="none">
 
         <video class="player__video" id="mp-video" playsinline></video>
+        <div class="player__subs" id="mp-subtitles" aria-hidden="true"></div>
         <div class="player__dim" aria-hidden="true"></div>
 
         <header class="player__top">
@@ -296,6 +297,12 @@
   <script src="js/media.js"></script>     <!-- media source seam: Stremio addon protocol client + config block -->
   <script src="js/screens/media.js"></script>
   <script src="js/screens/media-item.js"></script>
+  <script>
+    // AVPlay lives in Tizen's $WEBAPIS bundle — only inject it there so dev
+    // browsers don't 404; engine.js falls back to <video> when it's absent.
+    if (window.tizen) document.write('<script src="$WEBAPIS/webapis/webapis.js"><\/script>');
+  </script>
+  <script src="js/engine.js"></script>         <!-- playback engine seam: AVPlay on Tizen, <video> elsewhere -->
   <script src="js/screens/media-play.js"></script>
   <script src="js/screens/settings.js"></script>
   <script src="js/app.js"></script>
