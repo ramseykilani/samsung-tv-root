@@ -1,24 +1,35 @@
 /*
- * framed — physical rendering of mounts and frame mouldings on the Art screen.
+ * framed — physical rendering of picture frames on the Art screen.
  *
- * These are material constants of real objects (walnut, gilt, a bevel-cut mat), not interface
- * decisions, so they live here rather than in the theme. The canon's no-shadow law governs the
- * UI; a framed picture on a wall casts shadows, and pretending otherwise is what made it look flat.
+ * These are material constants of real objects (walnut, gilding, linen, a bevel-cut mat), not
+ * interface decisions, so they live here rather than in the theme. The canon's no-shadow law governs
+ * the UI; a framed picture on a wall is lit and casts shadows, and pretending otherwise looks flat.
+ *
+ * The goal is a TV that passes for a framed painting, so the frame is drawn like a real one:
+ *   - The moulding always sits at the screen's edge, inside the TV's own 14 mm black bezel, which
+ *     reads as the dark surround of the frame. A mat, when set, sits inside the moulding.
+ *   - Mouldings and liners are bitmaps rendered offline by tools/gen_frames.py from real
+ *     cross-sections (normals, a soft key from above-left, the room, self-shadowing, satin wood,
+ *     burnished/matte gilding, linen), one strip per side because each rail is lit differently.
+ *     CSS only places the four mitred strips; there are no CSS gradients on the frame (they band).
+ *   - Real widths: mouldings are sized in mm against the 55" Frame's 1208.7 x 679.9 mm screen.
+ *   - The light comes from above and to one side (data-light: the side the room's window is on).
+ *     The frame shades whatever sits inside it (mat, liner, picture), most at the top.
  *
  * The stage provides (set by js/screens/art.js):
  *   --u   one hundredth of the stage's shorter edge, in px (so the miniature scales exactly)
- *   --mw  mount width: bevel face, shadowbox wall depth, or float gap
- *   --fw  moulding width
- * The frame box (.art-frame) is the picture itself; mount and moulding sit outside it.
- * Light comes from above and slightly left, as in a room.
+ *   --mm  px per real millimetre (the stage's short edge is 679.9 mm)
+ *   --mw  liner width (mount)                --fw  moulding width
+ *   --ft --fr --fb --fl  distance from the picture's edge to the moulding's outer edge, per side
+ *   --lx  1 when the light is on the left, -1 on the right (for shadows inside the un-mirrored image)
+ * The frame box (.art-frame) is the picture itself; liner and moulding sit outside it.
+ * Generated per design (end of file): --m-mm/--l-mm nominal width, --m-lip/--l-lip lip height, strips.
  */
 
-/* ---------- the mat board itself, seen inside the TV's own frame ----------
- * The TV bezel is the real frame, so the screen shows what sits inside one: mat board and art.
+/* ---------- the stage: mat board inside the TV's (or the moulding's) opening ----------
  *   ::before  paper tooth (soft-light, so it works on any mat colour; off on true black)
  *             and the slow fall of room light across the board
- *   ::after   the bezel's lip shadowing the board's edges, strongest at the top
- * Both sit under the picture (.art-frame is z 1) except the bezel shadow, which is over all. */
+ *   ::after   with no moulding, the TV bezel's lip shadowing the board's edges, strongest at the top */
 .art-stage::before, .art-stage::after {
   content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
 }
@@ -31,52 +42,58 @@
   mix-blend-mode: soft-light;
   opacity: var(--mat-grain, 0.5);
 }
-.art-stage::after {
+.art-stage:not([data-framed="true"])::after {
   z-index: 4;
   box-shadow: inset 0 calc(var(--u) * 1.4) calc(var(--u) * 2.2) calc(var(--u) * -1.2) rgba(0, 0, 0, 0.22),
               inset 0 calc(var(--u) * -0.6) calc(var(--u) * 1.6) calc(var(--u) * -1.2) rgba(0, 0, 0, 0.08),
               inset 0 0 calc(var(--u) * 1.8) calc(var(--u) * -0.6) rgba(0, 0, 0, 0.10);
 }
+/* under the moulding: dark, so the anti-aliased mitre joins read as a hairline joint, not a light seam */
+.art-stage[data-framed="true"] { box-shadow: inset 0 0 0 calc(var(--fw) - 1px) #0b0a09; }
 .art-stage .art-frame { z-index: 1; }
 .art-stage .art-label { z-index: 1; }
+/* with a moulding at the screen's edge, the caption sits on the mat inside it */
+.art-stage[data-framed="true"] .art-label {
+  left: calc(var(--fw) + var(--matte) * 1vmin); bottom: calc(var(--fw) + var(--matte) * 0.3vmin);
+}
 
-/* ---------- the four mitred sides, shared by mount and moulding ---------- */
-.side { position: absolute; display: none; pointer-events: none; }
+/* ---------- the four mitred sides, shared by liner (mount) and moulding ---------- */
+.side { position: absolute; display: none; pointer-events: none; background-color: #0b0a09; }
 .side--t {
-  top: calc(var(--o) * -1); left: calc(var(--o) * -1); right: calc(var(--o) * -1); height: var(--w);
-  --dir: to bottom; --along: to right;
-  --tint-out: rgba(255, 255, 255, 0.10); --tint-in: rgba(0, 0, 0, 0.16); --tint-wall: rgba(0, 0, 0, 0.10);
+  top: calc(var(--o-t) * -1); left: calc(var(--o-l) * -1); right: calc(var(--o-r) * -1); height: var(--w);
+  background-repeat: repeat-x; background-size: auto 100%;
+  --tint-in: rgba(0, 0, 0, 0.16);
   -webkit-clip-path: polygon(0 0, 100% 0, calc(100% - var(--w)) 100%, var(--w) 100%);
   clip-path: polygon(0 0, 100% 0, calc(100% - var(--w)) 100%, var(--w) 100%);
 }
 .side--b {
-  bottom: calc(var(--o) * -1); left: calc(var(--o) * -1); right: calc(var(--o) * -1); height: var(--w);
-  --dir: to top; --along: to right;
-  --tint-out: rgba(0, 0, 0, 0.20); --tint-in: rgba(255, 255, 255, 0.14); --tint-wall: rgba(255, 255, 255, 0.06);
+  bottom: calc(var(--o-b) * -1); left: calc(var(--o-l) * -1); right: calc(var(--o-r) * -1); height: var(--w);
+  background-repeat: repeat-x; background-size: auto 100%;
+  --tint-in: rgba(255, 255, 255, 0.14);
   -webkit-clip-path: polygon(var(--w) 0, calc(100% - var(--w)) 0, 100% 100%, 0 100%);
   clip-path: polygon(var(--w) 0, calc(100% - var(--w)) 0, 100% 100%, 0 100%);
 }
 .side--l {
-  left: calc(var(--o) * -1); top: calc(var(--o) * -1); bottom: calc(var(--o) * -1); width: var(--w);
-  --dir: to right; --along: to bottom;
-  --tint-out: rgba(255, 255, 255, 0.04); --tint-in: rgba(0, 0, 0, 0.08); --tint-wall: rgba(0, 0, 0, 0.10);
+  left: calc(var(--o-l) * -1); top: calc(var(--o-t) * -1); bottom: calc(var(--o-b) * -1); width: var(--w);
+  background-repeat: repeat-y; background-size: 100% auto;
+  --tint-in: rgba(0, 0, 0, 0.08);
   -webkit-clip-path: polygon(0 0, 100% var(--w), 100% calc(100% - var(--w)), 0 100%);
   clip-path: polygon(0 0, 100% var(--w), 100% calc(100% - var(--w)), 0 100%);
 }
 .side--r {
-  right: calc(var(--o) * -1); top: calc(var(--o) * -1); bottom: calc(var(--o) * -1); width: var(--w);
-  --dir: to left; --along: to bottom;
-  --tint-out: rgba(0, 0, 0, 0.10); --tint-in: rgba(255, 255, 255, 0.02); --tint-wall: rgba(0, 0, 0, 0.03);
+  right: calc(var(--o-r) * -1); top: calc(var(--o-t) * -1); bottom: calc(var(--o-b) * -1); width: var(--w);
+  background-repeat: repeat-y; background-size: 100% auto;
+  --tint-in: rgba(255, 255, 255, 0.04);
   -webkit-clip-path: polygon(0 var(--w), 100% 0, 100% 100%, 0 calc(100% - var(--w)));
   clip-path: polygon(0 var(--w), 100% 0, 100% 100%, 0 calc(100% - var(--w)));
 }
-.mount { --o: var(--mw); --w: var(--mw); z-index: 1; }
-.mould { --o: calc(var(--mw) + var(--fw)); --w: var(--fw); z-index: 3; }
+.mount { --o-t: var(--mw); --o-r: var(--mw); --o-b: var(--mw); --o-l: var(--mw); --w: var(--mw); z-index: 1; }
+.mould { --o-t: var(--ft); --o-r: var(--fr); --o-b: var(--fb); --o-l: var(--fl); --w: var(--fw); z-index: 3; }
 
 /* Tizen fallback: without clip-path the four sides can't mitre — give them butt joints
  * instead (left/right stop where top/bottom end) so corners don't double-draw. */
 @supports not (clip-path: polygon(0 0, 100% 0, 0 100%)) {
-  .side--l, .side--r { top: calc(var(--w) - var(--o)); bottom: calc(var(--w) - var(--o)); }
+  .side--l, .side--r { top: calc(var(--w) - var(--o-t)); bottom: calc(var(--w) - var(--o-b)); }
 }
 
 /* Tizen fallback: without blend modes the paper tooth renders at full strength —
@@ -87,121 +104,52 @@
 .art-image { z-index: 0; }
 .art-image::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
 
-/* ---------- mounts: how the picture meets the matte ---------- */
+/* light from the right: mirror the whole frame, then un-mirror the picture */
+.art-frame[data-light="right"], .art-frame[data-light="right"] .art-image { transform: scaleX(-1); }
 
-/* Bevel: a 45° cut through the mat board, its core showing as a bright (or black) slope. */
-.art-frame[data-core="light"] { --bevel-core: #F4F1E9; }
+/* ---------- liners: what sits between the picture and the moulding (or the mat) ---------- */
+.art-frame[data-mount="fillet"] .mount, .art-frame[data-mount="linen"] .mount,
+.art-frame[data-mount="slip"] .mount { display: block; }
+.art-frame[data-moulding]:not([data-moulding="none"])[data-mount="float"] .mount { display: block; }
+
+/* the liner's sight edge stands a few mm proud of the picture and shades it, mostly from above */
+.art-frame[data-mount="fillet"] .art-image::after, .art-frame[data-mount="linen"] .art-image::after,
+.art-frame[data-mount="slip"] .art-image::after {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+              inset calc(var(--lx) * var(--mm) * var(--l-lip) * 0.6) calc(var(--mm) * var(--l-lip) * 1.4)
+                    calc(var(--mm) * var(--l-lip) * 1.3) rgba(0, 0, 0, 0.38),
+              inset 0 0 calc(var(--mm) * 2) rgba(0, 0, 0, 0.18);
+}
+/* floater: the canvas stands proud of the tray; its own edge is a crisp dark line */
+.art-frame[data-mount="float"] .art-image::after { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45); }
+
+/* Bevel: the mat's 45-degree cut, its white (or black) core lit by which way each face points:
+ * the top face looks down (shade), the bottom face up (lit), the sides towards the light or away. */
+.art-frame[data-core="light"] { --bevel-core: #EFEBE2; }
 .art-frame[data-core="dark"] { --bevel-core: #1C1D1C; }
 .art-frame[data-mount="bevel"] .mount {
   display: block;
   background: linear-gradient(var(--tint-in), var(--tint-in)), var(--bevel-core);
 }
 .art-frame[data-mount="bevel"] .art-image::after {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22), inset 0 calc(var(--u) * 0.15) calc(var(--u) * 0.3) rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2),
+              inset calc(var(--lx) * var(--mm) * 0.8) calc(var(--mm) * 1.6) calc(var(--mm) * 1.8) rgba(0, 0, 0, 0.22);
 }
 
-/* Double mat: two boards. The top board's bevel, a thin reveal of the under board in a
- * contrasting tone, then the under board's own bevel. --b bevel, --r reveal (set by JS). */
-.art-frame[data-core="light"] { --reveal: #23282A; --reveal-core: #F4F1E9; }
-.art-frame[data-core="dark"] { --reveal: #CFCBC0; --reveal-core: #1C1D1C; }
-.art-frame[data-mount="double"] .mount {
-  display: block;
-  background:
-    linear-gradient(var(--tint-in), var(--tint-in)),
-    linear-gradient(var(--dir),
-      var(--bevel-core) 0, var(--bevel-core) var(--b),
-      var(--reveal) var(--b), var(--reveal) calc(var(--b) + var(--r)),
-      var(--reveal-core) calc(var(--b) + var(--r)), var(--reveal-core) 100%);
-}
-.art-frame[data-mount="double"] .art-image::after {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22), inset 0 calc(var(--u) * 0.15) calc(var(--u) * 0.3) rgba(0, 0, 0, 0.22);
-}
-
-/* Shadowbox: the picture is set back; the mat turns into four walls that fall into shadow. */
-.art-frame[data-mount="shadowbox"] .mount {
-  display: block;
-  background:
-    linear-gradient(var(--tint-wall), var(--tint-wall)),
-    linear-gradient(var(--dir), rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.16)),
-    var(--matte-color);
-}
-.art-frame[data-mount="shadowbox"] .art-image::after {
-  box-shadow: inset 0 calc(var(--u) * 1.1) calc(var(--u) * 1.6) calc(var(--u) * -0.5) rgba(0, 0, 0, 0.55),
-              inset calc(var(--u) * 0.5) 0 calc(var(--u) * 1) calc(var(--u) * -0.5) rgba(0, 0, 0, 0.25),
-              inset 0 0 calc(var(--u) * 0.5) rgba(0, 0, 0, 0.25);
-}
-
-/* Float: the picture stands off the mat on a hidden block and casts a soft shadow. */
-.art-frame[data-mount="float"] .art-image {
-  box-shadow: 0 calc(var(--u) * 0.6) calc(var(--u) * 1.6) rgba(0, 0, 0, 0.36),
-              0 calc(var(--u) * 0.12) calc(var(--u) * 0.3) rgba(0, 0, 0, 0.28);
-}
-
-/* ---------- liners: what a framer sets between a painting and its frame ---------- */
-
-/* Linen liner: a fabric-wrapped slope with a gilt sight fillet against the painting. */
-.art-frame[data-mount="linen"] .mount {
-  display: block;
-  background:
-    linear-gradient(var(--tint-in), var(--tint-in)),
-    linear-gradient(var(--dir), rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(100% - var(--b)),
-      #8C6C2E calc(100% - var(--b)), #E6CC8C calc(100% - var(--b) * 0.55), #6E4F1A 100%),
-    linear-gradient(var(--dir), rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.10) calc(100% - var(--b))),
-    repeating-linear-gradient(var(--dir), rgba(80, 68, 48, 0.08) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(var(--along), rgba(255, 255, 255, 0.10) 0 1px, transparent 1px 2px, rgba(80, 68, 48, 0.06) 2px 3px),
-    #D6CDBA;
-}
-
-/* Gold fillet: a slim rounded gilt bead hugging the painting. */
-.art-frame[data-mount="fillet"] .mount {
-  display: block;
-  background:
-    linear-gradient(var(--tint-in), var(--tint-in)),
-    linear-gradient(var(--dir), #5E4215 0, #C9A85E 22%, #F0DA9C 42%, #B8923F 62%, #E2C47E 78%, #6A4C1C 100%);
-}
-
-/* Black slip: a satin black step between frame and painting. */
-.art-frame[data-mount="slip"] .mount {
-  display: block;
-  background:
-    linear-gradient(var(--tint-in), var(--tint-in)),
-    linear-gradient(var(--dir), #3B3C3D 0, #2A2B2C 18%, #161718 55%, #0C0C0D 100%);
-}
-.art-frame[data-mount="linen"] .art-image::after,
-.art-frame[data-mount="fillet"] .art-image::after,
-.art-frame[data-mount="slip"] .art-image::after {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3), inset 0 calc(var(--u) * 0.2) calc(var(--u) * 0.4) rgba(0, 0, 0, 0.25);
-}
-
-/* ---------- mouldings: the frame itself ----------
- * Each side layers: room light for its orientation, the carved profile across its width
- * (outer edge, ridge, flat, cove, lip, sight edge), a slow tone drift along its length,
- * fine grain, and the material's base colour. Mitres come from the clip-paths above. */
-.art-frame[data-moulding] .mould {
-  background:
-    linear-gradient(var(--tint-out), var(--tint-out)),
-    linear-gradient(var(--dir), var(--m-profile)),
-    linear-gradient(var(--along), var(--m-drift)),
-    repeating-linear-gradient(var(--dir), var(--m-grain)),
-    var(--m-base);
-}
+/* ---------- the moulding ---------- */
 .art-frame[data-moulding]:not([data-moulding="none"]) .mould { display: block; }
 
-/* the frame lifts off the wall (cast shadow on the matte) and shades the picture's top edge */
-.art-frame::before, .art-frame::after { content: ""; position: absolute; display: none; pointer-events: none; }
-.art-frame::before {
-  top: calc((var(--mw) + var(--fw)) * -1); right: calc((var(--mw) + var(--fw)) * -1);
-  bottom: calc((var(--mw) + var(--fw)) * -1); left: calc((var(--mw) + var(--fw)) * -1);
-  box-shadow: 0 calc(var(--u) * 0.45) calc(var(--u) * 1.3) rgba(0, 0, 0, 0.34),
-              0 calc(var(--u) * 0.1) calc(var(--u) * 0.25) rgba(0, 0, 0, 0.28);
-}
+/* The moulding's lip stands above everything inside it and, lit from above-left, throws a soft
+ * shadow down and to the right across the top and left of the opening (mat, liner or picture),
+ * plus the gentle occlusion found in any inside corner. Sized from the lip height in mm. */
 .art-frame::after {
-  top: calc(var(--mw) * -1); right: calc(var(--mw) * -1); bottom: calc(var(--mw) * -1); left: calc(var(--mw) * -1);
-  z-index: 2;
-  box-shadow: inset 0 calc(var(--u) * 0.35) calc(var(--u) * 0.7) rgba(0, 0, 0, 0.42),
-              inset calc(var(--u) * 0.2) 0 calc(var(--u) * 0.5) rgba(0, 0, 0, 0.16);
+  content: ""; position: absolute; display: none; pointer-events: none; z-index: 2;
+  top: calc((var(--ft) - var(--fw)) * -1); right: calc((var(--fr) - var(--fw)) * -1);
+  bottom: calc((var(--fb) - var(--fw)) * -1); left: calc((var(--fl) - var(--fw)) * -1);
+  box-shadow: inset calc(var(--mm) * var(--m-lip) * 0.7) calc(var(--mm) * var(--m-lip) * 1.6)
+                    calc(var(--mm) * var(--m-lip) * 1.5) rgba(0, 0, 0, 0.40),
+              inset 0 0 calc(var(--mm) * 4) rgba(0, 0, 0, 0.20);
 }
-.art-frame[data-moulding]:not([data-moulding="none"])::before,
 .art-frame[data-moulding]:not([data-moulding="none"])::after { display: block; }
 
 /* ---------- the TV itself (home miniature, optional) ----------
@@ -228,70 +176,56 @@
   box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.35), 0 0.1rem 0.3rem rgba(0, 0, 0, 0.3);
 }
 .home__art--tv .home__stage { box-shadow: 0 0 0 1px #060606; }
+.home__art--tv .home__stage[data-framed="true"] { box-shadow: 0 0 0 1px #060606, inset 0 0 0 calc(var(--fw) - 1px) #0b0a09; }
 
-/* ---------- finishes x profiles (generated by a script; edit the tables, not these rules) ----------
- * finish: base colour, wood grain and tone drift.  profile: the carved shape across the width
- * (flat gallery, concave scoop, rounded cushion, stepped ornate), lit in the finish's own colours. */
-.art-frame[data-moulding="black"] {
-  --m-base: #1A1B1C;
-  --m-drift: rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.025) 75%, rgba(255, 255, 255, 0);
-  --m-grain: rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 3px;
-}
-.art-frame[data-moulding="ebony"] {
-  --m-base: #0F0E0D;
-  --m-drift: rgba(255, 248, 236, 0.05), rgba(0, 0, 0, 0) 30%, rgba(255, 248, 236, 0.03) 65%, rgba(0, 0, 0, 0);
-  --m-grain: rgba(255, 248, 236, 0.015) 0 1px, transparent 1px 4px;
-}
-.art-frame[data-moulding="walnut"] {
-  --m-base: #4A3121;
-  --m-drift: rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0) 17%, rgba(0, 0, 0, 0.07) 39%, rgba(255, 214, 170, 0.06) 61%, rgba(0, 0, 0, 0.10) 84%, rgba(0, 0, 0, 0.02);
-  --m-grain: rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px, rgba(0, 0, 0, 0.06) 3px 4px, transparent 4px 7px, rgba(255, 214, 170, 0.05) 7px 9px, transparent 9px 13px, rgba(0, 0, 0, 0.09) 13px 14px, transparent 14px 19px;
-}
-.art-frame[data-moulding="oak"] {
-  --m-base: #AE8856;
-  --m-drift: rgba(90, 55, 20, 0.10), rgba(0, 0, 0, 0) 22%, rgba(90, 55, 20, 0.07) 47%, rgba(255, 235, 200, 0.07) 70%, rgba(90, 55, 20, 0.09) 90%, rgba(0, 0, 0, 0);
-  --m-grain: rgba(90, 55, 20, 0.16) 0 1px, transparent 1px 4px, rgba(90, 55, 20, 0.08) 4px 5px, transparent 5px 9px, rgba(255, 235, 200, 0.07) 9px 11px, transparent 11px 16px, rgba(90, 55, 20, 0.12) 16px 17px, transparent 17px 23px;
-}
-.art-frame[data-moulding="gilt"] {
-  --m-base: #A88540;
-  --m-drift: rgba(255, 240, 200, 0.10), rgba(255, 240, 200, 0) 28%, rgba(80, 50, 0, 0.10) 58%, rgba(255, 240, 200, 0.06) 85%, rgba(0, 0, 0, 0);
-  --m-grain: rgba(80, 50, 0, 0.05) 0 1px, transparent 1px 2px;
-}
-.art-frame[data-moulding="silver"] {
-  --m-base: #8F9293;
-  --m-drift: rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 30%, rgba(20, 24, 28, 0.10) 60%, rgba(255, 255, 255, 0.05) 85%, rgba(0, 0, 0, 0);
-  --m-grain: rgba(20, 24, 28, 0.04) 0 1px, transparent 1px 2px;
-}
-.art-frame[data-moulding="white"] {
-  --m-base: #ECEAE4;
-  --m-drift: rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.02);
-  --m-grain: rgba(0, 0, 0, 0.01) 0 1px, transparent 1px 3px;
-}
-.art-frame[data-moulding="black"][data-profile="flat"] { --m-profile: rgba(0, 0, 0, 0.28) 0%, rgba(255, 255, 255, 0.14) 3%, rgba(255, 255, 255, 0.04) 8%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.01) 82%, rgba(0, 0, 0, 0.14) 86%, rgba(255, 255, 255, 0.11) 90%, rgba(0, 0, 0, 0.33) 100%; }
-.art-frame[data-moulding="black"][data-profile="scoop"] { --m-profile: rgba(0, 0, 0, 0.28) 0%, rgba(255, 255, 255, 0.25) 5%, rgba(255, 255, 255, 0.07) 12%, rgba(0, 0, 0, 0.10) 30%, rgba(0, 0, 0, 0.18) 50%, rgba(0, 0, 0, 0.07) 68%, rgba(255, 255, 255, 0.10) 80%, rgba(255, 255, 255, 0.21) 88%, rgba(0, 0, 0, 0.19) 94%, rgba(0, 0, 0, 0.36) 100%; }
-.art-frame[data-moulding="black"][data-profile="cushion"] { --m-profile: rgba(0, 0, 0, 0.30) 0%, rgba(0, 0, 0, 0.11) 6%, rgba(255, 255, 255, 0.03) 18%, rgba(255, 255, 255, 0.17) 38%, rgba(255, 255, 255, 0.23) 48%, rgba(255, 255, 255, 0.11) 60%, rgba(0, 0, 0, 0.07) 76%, rgba(0, 0, 0, 0.17) 84%, rgba(255, 255, 255, 0.14) 90%, rgba(0, 0, 0, 0.36) 100%; }
-.art-frame[data-moulding="black"][data-profile="ornate"] { --m-profile: rgba(0, 0, 0, 0.33) 0%, rgba(255, 255, 255, 0.28) 3%, rgba(0, 0, 0, 0.14) 7%, rgba(255, 255, 255, 0.19) 10%, rgba(255, 255, 255, 0.04) 16%, rgba(0, 0, 0, 0.15) 26%, rgba(255, 255, 255, 0.23) 36%, rgba(255, 255, 255, 0.08) 43%, rgba(0, 0, 0, 0.14) 50%, rgba(255, 255, 255, 0.17) 57%, rgba(0, 0, 0, 0.19) 64%, rgba(255, 255, 255, 0.21) 72%, rgba(0, 0, 0, 0.11) 78%, rgba(255, 255, 255, 0.25) 84%, rgba(0, 0, 0, 0.22) 89%, rgba(255, 255, 255, 0.17) 93%, rgba(0, 0, 0, 0.39) 100%; }
-.art-frame[data-moulding="ebony"][data-profile="flat"] { --m-profile: rgba(0, 0, 0, 0.50) 0%, rgba(255, 248, 236, 0.25) 3%, rgba(255, 248, 236, 0.08) 8%, rgba(255, 248, 236, 0.05) 50%, rgba(255, 248, 236, 0.02) 82%, rgba(0, 0, 0, 0.25) 86%, rgba(255, 248, 236, 0.20) 90%, rgba(0, 0, 0, 0.60) 100%; }
-.art-frame[data-moulding="ebony"][data-profile="scoop"] { --m-profile: rgba(0, 0, 0, 0.50) 0%, rgba(255, 248, 236, 0.45) 5%, rgba(255, 248, 236, 0.12) 12%, rgba(0, 0, 0, 0.18) 30%, rgba(0, 0, 0, 0.32) 50%, rgba(0, 0, 0, 0.12) 68%, rgba(255, 248, 236, 0.18) 80%, rgba(255, 248, 236, 0.38) 88%, rgba(0, 0, 0, 0.35) 94%, rgba(0, 0, 0, 0.65) 100%; }
-.art-frame[data-moulding="ebony"][data-profile="cushion"] { --m-profile: rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.20) 6%, rgba(255, 248, 236, 0.05) 18%, rgba(255, 248, 236, 0.30) 38%, rgba(255, 248, 236, 0.42) 48%, rgba(255, 248, 236, 0.20) 60%, rgba(0, 0, 0, 0.12) 76%, rgba(0, 0, 0, 0.30) 84%, rgba(255, 248, 236, 0.25) 90%, rgba(0, 0, 0, 0.65) 100%; }
-.art-frame[data-moulding="ebony"][data-profile="ornate"] { --m-profile: rgba(0, 0, 0, 0.60) 0%, rgba(255, 248, 236, 0.50) 3%, rgba(0, 0, 0, 0.25) 7%, rgba(255, 248, 236, 0.35) 10%, rgba(255, 248, 236, 0.08) 16%, rgba(0, 0, 0, 0.28) 26%, rgba(255, 248, 236, 0.42) 36%, rgba(255, 248, 236, 0.15) 43%, rgba(0, 0, 0, 0.25) 50%, rgba(255, 248, 236, 0.30) 57%, rgba(0, 0, 0, 0.35) 64%, rgba(255, 248, 236, 0.38) 72%, rgba(0, 0, 0, 0.20) 78%, rgba(255, 248, 236, 0.45) 84%, rgba(0, 0, 0, 0.40) 89%, rgba(255, 248, 236, 0.30) 93%, rgba(0, 0, 0, 0.70) 100%; }
-.art-frame[data-moulding="walnut"][data-profile="flat"] { --m-profile: rgba(0, 0, 0, 0.40) 0%, rgba(255, 222, 186, 0.20) 3%, rgba(255, 222, 186, 0.06) 8%, rgba(255, 222, 186, 0.04) 50%, rgba(255, 222, 186, 0.02) 82%, rgba(0, 0, 0, 0.20) 86%, rgba(255, 222, 186, 0.16) 90%, rgba(0, 0, 0, 0.48) 100%; }
-.art-frame[data-moulding="walnut"][data-profile="scoop"] { --m-profile: rgba(0, 0, 0, 0.40) 0%, rgba(255, 222, 186, 0.36) 5%, rgba(255, 222, 186, 0.10) 12%, rgba(0, 0, 0, 0.14) 30%, rgba(0, 0, 0, 0.26) 50%, rgba(0, 0, 0, 0.10) 68%, rgba(255, 222, 186, 0.14) 80%, rgba(255, 222, 186, 0.30) 88%, rgba(0, 0, 0, 0.28) 94%, rgba(0, 0, 0, 0.52) 100%; }
-.art-frame[data-moulding="walnut"][data-profile="cushion"] { --m-profile: rgba(0, 0, 0, 0.44) 0%, rgba(0, 0, 0, 0.16) 6%, rgba(255, 222, 186, 0.04) 18%, rgba(255, 222, 186, 0.24) 38%, rgba(255, 222, 186, 0.34) 48%, rgba(255, 222, 186, 0.16) 60%, rgba(0, 0, 0, 0.10) 76%, rgba(0, 0, 0, 0.24) 84%, rgba(255, 222, 186, 0.20) 90%, rgba(0, 0, 0, 0.52) 100%; }
-.art-frame[data-moulding="walnut"][data-profile="ornate"] { --m-profile: rgba(0, 0, 0, 0.48) 0%, rgba(255, 222, 186, 0.40) 3%, rgba(0, 0, 0, 0.20) 7%, rgba(255, 222, 186, 0.28) 10%, rgba(255, 222, 186, 0.06) 16%, rgba(0, 0, 0, 0.22) 26%, rgba(255, 222, 186, 0.34) 36%, rgba(255, 222, 186, 0.12) 43%, rgba(0, 0, 0, 0.20) 50%, rgba(255, 222, 186, 0.24) 57%, rgba(0, 0, 0, 0.28) 64%, rgba(255, 222, 186, 0.30) 72%, rgba(0, 0, 0, 0.16) 78%, rgba(255, 222, 186, 0.36) 84%, rgba(0, 0, 0, 0.32) 89%, rgba(255, 222, 186, 0.24) 93%, rgba(0, 0, 0, 0.56) 100%; }
-.art-frame[data-moulding="oak"][data-profile="flat"] { --m-profile: rgba(50, 28, 6, 0.40) 0%, rgba(255, 240, 210, 0.20) 3%, rgba(255, 240, 210, 0.06) 8%, rgba(255, 240, 210, 0.04) 50%, rgba(255, 240, 210, 0.02) 82%, rgba(50, 28, 6, 0.20) 86%, rgba(255, 240, 210, 0.16) 90%, rgba(50, 28, 6, 0.48) 100%; }
-.art-frame[data-moulding="oak"][data-profile="scoop"] { --m-profile: rgba(50, 28, 6, 0.40) 0%, rgba(255, 240, 210, 0.36) 5%, rgba(255, 240, 210, 0.10) 12%, rgba(50, 28, 6, 0.14) 30%, rgba(50, 28, 6, 0.26) 50%, rgba(50, 28, 6, 0.10) 68%, rgba(255, 240, 210, 0.14) 80%, rgba(255, 240, 210, 0.30) 88%, rgba(50, 28, 6, 0.28) 94%, rgba(50, 28, 6, 0.52) 100%; }
-.art-frame[data-moulding="oak"][data-profile="cushion"] { --m-profile: rgba(50, 28, 6, 0.44) 0%, rgba(50, 28, 6, 0.16) 6%, rgba(255, 240, 210, 0.04) 18%, rgba(255, 240, 210, 0.24) 38%, rgba(255, 240, 210, 0.34) 48%, rgba(255, 240, 210, 0.16) 60%, rgba(50, 28, 6, 0.10) 76%, rgba(50, 28, 6, 0.24) 84%, rgba(255, 240, 210, 0.20) 90%, rgba(50, 28, 6, 0.52) 100%; }
-.art-frame[data-moulding="oak"][data-profile="ornate"] { --m-profile: rgba(50, 28, 6, 0.48) 0%, rgba(255, 240, 210, 0.40) 3%, rgba(50, 28, 6, 0.20) 7%, rgba(255, 240, 210, 0.28) 10%, rgba(255, 240, 210, 0.06) 16%, rgba(50, 28, 6, 0.22) 26%, rgba(255, 240, 210, 0.34) 36%, rgba(255, 240, 210, 0.12) 43%, rgba(50, 28, 6, 0.20) 50%, rgba(255, 240, 210, 0.24) 57%, rgba(50, 28, 6, 0.28) 64%, rgba(255, 240, 210, 0.30) 72%, rgba(50, 28, 6, 0.16) 78%, rgba(255, 240, 210, 0.36) 84%, rgba(50, 28, 6, 0.32) 89%, rgba(255, 240, 210, 0.24) 93%, rgba(50, 28, 6, 0.56) 100%; }
-.art-frame[data-moulding="gilt"][data-profile="flat"] { --m-profile: rgba(50, 28, 0, 0.72) 0%, rgba(255, 238, 180, 0.36) 3%, rgba(255, 238, 180, 0.12) 8%, rgba(255, 238, 180, 0.07) 50%, rgba(255, 238, 180, 0.03) 82%, rgba(50, 28, 0, 0.36) 86%, rgba(255, 238, 180, 0.29) 90%, rgba(50, 28, 0, 0.87) 100%; }
-.art-frame[data-moulding="gilt"][data-profile="scoop"] { --m-profile: rgba(50, 28, 0, 0.72) 0%, rgba(255, 238, 180, 0.65) 5%, rgba(255, 238, 180, 0.17) 12%, rgba(50, 28, 0, 0.26) 30%, rgba(50, 28, 0, 0.46) 50%, rgba(50, 28, 0, 0.17) 68%, rgba(255, 238, 180, 0.26) 80%, rgba(255, 238, 180, 0.55) 88%, rgba(50, 28, 0, 0.51) 94%, rgba(50, 28, 0, 0.90) 100%; }
-.art-frame[data-moulding="gilt"][data-profile="cushion"] { --m-profile: rgba(50, 28, 0, 0.80) 0%, rgba(50, 28, 0, 0.29) 6%, rgba(255, 238, 180, 0.07) 18%, rgba(255, 238, 180, 0.43) 38%, rgba(255, 238, 180, 0.61) 48%, rgba(255, 238, 180, 0.29) 60%, rgba(50, 28, 0, 0.17) 76%, rgba(50, 28, 0, 0.43) 84%, rgba(255, 238, 180, 0.36) 90%, rgba(50, 28, 0, 0.90) 100%; }
-.art-frame[data-moulding="gilt"][data-profile="ornate"] { --m-profile: rgba(50, 28, 0, 0.87) 0%, rgba(255, 238, 180, 0.72) 3%, rgba(50, 28, 0, 0.36) 7%, rgba(255, 238, 180, 0.51) 10%, rgba(255, 238, 180, 0.12) 16%, rgba(50, 28, 0, 0.41) 26%, rgba(255, 238, 180, 0.61) 36%, rgba(255, 238, 180, 0.22) 43%, rgba(50, 28, 0, 0.36) 50%, rgba(255, 238, 180, 0.43) 57%, rgba(50, 28, 0, 0.51) 64%, rgba(255, 238, 180, 0.55) 72%, rgba(50, 28, 0, 0.29) 78%, rgba(255, 238, 180, 0.65) 84%, rgba(50, 28, 0, 0.58) 89%, rgba(255, 238, 180, 0.43) 93%, rgba(50, 28, 0, 0.90) 100%; }
-.art-frame[data-moulding="silver"][data-profile="flat"] { --m-profile: rgba(22, 26, 30, 0.65) 0%, rgba(255, 255, 255, 0.33) 3%, rgba(255, 255, 255, 0.10) 8%, rgba(255, 255, 255, 0.07) 50%, rgba(255, 255, 255, 0.03) 82%, rgba(22, 26, 30, 0.33) 86%, rgba(255, 255, 255, 0.26) 90%, rgba(22, 26, 30, 0.78) 100%; }
-.art-frame[data-moulding="silver"][data-profile="scoop"] { --m-profile: rgba(22, 26, 30, 0.65) 0%, rgba(255, 255, 255, 0.59) 5%, rgba(255, 255, 255, 0.16) 12%, rgba(22, 26, 30, 0.23) 30%, rgba(22, 26, 30, 0.42) 50%, rgba(22, 26, 30, 0.16) 68%, rgba(255, 255, 255, 0.23) 80%, rgba(255, 255, 255, 0.49) 88%, rgba(22, 26, 30, 0.45) 94%, rgba(22, 26, 30, 0.85) 100%; }
-.art-frame[data-moulding="silver"][data-profile="cushion"] { --m-profile: rgba(22, 26, 30, 0.72) 0%, rgba(22, 26, 30, 0.26) 6%, rgba(255, 255, 255, 0.07) 18%, rgba(255, 255, 255, 0.39) 38%, rgba(255, 255, 255, 0.55) 48%, rgba(255, 255, 255, 0.26) 60%, rgba(22, 26, 30, 0.16) 76%, rgba(22, 26, 30, 0.39) 84%, rgba(255, 255, 255, 0.33) 90%, rgba(22, 26, 30, 0.85) 100%; }
-.art-frame[data-moulding="silver"][data-profile="ornate"] { --m-profile: rgba(22, 26, 30, 0.78) 0%, rgba(255, 255, 255, 0.65) 3%, rgba(22, 26, 30, 0.33) 7%, rgba(255, 255, 255, 0.45) 10%, rgba(255, 255, 255, 0.10) 16%, rgba(22, 26, 30, 0.36) 26%, rgba(255, 255, 255, 0.55) 36%, rgba(255, 255, 255, 0.20) 43%, rgba(22, 26, 30, 0.33) 50%, rgba(255, 255, 255, 0.39) 57%, rgba(22, 26, 30, 0.45) 64%, rgba(255, 255, 255, 0.49) 72%, rgba(22, 26, 30, 0.26) 78%, rgba(255, 255, 255, 0.59) 84%, rgba(22, 26, 30, 0.52) 89%, rgba(255, 255, 255, 0.39) 93%, rgba(22, 26, 30, 0.90) 100%; }
-.art-frame[data-moulding="white"][data-profile="flat"] { --m-profile: rgba(0, 0, 0, 0.30) 0%, rgba(255, 255, 255, 0.15) 3%, rgba(255, 255, 255, 0.05) 8%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.01) 82%, rgba(0, 0, 0, 0.15) 86%, rgba(255, 255, 255, 0.12) 90%, rgba(0, 0, 0, 0.36) 100%; }
-.art-frame[data-moulding="white"][data-profile="scoop"] { --m-profile: rgba(0, 0, 0, 0.30) 0%, rgba(255, 255, 255, 0.27) 5%, rgba(255, 255, 255, 0.07) 12%, rgba(0, 0, 0, 0.11) 30%, rgba(0, 0, 0, 0.19) 50%, rgba(0, 0, 0, 0.07) 68%, rgba(255, 255, 255, 0.11) 80%, rgba(255, 255, 255, 0.23) 88%, rgba(0, 0, 0, 0.21) 94%, rgba(0, 0, 0, 0.39) 100%; }
-.art-frame[data-moulding="white"][data-profile="cushion"] { --m-profile: rgba(0, 0, 0, 0.33) 0%, rgba(0, 0, 0, 0.12) 6%, rgba(255, 255, 255, 0.03) 18%, rgba(255, 255, 255, 0.18) 38%, rgba(255, 255, 255, 0.25) 48%, rgba(255, 255, 255, 0.12) 60%, rgba(0, 0, 0, 0.07) 76%, rgba(0, 0, 0, 0.18) 84%, rgba(255, 255, 255, 0.15) 90%, rgba(0, 0, 0, 0.39) 100%; }
-.art-frame[data-moulding="white"][data-profile="ornate"] { --m-profile: rgba(0, 0, 0, 0.36) 0%, rgba(255, 255, 255, 0.30) 3%, rgba(0, 0, 0, 0.15) 7%, rgba(255, 255, 255, 0.21) 10%, rgba(255, 255, 255, 0.05) 16%, rgba(0, 0, 0, 0.17) 26%, rgba(255, 255, 255, 0.25) 36%, rgba(255, 255, 255, 0.09) 43%, rgba(0, 0, 0, 0.15) 50%, rgba(255, 255, 255, 0.18) 57%, rgba(0, 0, 0, 0.21) 64%, rgba(255, 255, 255, 0.23) 72%, rgba(0, 0, 0, 0.12) 78%, rgba(255, 255, 255, 0.27) 84%, rgba(0, 0, 0, 0.24) 89%, rgba(255, 255, 255, 0.18) 93%, rgba(0, 0, 0, 0.42) 100%; }
+/* ===== GENERATED by tools/gen_frames.py (do not edit by hand; edit the generator and re-run it) ===== */
+/* --m-mm / --l-mm: nominal width in mm (read by js/screens/art.js);
+ * --m-lip / --l-lip: height of the sight edge above what sits inside it, in mm (cast shadows). */
+/* walnut: solid walnut gallery scoop, satin oil finish */
+.art-frame[data-moulding="walnut"] { --m-mm: 70; --m-lip: 9; }
+.art-frame[data-moulding="walnut"] .mould.side--t { background-image: url("../assets/frames/walnut-t.jpg"); }
+.art-frame[data-moulding="walnut"] .mould.side--b { background-image: url("../assets/frames/walnut-b.jpg"); }
+.art-frame[data-moulding="walnut"] .mould.side--l { background-image: url("../assets/frames/walnut-l.jpg"); }
+.art-frame[data-moulding="walnut"] .mould.side--r { background-image: url("../assets/frames/walnut-r.jpg"); }
+/* gilt: water-gilt Maratta-type frame: torsade torus, matte cove, sanded frieze, burnished pearls */
+.art-frame[data-moulding="gilt"] { --m-mm: 100; --m-lip: 11; }
+.art-frame[data-moulding="gilt"] .mould.side--t { background-image: url("../assets/frames/gilt-t.jpg"); }
+.art-frame[data-moulding="gilt"] .mould.side--b { background-image: url("../assets/frames/gilt-b.jpg"); }
+.art-frame[data-moulding="gilt"] .mould.side--l { background-image: url("../assets/frames/gilt-l.jpg"); }
+.art-frame[data-moulding="gilt"] .mould.side--r { background-image: url("../assets/frames/gilt-r.jpg"); }
+/* black: black-stained ash, square gallery profile with eased edges, satin */
+.art-frame[data-moulding="black"] { --m-mm: 42; --m-lip: 7; }
+.art-frame[data-moulding="black"] .mould.side--t { background-image: url("../assets/frames/black-t.jpg"); }
+.art-frame[data-moulding="black"] .mould.side--b { background-image: url("../assets/frames/black-b.jpg"); }
+.art-frame[data-moulding="black"] .mould.side--l { background-image: url("../assets/frames/black-l.jpg"); }
+.art-frame[data-moulding="black"] .mould.side--r { background-image: url("../assets/frames/black-r.jpg"); }
+/* ebony: Dutch 17th-c. style ebonised reverse profile with ripple and wave mouldings, French polished */
+.art-frame[data-moulding="ebony"] { --m-mm: 82; --m-lip: 10; }
+.art-frame[data-moulding="ebony"] .mould.side--t { background-image: url("../assets/frames/ebony-t.jpg"); }
+.art-frame[data-moulding="ebony"] .mould.side--b { background-image: url("../assets/frames/ebony-b.jpg"); }
+.art-frame[data-moulding="ebony"] .mould.side--l { background-image: url("../assets/frames/ebony-l.jpg"); }
+.art-frame[data-moulding="ebony"] .mould.side--r { background-image: url("../assets/frames/ebony-r.jpg"); }
+/* fillet: gilt sight fillet: a burnished bead beside a small cove */
+.art-frame[data-mount="fillet"] { --l-mm: 11; --l-lip: 4; }
+.art-frame[data-mount="fillet"] .mount.side--t { background-image: url("../assets/frames/fillet-t.jpg"); }
+.art-frame[data-mount="fillet"] .mount.side--b { background-image: url("../assets/frames/fillet-b.jpg"); }
+.art-frame[data-mount="fillet"] .mount.side--l { background-image: url("../assets/frames/fillet-l.jpg"); }
+.art-frame[data-mount="fillet"] .mount.side--r { background-image: url("../assets/frames/fillet-r.jpg"); }
+/* linen: linen-wrapped liner sloping to a small gilt sight lip */
+.art-frame[data-mount="linen"] { --l-mm: 40; --l-lip: 5; }
+.art-frame[data-mount="linen"] .mount.side--t { background-image: url("../assets/frames/linen-t.jpg"); }
+.art-frame[data-mount="linen"] .mount.side--b { background-image: url("../assets/frames/linen-b.jpg"); }
+.art-frame[data-mount="linen"] .mount.side--l { background-image: url("../assets/frames/linen-l.jpg"); }
+.art-frame[data-mount="linen"] .mount.side--r { background-image: url("../assets/frames/linen-r.jpg"); }
+/* slip: black satin slip, bevelled towards the picture */
+.art-frame[data-mount="slip"] { --l-mm: 15; --l-lip: 4; }
+.art-frame[data-mount="slip"] .mount.side--t { background-image: url("../assets/frames/slip-t.jpg"); }
+.art-frame[data-mount="slip"] .mount.side--b { background-image: url("../assets/frames/slip-b.jpg"); }
+.art-frame[data-mount="slip"] .mount.side--l { background-image: url("../assets/frames/slip-l.jpg"); }
+.art-frame[data-mount="slip"] .mount.side--r { background-image: url("../assets/frames/slip-r.jpg"); }
+/* float: floater gap: the black tray floor between the moulding and the canvas */
+.art-frame[data-mount="float"] { --l-mm: 9; --l-lip: 0; }
+.art-frame[data-mount="float"] .mount.side--t { background-image: url("../assets/frames/float-t.jpg"); }
+.art-frame[data-mount="float"] .mount.side--b { background-image: url("../assets/frames/float-b.jpg"); }
+.art-frame[data-mount="float"] .mount.side--l { background-image: url("../assets/frames/float-l.jpg"); }
+.art-frame[data-mount="float"] .mount.side--r { background-image: url("../assets/frames/float-r.jpg"); }

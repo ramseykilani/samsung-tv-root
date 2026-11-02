@@ -1,6 +1,6 @@
 /*
- * framed — Art screen. Fullscreen picture in a drawn frame (finish × profile × liner) on an
- * optional matte; the slideshow sequencer (js/slideshow.js) decides which library picture is current.
+ * framed — Art screen. Fullscreen picture in a drawn frame (moulding × liner, lit from the chosen side)
+ * with an optional mat; the slideshow sequencer (js/slideshow.js) decides which library picture is current.
  * No chrome while art is shown; the corner affordance (or the `s` key) opens the settings panel.
  * While the panel is closed: Left/Right = previous/next picture, `p` / MediaPlayPause = slideshow
  * on/off. Frame/matte settings persist under "framed.art" (the default look) and per picture under
@@ -37,14 +37,27 @@ window.framed = window.framed || {};
     { value: 'custom', label: 'Custom' }
   ];
 
-  // Mount and moulding geometry, in hundredths of the stage's shorter edge (see css/frames.css).
-  var MOUNT_DEPTH = { flat: 0, bevel: 0.7, double: 2.6, shadowbox: 2.4, float: 0, linen: 3.4, fillet: 1.0, slip: 1.5 };
-  var BEVEL = 0.7, REVEAL = 1.2; // double mat: bevel, contrasting reveal, bevel
-  var FLOAT_GAP = 2.8;          // float only shows a gap when a moulding surrounds it
-  var MOULDING_STEP = 0.8;      // moulding width per Frame width step (1–10)
+  // Frame geometry is real-world: the 55" Frame's screen is 679.9 mm tall, so one hundredth of the
+  // stage's shorter edge (u) is 6.799 mm. Each moulding and liner has a nominal width in mm, written
+  // by tools/gen_frames.py into css/frames.css as --m-mm / --l-mm and read back here.
+  var MM_PER_U = 6.799;
+  var BEVEL_MM = 4.5;   // a mat's bevel cut (no bitmap; see css/frames.css)
+  // Contain inside a moulding: a picture whose shape differs from the screen's gets at least this
+  // much mat all round (in u), so it never touches the frame on two sides only, which no framer would do
+  var CONTAIN_MIN_MAT = 6;
+  // Frame width steps 1–10 scale the moulding's nominal width; 5 is the moulding as made.
+  var WIDTH_SCALE = [0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
+  var MOULDINGS = [
+    { value: 'none', label: 'None' }, { value: 'walnut', label: 'Walnut' }, { value: 'gilt', label: 'Gilt' },
+    { value: 'ebony', label: 'Ebony' }, { value: 'black', label: 'Black' }];
+  var MOUNTS = [
+    { value: 'flat', label: 'None' }, { value: 'fillet', label: 'Gold fillet' }, { value: 'linen', label: 'Linen' },
+    { value: 'slip', label: 'Black slip' }, { value: 'bevel', label: 'Mat bevel' }, { value: 'float', label: 'Float' }];
+  // values from earlier versions -> their nearest surviving design
+  var RETIRED = { oak: 'walnut', silver: 'gilt', white: 'black', double: 'bevel', shadowbox: 'bevel' };
 
-  // The owner's look: no mat, the picture fills the screen, and a drawn frame at the screen's
-  // edges pairs with the TV's own bezel as a double frame.
+  // The owner's look: no mat, the picture fills the screen, and a walnut moulding with a gold
+  // fillet at the screen's edge, inside the TV's own black bezel.
   var DEFAULTS = {
     fit: 'cover',
     matte: 0,
@@ -55,11 +68,42 @@ window.framed = window.framed || {};
     customLight: 85,
     mount: 'fillet',
     moulding: 'walnut',
-    profile: 'scoop',
     frameWeight: 5,
+    light: 'left',
     label: 'off',
     drift: 'on'
   };
+
+  function has(list, v) { for (var i = 0; i < list.length; i++) if (list[i].value === v) return true; return false; }
+  // stored settings from any version: unknown values fall back, retired ones map to their successor
+  function sanitize(o) {
+    if (!has(MOULDINGS, o.moulding)) o.moulding = RETIRED[o.moulding] || DEFAULTS.moulding;
+    if (!has(MOUNTS, o.mount)) o.mount = RETIRED[o.mount] || DEFAULTS.mount;
+    if (o.light !== 'left' && o.light !== 'right') o.light = DEFAULTS.light;
+    if (o.fit !== 'contain' && o.fit !== 'cover') o.fit = DEFAULTS.fit;
+    if (o.drift !== 'on' && o.drift !== 'off') o.drift = DEFAULTS.drift;
+    var w = Math.round(Number(o.frameWeight));
+    o.frameWeight = w >= 1 && w <= 10 ? w : DEFAULTS.frameWeight;
+    if (!(Number(o.matte) >= 0)) o.matte = DEFAULTS.matte;
+    if (!(Number(o.matteBottom) >= 0)) o.matteBottom = DEFAULTS.matteBottom;
+    delete o.profile; // retired: each moulding now has its own profile
+    return o;
+  }
+
+  function mix() {
+    var out = {}, i, k;
+    for (i = 0; i < arguments.length; i++) {
+      var o = arguments[i] || {};
+      for (k in o) if (o.hasOwnProperty(k)) out[k] = o[k];
+    }
+    return out;
+  }
+  function globalLook() { return mix(DEFAULTS, F.store.get('art', {})); }
+  // stored settings from any version still get sanitized, per-picture or global
+  function effective(id) {
+    var per = F.store.get('artPer', {});
+    return id && per[id] ? sanitize(mix(DEFAULTS, per[id])) : sanitize(globalLook());
+  }
 
   // Anti-burn-in drift: the whole stage is oversized by DRIFT_MAX px on every side and nudged
   // within that overscan once per hour, so the art shifts a few pixels without ever revealing
@@ -87,8 +131,8 @@ window.framed = window.framed || {};
     stage.style.transform = 'translate(' + driftAxis(h, 0x9E3779B1) + 'px,' + driftAxis(h, 0x85EBCA6B) + 'px)';
   }
 
-  var s = globalLook();
-  F.store.set('art', s);
+  var s = effective(F.slideshow.current() && F.slideshow.current().id);
+  F.store.set('art', sanitize(globalLook()));
   var api = null;
   var natural = { w: 3, h: 2 };
   var naturals = {};         // src -> { w, h }, for the launcher's miniature
@@ -100,24 +144,10 @@ window.framed = window.framed || {};
   var driftHour = 0;
   var KEY = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, PLAY_PAUSE: 179, TIZEN_PLAY_PAUSE: 10252 };
 
-  function mix() {
-    var out = {}, i, k;
-    for (i = 0; i < arguments.length; i++) {
-      var o = arguments[i] || {};
-      for (k in o) if (o.hasOwnProperty(k)) out[k] = o[k];
-    }
-    return out;
-  }
-  function globalLook() { return mix(DEFAULTS, F.store.get('art', {})); }
-  function effective(id) {
-    var per = F.store.get('artPer', {});
-    return id && per[id] ? mix(DEFAULTS, per[id]) : globalLook();
-  }
-
   // An edit dials in the current picture's own look AND becomes the default for
   // pictures that don't have their own yet; other pictures' memories are untouched.
   function save(patch) {
-    s = mix(s, patch);
+    s = sanitize(mix(s, patch));
     F.store.set('art', s);
     var item = F.slideshow.current();
     if (item) {
@@ -154,36 +184,57 @@ window.framed = window.framed || {};
     return isLight(matteHex(eff)) ? tone('--fr-frame-dark') : tone('--fr-frame-light');
   }
 
-  // Dress any stage (the Art screen, or the launcher's miniature) in the given settings (eff) and
-  // size the picture so picture + mount + moulding fit inside the matte opening.
+  function cssMM(el, name) {
+    var v = parseFloat(getComputedStyle(el).getPropertyValue(name));
+    return isNaN(v) ? 0 : v;
+  }
+
+  // nominal moulding width (mm) of the current design, for the Frame width label
+  function mouldingMM(step) {
+    if (s.moulding === 'none') return 0;
+    frame.setAttribute('data-moulding', s.moulding);
+    return (cssMM(frame, '--m-mm') || 60) * WIDTH_SCALE[(step || s.frameWeight) - 1];
+  }
+
+  // Dress any stage (the Art screen, or the launcher's miniature) in the current settings.
+  // Like a real frame, the moulding sits at the stage's (screen's) edge; the mat, if any, is the
+  // stage showing inside it, and the liner hugs the picture. With no moulding the TV's own bezel is
+  // the frame and the stage is the mat inside it.
   // n = the picture's natural size (only used for Contain).
   function dress(st, fr, im, n, eff) {
     eff = eff || s;
-    var r = st.getBoundingClientRect();
-    var u = Math.min(r.width, r.height) / 100;
-    var framed = eff.moulding !== 'none';
-    var mw = (eff.mount === 'float' ? (framed ? FLOAT_GAP : 0) : (MOUNT_DEPTH[eff.mount] || 0)) * u;
-    var fw = framed ? eff.frameWeight * MOULDING_STEP * u : 0;
-    var pad = eff.matte * u, padB = (eff.matte + eff.matteBottom) * u;
-
-    st.style.padding = pad + 'px ' + pad + 'px ' + padB + 'px';
-    st.style.setProperty('--u', u + 'px');
-    st.style.setProperty('--mw', mw + 'px');
-    st.style.setProperty('--fw', fw + 'px');
-    st.style.setProperty('--b', BEVEL * u + 'px');
-    st.style.setProperty('--r', REVEAL * u + 'px');
-    st.style.setProperty('--mat-grain', eff.matteColor === 'black' ? 0 : isLight(matteHex(eff)) ? 0.55 : 0.35);
-    st.style.setProperty('--matte', eff.matte);
-    st.style.setProperty('--matte-color', matteHex(eff));
-    st.style.setProperty('--frame-color', captionColor(eff));
+    var light = isLight(matteHex(eff));
     fr.setAttribute('data-mount', eff.mount);
     fr.setAttribute('data-moulding', eff.moulding);
-    fr.setAttribute('data-profile', eff.profile);
-    fr.setAttribute('data-core', isLight(matteHex(eff)) ? 'light' : 'dark');
+    fr.setAttribute('data-light', eff.light);
+    fr.setAttribute('data-core', light ? 'light' : 'dark');
     im.setAttribute('data-fit', eff.fit);
 
-    var ring = 2 * (mw + fw);
-    var aw = Math.max(1, r.width - pad * 2 - ring), ah = Math.max(1, r.height - pad - padB - ring);
+    var r = st.getBoundingClientRect();
+    var u = Math.min(r.width, r.height) / 100;
+    var mm = u / MM_PER_U;
+    var framed = eff.moulding !== 'none';
+    var mw = eff.mount === 'bevel' ? BEVEL_MM * mm
+      : eff.mount === 'float' && !framed ? 0   // a floater's gap only exists inside a moulding
+      : cssMM(fr, '--l-mm') * mm;
+    var fw = framed ? (cssMM(fr, '--m-mm') || 60) * WIDTH_SCALE[eff.frameWeight - 1] * mm : 0;
+    var matte = framed && eff.fit === 'contain' ? Math.max(eff.matte, CONTAIN_MIN_MAT) : eff.matte;
+    var mat = matte * u, matB = (matte + eff.matteBottom) * u;
+    var pt = fw + mat, px = fw + mat, pb = fw + matB;
+
+    st.style.padding = pt + 'px ' + px + 'px ' + pb + 'px';
+    st.setAttribute('data-framed', String(framed));
+    st.style.setProperty('--u', u + 'px');
+    st.style.setProperty('--mm', mm + 'px');
+    st.style.setProperty('--mw', mw + 'px');
+    st.style.setProperty('--fw', fw + 'px');
+    st.style.setProperty('--lx', eff.light === 'right' ? -1 : 1);
+    st.style.setProperty('--mat-grain', eff.matteColor === 'black' ? 0 : light ? 0.55 : 0.35);
+    st.style.setProperty('--matte', matte);
+    st.style.setProperty('--matte-color', matteHex(eff));
+    st.style.setProperty('--frame-color', captionColor(eff));
+
+    var aw = Math.max(1, r.width - px * 2 - mw * 2), ah = Math.max(1, r.height - pt - pb - mw * 2);
     var w = aw, h = ah;
     if (eff.fit === 'contain') {
       var k = Math.min(aw / n.w, ah / n.h);
@@ -191,6 +242,14 @@ window.framed = window.framed || {};
     }
     fr.style.width = w + 'px';
     fr.style.height = h + 'px';
+
+    // the stage centres the picture in its padded box; the moulding reaches from the picture's
+    // edges out to the stage's edges
+    var top = pt + (r.height - pt - pb - h) / 2, left = (r.width - w) / 2;
+    st.style.setProperty('--ft', top + 'px');
+    st.style.setProperty('--fb', (r.height - top - h) + 'px');
+    st.style.setProperty('--fl', left + 'px');
+    st.style.setProperty('--fr', left + 'px');
   }
 
   // Dimming and sensor-driven RGB gains affect only the art stage. The settings
@@ -217,7 +276,7 @@ window.framed = window.framed || {};
 
   // When the picture changes (slideshow tick, Picture row), every settings row must show the new
   // picture's own look — not the previous picture's values. Runs whether or not the panel is open.
-  var SYNC_IDS = ['fit', 'moulding', 'profile', 'frameWeight', 'mount', 'matte', 'matteBottom', 'matteColor', 'customHue', 'customSat', 'customLight', 'label', 'drift'];
+  var SYNC_IDS = ['fit', 'moulding', 'profile', 'frameWeight', 'mount', 'matte', 'matteBottom', 'matteColor', 'customHue', 'customSat', 'customLight', 'label', 'light', 'drift'];
   function syncPanel() {
     if (!api) return;
     for (var i = 0; i < SYNC_IDS.length; i++) api.set(SYNC_IDS[i], s[SYNC_IDS[i]]);
@@ -310,18 +369,12 @@ window.framed = window.framed || {};
         { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
-      { id: 'moulding', name: 'Frame', type: 'choice', value: s.moulding, options: [
-        { value: 'none', label: 'None' }, { value: 'black', label: 'Black' }, { value: 'ebony', label: 'Ebony' },
-        { value: 'walnut', label: 'Walnut' }, { value: 'oak', label: 'Oak' }, { value: 'gilt', label: 'Gilt' },
-        { value: 'silver', label: 'Silver' }, { value: 'white', label: 'White' }] },
-      { id: 'profile', name: 'Profile', type: 'choice', value: s.profile, hidden: none, options: [
-        { value: 'flat', label: 'Flat' }, { value: 'scoop', label: 'Scoop' },
-        { value: 'cushion', label: 'Cushion' }, { value: 'ornate', label: 'Ornate' }] },
-      { id: 'frameWeight', name: 'Frame width', type: 'range', value: s.frameWeight, min: 1, max: 10, step: 1, hidden: none },
-      { id: 'mount', name: 'Liner', type: 'choice', value: s.mount, options: [
-        { value: 'flat', label: 'None' }, { value: 'fillet', label: 'Gold fillet' }, { value: 'linen', label: 'Linen' },
-        { value: 'slip', label: 'Black slip' }, { value: 'bevel', label: 'Bevel' }, { value: 'double', label: 'Double mat' },
-        { value: 'shadowbox', label: 'Shadowbox' }, { value: 'float', label: 'Float' }] },
+      { id: 'moulding', name: 'Frame', type: 'choice', value: s.moulding, options: MOULDINGS },
+      { id: 'frameWeight', name: 'Frame width', type: 'range', value: s.frameWeight, min: 1, max: 10, step: 1, hidden: none,
+        format: function (v) { return (Math.round(mouldingMM(v) / 5) / 2) + ' cm'; } },
+      { id: 'mount', name: 'Liner', type: 'choice', value: s.mount, options: MOUNTS },
+      { id: 'light', name: 'Light from', type: 'choice', value: s.light, hidden: none, options: [
+        { value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
       { id: 'matte', name: 'Matte width', type: 'range', value: s.matte, min: 0, max: 30, step: 1, unit: '%', fastStep: 3 },
       { id: 'matteBottom', name: 'Bottom weight', type: 'range', value: s.matteBottom, min: 0, max: 10, step: 1, unit: '%' },
       { id: 'matteColor', name: 'Matte', type: 'swatch', value: s.matteColor, options: MATTES },
@@ -340,7 +393,7 @@ window.framed = window.framed || {};
         var per = F.store.get('artPer', {});
         var cur = F.slideshow.current();
         if (cur && per[cur.id]) { delete per[cur.id]; F.store.set('artPer', per); }
-        s = mix(DEFAULTS);
+        s = sanitize(mix(DEFAULTS));
         F.store.set('art', s);
         F.slideshow.set({ cadence: F.slideshow.DEFAULTS.cadence, every: F.slideshow.DEFAULTS.every, order: F.slideshow.DEFAULTS.order });
         buildControls();
@@ -368,9 +421,10 @@ window.framed = window.framed || {};
           var custom = value === 'custom';
           api.setHidden('customHue', !custom); api.setHidden('customSat', !custom); api.setHidden('customLight', !custom);
         }
-        if (id === 'moulding') { api.setHidden('frameWeight', value === 'none'); api.setHidden('profile', value === 'none'); }
+        if (id === 'moulding') { api.setHidden('frameWeight', value === 'none'); api.setHidden('light', value === 'none'); }
       }
       apply();
+      if (id === 'moulding') api.set('frameWeight', s.frameWeight); // relabel the width in cm for this design
     });
   }
 
