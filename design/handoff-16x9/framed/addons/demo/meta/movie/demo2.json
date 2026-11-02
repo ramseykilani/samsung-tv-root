@@ -1,0 +1,1 @@
+{"meta": {"id": "demo2", "type": "movie", "name": "Demo item 2", "poster": "assets/art/demo-landscape.png", "releaseInfo": "2024", "genres": ["Demo"], "description": "Bundled demo metadata served by addons/demo over the Stremio protocol."}}

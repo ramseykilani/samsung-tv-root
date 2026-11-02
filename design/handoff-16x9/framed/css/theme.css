@@ -1,0 +1,106 @@
+/* =====================================================================================
+ * framed — THEME: Mhach (the Saltmoor Pyramid), ultima Visual Language Canon §5.3.
+ *
+ * The only file where colour, type, line weight, radius, motion and space are decided.
+ * css/app.css consumes these roles and holds no visual literals.
+ * 1rem = 10 logical px on the 1920×1080 canvas. 10-foot floor: no text under 2.8rem.
+ * ===================================================================================== */
+
+@font-face { font-family: "Cormorant Garamond"; font-style: normal; font-weight: 300; font-display: block; src: url("../assets/fonts/cormorant-garamond-latin-300-normal.woff2") format("woff2"); }
+@font-face { font-family: "Cormorant Garamond"; font-style: normal; font-weight: 400; font-display: block; src: url("../assets/fonts/cormorant-garamond-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Cormorant Garamond"; font-style: normal; font-weight: 500; font-display: block; src: url("../assets/fonts/cormorant-garamond-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Cormorant Garamond"; font-style: italic; font-weight: 400; font-display: block; src: url("../assets/fonts/cormorant-garamond-latin-400-italic.woff2") format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 400; font-display: block; src: url("../assets/fonts/eb-garamond-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 500; font-display: block; src: url("../assets/fonts/eb-garamond-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-style: italic; font-weight: 400; font-display: block; src: url("../assets/fonts/eb-garamond-latin-400-italic.woff2") format("woff2"); }
+
+:root,
+html[data-theme="mhach"] {
+  /* ---- surfaces: waterlogged stone ---- */
+  --fr-color-bg: #1B2427;              /* surface-base */
+  --fr-color-surface: #242F32;         /* surface-raised */
+  --fr-color-surface-raised: #242F32;  /* focused row / tile ground */
+  --fr-color-surface-sunken: #12191C;  /* standing water, behind the matte */
+
+  /* ---- ink: bone-pale ---- */
+  --fr-color-text: #E0DFD7;
+  --fr-color-text-muted: #ABA99C;
+  --fr-color-text-faint: #777669;
+
+  /* ---- lines ---- */
+  --fr-color-border: #344246;
+  --fr-color-border-strong: #4A5D64;
+  --fr-border-width: 1px;
+
+  /* ---- states ----
+   * focus = charge (presence: where the cursor is). selected = seal (what is committed).
+   * breach only for refusals. Nothing else carries colour. */
+  --fr-color-focus: #72AC99;           /* charge */
+  --fr-color-focus-text: #9CC9BA;      /* charge, text-safe */
+  --fr-color-selected: #8143AD;        /* seal */
+  --fr-color-selected-text: #C7A3E0;   /* seal, text-safe */
+  --fr-color-disabled: #4A5D64;
+  --fr-color-error: #A83841;           /* breach */
+  --fr-color-ok: #72AC99;
+  --fr-color-info: #4A5D64;
+  --fr-focus-ring-width: 0.4rem;
+  --fr-focus-bar: 0.6rem;              /* the charge bar on a focused tile / row */
+  --fr-focus-scale: 1;                 /* Mhach does not grow; it is already exact */
+  --fr-focus-gap: 0.8rem;              /* poster cursor: a charge rule held off the image, like a frame's reveal */
+  --fr-color-focus-dim: #536E65;       /* charge-dim: the cursor on something that can't be acted on */
+  --fr-recede: 0.55;                   /* the rest of a poster wall while one poster has the cursor */
+
+  /* ---- art frame tones (read by js/screens/art.js) ---- */
+  --fr-frame-dark: #12191C;
+  --fr-frame-light: #E0DFD7;
+  --fr-recess: rgba(0, 0, 0, 0.3);     /* shadow-box set-back band: a crisp step, never a blur */
+  --fr-label-meta-opacity: 0.72;
+  --fr-floor-black: #000;              /* the floor preview dims toward true black */
+
+  /* ---- typography: serifs only, inverted weight (large runs light) ---- */
+  --fr-font-display: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+  --fr-font-family: "EB Garamond", Georgia, serif;
+  --fr-font-size-body: 2.8rem;
+  --fr-font-size-label: 3.2rem;        /* control names, values */
+  --fr-font-size-tile: 6.4rem;         /* launcher words */
+  --fr-font-size-heading: 4.8rem;
+  --fr-font-size-title: 7.2rem;        /* screen title */
+  --fr-font-size-display: 14.4rem;     /* launcher clock */
+  --fr-font-weight-display: 300;
+  --fr-font-weight-heading: 300;
+  --fr-font-weight-label: 400;
+  --fr-font-weight-strong: 500;
+  --fr-line-height: 1.4;
+  --fr-letter-spacing-label: 0.02em;
+
+  /* ---- space: canon §3.1 (4px base, ×1.5), doubled for the 10-foot canvas ---- */
+  --fr-space-1: 0.8rem;
+  --fr-space-2: 1.2rem;
+  --fr-space-3: 1.6rem;
+  --fr-space-4: 2.4rem;
+  --fr-space-5: 3.2rem;
+  --fr-space-6: 4.8rem;
+  --fr-space-7: 7.2rem;
+  --fr-space-8: 9.6rem;
+  --fr-space-9: 14.4rem;
+  --fr-gutter: 14.4rem;                /* screen side margin */
+  --fr-panel-width: 72rem;
+  --fr-home-art-width: 108rem;         /* launcher miniature of the Art screen (16:9) */
+  /* The black that disappears into the TV's own bezel (sRGB level 5, found with the bezel test card;
+   * tools/slim_frames.py BEZEL_BLACK renders the frames' flat face at the same level) */
+  --fr-bezel-black: rgb(5, 5, 5);
+  /* The Frame 2024 (55" LS03D) body and bezel in mm, for the home miniature's TV frame */
+  --fr-tv-body-w: 1236.98;
+  --fr-tv-body-h: 708.66;
+  --fr-tv-bezel-side: 14.14;
+  --fr-tv-bezel-tb: 14.38;
+  --fr-home-art-recede: 0.45;          /* how far it dims while another app is focused */
+
+  /* ---- shape & motion: the pyramid does not forgive curves; motion cuts ---- */
+  --fr-radius: 0;
+  --fr-motion: 60ms ease-out;
+  --fr-motion-reveal: 110ms ease-out;
+  --fr-motion-art: 900ms ease-in-out;  /* slideshow dissolve: the one slow thing, because it is the art */
+  --fr-shadow-panel: none;             /* canon §2.5: no drop shadows */
+  --fr-shadow-toast: none;
+}

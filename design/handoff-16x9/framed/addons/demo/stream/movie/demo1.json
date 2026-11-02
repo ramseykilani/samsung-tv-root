@@ -1,0 +1,15 @@
+{
+  "streams": [
+    {
+      "name": "framed demo",
+      "title": "Bundled MP4 640x360 (direct file)",
+      "url": "assets/media/demo.mp4"
+    },
+    {
+      "name": "framed demo",
+      "title": "P2P source (no direct file URL \u2014 not playable on TV)",
+      "infoHash": "0123456789abcdef0123456789abcdef01234567",
+      "fileIdx": 0
+    }
+  ]
+}
