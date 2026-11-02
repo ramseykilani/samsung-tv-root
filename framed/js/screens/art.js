@@ -145,6 +145,7 @@ window.framed = window.framed || {};
   var panelOpen = false;
   var chromeTimer;
   var driftTimer = null;
+  var libraryTimer = null;
   var driftHour = 0;
   var KEY = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, PLAY_PAUSE: 179, TIZEN_PLAY_PAUSE: 10252 };
 
@@ -493,8 +494,13 @@ window.framed = window.framed || {};
       }, 60000);
       F.nav.setScope(el, { initial: corner, remember: false });
       showChrome(3000);
+      // pick up pictures dropped in the remote folder since boot: refetch the
+      // manifest now and once a minute while art is showing
+      F.library.reload();
+      clearInterval(libraryTimer);
+      libraryTimer = setInterval(function () { F.library.reload(); }, 60000);
     },
-    leave: function () { F.adaptive.stop(); F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); },
+    leave: function () { F.adaptive.stop(); F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); clearInterval(libraryTimer); },
     back: function () {
       if (panelOpen) { closePanel(); return true; }
       return false;

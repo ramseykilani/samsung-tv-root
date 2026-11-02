@@ -85,7 +85,12 @@ window.framed = window.framed || {};
         try { items = fromManifest(base, JSON.parse(xhr.responseText)); } catch (e) { /* malformed */ }
         if (!items) return fallback('bad manifest');
         done = true;
-        set(items, 'remote');
+        // only notify listeners when the manifest actually changed — the art screen
+        // polls this every minute and a no-change event would rebuild its controls
+        var same = ITEMS.length === items.length && ITEMS.every(function (it, i) {
+          return it.id === items[i].id && it.src === items[i].src;
+        });
+        if (!same) set(items, 'remote');
       };
       xhr.onerror = function () { fallback('network error'); };
       xhr.ontimeout = function () { fallback('timeout after ' + REMOTE_TIMEOUT_MS + ' ms'); };
