@@ -66,6 +66,10 @@ window.framed = window.framed || {};
   // an edge — the same idea as Samsung's periodic image shift, derived from the hour-of-epoch
   // so it survives reloads and needs no stored state.
   var DRIFT_MAX = 10; // logical px each way (~20 px on the 4K panel)
+  // Overscan must exceed the drift: at a maximum nudge the stage edge would land exactly on the
+  // screen edge, and subpixel rounding on the TV exposes a sliver of the wall behind it — most
+  // visible with no mat, where nothing else cushions the seam. Extra margin keeps it off-screen.
+  var DRIFT_PAD = DRIFT_MAX + 6;
   function driftAxis(h, salt) {
     var a = (h ^ salt) >>> 0;
     a = (a + 0x6D2B79F5) >>> 0;
@@ -80,10 +84,10 @@ window.framed = window.framed || {};
       return;
     }
     var h = Math.floor(Date.now() / 3600000);
-    stage.style.top = -DRIFT_MAX + 'px';
-    stage.style.bottom = -DRIFT_MAX + 'px';
-    stage.style.left = -DRIFT_MAX + 'px';
-    stage.style.right = panelOpen ? '' : -DRIFT_MAX + 'px'; // while the panel is open, CSS owns right
+    stage.style.top = -DRIFT_PAD + 'px';
+    stage.style.bottom = -DRIFT_PAD + 'px';
+    stage.style.left = -DRIFT_PAD + 'px';
+    stage.style.right = panelOpen ? '' : -DRIFT_PAD + 'px'; // while the panel is open, CSS owns right
     stage.style.transform = 'translate(' + driftAxis(h, 0x9E3779B1) + 'px,' + driftAxis(h, 0x85EBCA6B) + 'px)';
   }
 

@@ -137,7 +137,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
  * The stage IS the matte: its background is the matte colour, its padding is the matte width
  * (in vmin so the band is equal on all sides) plus an optional extra bottom weight.
  * The frame box is sized by JS (art.js layout()) to hug the image (contain) or fill (cover). */
-.screen--art { background: var(--fr-color-surface-sunken); }
+.screen--art { background: var(--fr-color-surface-sunken); overflow: hidden; }
 .art-stage {
   --matte: 8;              /* % of the shorter screen edge, each side */
   --matte-bottom: 0;       /* extra bottom %, gallery-style */
