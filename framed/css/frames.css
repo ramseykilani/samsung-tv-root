@@ -1,16 +1,17 @@
 /*
  * framed — physical rendering of picture frames on the Art screen.
  *
- * These are material constants of real objects (walnut, gilding, linen, a bevel-cut mat), not
+ * These are material constants of real objects (satin black lacquer, gilding), not
  * interface decisions, so they live here rather than in the theme. The canon's no-shadow law governs
  * the UI; a framed picture on a wall is lit and casts shadows, and pretending otherwise looks flat.
  *
  * The goal is a TV that passes for a framed painting, so the frame is drawn like a real one:
- *   - The moulding always sits at the screen's edge, inside the TV's own 14 mm black bezel, which
- *     reads as the dark surround of the frame. A mat, when set, sits inside the moulding.
+ *   - The frame is thin and continues the TV's own 14 mm black bezel: its flat face is the bezel's
+ *     black, then a lit step down to the picture. It hugs the 16:9 picture, the same width all round,
+ *     so it meets the screen's edge at the top and bottom; the few mm left at the sides are bezel black.
  *   - Mouldings and liners are bitmaps rendered offline by tools/gen_frames.py from real
- *     cross-sections (normals, a soft key from above-left, the room, self-shadowing, satin wood,
- *     burnished/matte gilding, linen), one strip per side because each rail is lit differently.
+ *     cross-sections (normals, a soft key from above-left, the room, self-shadowing, satin black,
+ *     burnished/matte gilding), one strip per side because each rail is lit differently.
  *     CSS only places the four mitred strips; there are no CSS gradients on the frame (they band).
  *   - Real widths: mouldings are sized in mm against the 55" Frame's 1208.7 x 679.9 mm screen.
  *   - The light comes from above and to one side (data-light: the side the room's window is on).
@@ -26,21 +27,10 @@
  * Generated per design (end of file): --m-mm/--l-mm nominal width, --m-lip/--l-lip lip height, strips.
  */
 
-/* ---------- the stage: mat board inside the TV's (or the moulding's) opening ----------
- *   ::before  paper tooth (soft-light, so it works on any mat colour; off on true black)
- *             and the slow fall of room light across the board
- *   ::after   with no moulding, the TV bezel's lip shadowing the board's edges, strongest at the top */
-.art-stage::before, .art-stage::after {
+/* ---------- the stage: the TV's (or the moulding's) opening, filled by the picture ----------
+ *   ::after   with no moulding, the TV bezel's lip shadowing the picture's edges, strongest at the top */
+.art-stage::after {
   content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
-}
-.art-stage::before {
-  z-index: 0;
-  background:
-    linear-gradient(172deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.05)),
-    url("../assets/textures/mat.png");
-  background-size: auto, calc(var(--u) * 24) calc(var(--u) * 24);
-  mix-blend-mode: soft-light;
-  opacity: var(--mat-grain, 0.5);
 }
 .art-stage:not([data-framed="true"])::after {
   z-index: 4;
@@ -48,17 +38,10 @@
               inset 0 calc(var(--u) * -0.6) calc(var(--u) * 1.6) calc(var(--u) * -1.2) rgba(0, 0, 0, 0.08),
               inset 0 0 calc(var(--u) * 1.8) calc(var(--u) * -0.6) rgba(0, 0, 0, 0.10);
 }
-/* under the moulding: dark, so the anti-aliased mitre joins read as a hairline joint, not a light seam */
-.art-stage[data-framed="true"] { box-shadow: inset 0 0 0 calc(var(--fw) - 1px) #0b0a09; }
 .art-stage .art-frame { z-index: 1; }
-.art-stage .art-label { z-index: 1; }
-/* with a moulding at the screen's edge, the caption sits on the mat inside it */
-.art-stage[data-framed="true"] .art-label {
-  left: calc(var(--fw) + var(--matte) * 1vmin); bottom: calc(var(--fw) + var(--matte) * 0.3vmin);
-}
 
 /* ---------- the four mitred sides, shared by liner (mount) and moulding ---------- */
-.side { position: absolute; display: none; pointer-events: none; background-color: #0b0a09; }
+.side { position: absolute; display: none; pointer-events: none; background-color: var(--fr-bezel-black); }
 .side--t {
   top: calc(var(--o-t) * -1); left: calc(var(--o-l) * -1); right: calc(var(--o-r) * -1); height: var(--w);
   background-repeat: repeat-x; background-size: auto 100%;
@@ -95,26 +78,18 @@
 @supports not (clip-path: polygon(0 0, 100% 0, 0 100%)) {
   .side--l, .side--r { top: calc(var(--w) - var(--o-t)); bottom: calc(var(--w) - var(--o-b)); }
 }
-
-/* Tizen fallback: without blend modes the paper tooth renders at full strength —
- * halve it rather than let the texture shout over the matte. */
-@supports not (mix-blend-mode: soft-light) {
-  .art-stage::before { opacity: calc(var(--mat-grain, 0.5) * 0.4); }
-}
 .art-image { z-index: 0; }
 .art-image::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
 
 /* light from the right: mirror the whole frame, then un-mirror the picture */
 .art-frame[data-light="right"], .art-frame[data-light="right"] .art-image { transform: scaleX(-1); }
 
-/* ---------- liners: what sits between the picture and the moulding (or the mat) ---------- */
-.art-frame[data-mount="fillet"] .mount, .art-frame[data-mount="linen"] .mount,
-.art-frame[data-mount="slip"] .mount { display: block; }
+/* ---------- liners: what sits between the picture and the moulding ---------- */
+.art-frame[data-mount="goldline"] .mount { display: block; }
 .art-frame[data-moulding]:not([data-moulding="none"])[data-mount="float"] .mount { display: block; }
 
 /* the liner's sight edge stands a few mm proud of the picture and shades it, mostly from above */
-.art-frame[data-mount="fillet"] .art-image::after, .art-frame[data-mount="linen"] .art-image::after,
-.art-frame[data-mount="slip"] .art-image::after {
+.art-frame[data-mount="goldline"] .art-image::after {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35),
               inset calc(var(--lx) * var(--mm) * var(--l-lip) * 0.6) calc(var(--mm) * var(--l-lip) * 1.4)
                     calc(var(--mm) * var(--l-lip) * 1.3) rgba(0, 0, 0, 0.38),
@@ -123,18 +98,6 @@
 /* floater: the canvas stands proud of the tray; its own edge is a crisp dark line */
 .art-frame[data-mount="float"] .art-image::after { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45); }
 
-/* Bevel: the mat's 45-degree cut, its white (or black) core lit by which way each face points:
- * the top face looks down (shade), the bottom face up (lit), the sides towards the light or away. */
-.art-frame[data-core="light"] { --bevel-core: #EFEBE2; }
-.art-frame[data-core="dark"] { --bevel-core: #1C1D1C; }
-.art-frame[data-mount="bevel"] .mount {
-  display: block;
-  background: linear-gradient(var(--tint-in), var(--tint-in)), var(--bevel-core);
-}
-.art-frame[data-mount="bevel"] .art-image::after {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2),
-              inset calc(var(--lx) * var(--mm) * 0.8) calc(var(--mm) * 1.6) calc(var(--mm) * 1.8) rgba(0, 0, 0, 0.22);
-}
 
 /* ---------- the moulding ---------- */
 .art-frame[data-moulding]:not([data-moulding="none"]) .mould { display: block; }
@@ -176,53 +139,28 @@
   box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.35), 0 0.1rem 0.3rem rgba(0, 0, 0, 0.3);
 }
 .home__art--tv .home__stage { box-shadow: 0 0 0 1px #060606; }
-.home__art--tv .home__stage[data-framed="true"] { box-shadow: 0 0 0 1px #060606, inset 0 0 0 calc(var(--fw) - 1px) #0b0a09; }
 
 /* ===== GENERATED by tools/gen_frames.py (do not edit by hand; edit the generator and re-run it) ===== */
 /* --m-mm / --l-mm: nominal width in mm (read by js/screens/art.js);
  * --m-lip / --l-lip: height of the sight edge above what sits inside it, in mm (cast shadows). */
-/* walnut: solid walnut gallery scoop, satin oil finish */
-.art-frame[data-moulding="walnut"] { --m-mm: 70; --m-lip: 9; }
-.art-frame[data-moulding="walnut"] .mould.side--t { background-image: url("../assets/frames/walnut-t.jpg"); }
-.art-frame[data-moulding="walnut"] .mould.side--b { background-image: url("../assets/frames/walnut-b.jpg"); }
-.art-frame[data-moulding="walnut"] .mould.side--l { background-image: url("../assets/frames/walnut-l.jpg"); }
-.art-frame[data-moulding="walnut"] .mould.side--r { background-image: url("../assets/frames/walnut-r.jpg"); }
-/* gilt: water-gilt Maratta-type frame: torsade torus, matte cove, sanded frieze, burnished pearls */
-.art-frame[data-moulding="gilt"] { --m-mm: 100; --m-lip: 11; }
-.art-frame[data-moulding="gilt"] .mould.side--t { background-image: url("../assets/frames/gilt-t.jpg"); }
-.art-frame[data-moulding="gilt"] .mould.side--b { background-image: url("../assets/frames/gilt-b.jpg"); }
-.art-frame[data-moulding="gilt"] .mould.side--l { background-image: url("../assets/frames/gilt-l.jpg"); }
-.art-frame[data-moulding="gilt"] .mould.side--r { background-image: url("../assets/frames/gilt-r.jpg"); }
-/* black: black-stained ash, square gallery profile with eased edges, satin */
-.art-frame[data-moulding="black"] { --m-mm: 42; --m-lip: 7; }
-.art-frame[data-moulding="black"] .mould.side--t { background-image: url("../assets/frames/black-t.jpg"); }
-.art-frame[data-moulding="black"] .mould.side--b { background-image: url("../assets/frames/black-b.jpg"); }
-.art-frame[data-moulding="black"] .mould.side--l { background-image: url("../assets/frames/black-l.jpg"); }
-.art-frame[data-moulding="black"] .mould.side--r { background-image: url("../assets/frames/black-r.jpg"); }
-/* ebony: Dutch 17th-c. style ebonised reverse profile with ripple and wave mouldings, French polished */
-.art-frame[data-moulding="ebony"] { --m-mm: 82; --m-lip: 10; }
-.art-frame[data-moulding="ebony"] .mould.side--t { background-image: url("../assets/frames/ebony-t.jpg"); }
-.art-frame[data-moulding="ebony"] .mould.side--b { background-image: url("../assets/frames/ebony-b.jpg"); }
-.art-frame[data-moulding="ebony"] .mould.side--l { background-image: url("../assets/frames/ebony-l.jpg"); }
-.art-frame[data-moulding="ebony"] .mould.side--r { background-image: url("../assets/frames/ebony-r.jpg"); }
-/* fillet: gilt sight fillet: a burnished bead beside a small cove */
-.art-frame[data-mount="fillet"] { --l-mm: 11; --l-lip: 4; }
-.art-frame[data-mount="fillet"] .mount.side--t { background-image: url("../assets/frames/fillet-t.jpg"); }
-.art-frame[data-mount="fillet"] .mount.side--b { background-image: url("../assets/frames/fillet-b.jpg"); }
-.art-frame[data-mount="fillet"] .mount.side--l { background-image: url("../assets/frames/fillet-l.jpg"); }
-.art-frame[data-mount="fillet"] .mount.side--r { background-image: url("../assets/frames/fillet-r.jpg"); }
-/* linen: linen-wrapped liner sloping to a small gilt sight lip */
-.art-frame[data-mount="linen"] { --l-mm: 40; --l-lip: 5; }
-.art-frame[data-mount="linen"] .mount.side--t { background-image: url("../assets/frames/linen-t.jpg"); }
-.art-frame[data-mount="linen"] .mount.side--b { background-image: url("../assets/frames/linen-b.jpg"); }
-.art-frame[data-mount="linen"] .mount.side--l { background-image: url("../assets/frames/linen-l.jpg"); }
-.art-frame[data-mount="linen"] .mount.side--r { background-image: url("../assets/frames/linen-r.jpg"); }
-/* slip: black satin slip, bevelled towards the picture */
-.art-frame[data-mount="slip"] { --l-mm: 15; --l-lip: 4; }
-.art-frame[data-mount="slip"] .mount.side--t { background-image: url("../assets/frames/slip-t.jpg"); }
-.art-frame[data-mount="slip"] .mount.side--b { background-image: url("../assets/frames/slip-b.jpg"); }
-.art-frame[data-mount="slip"] .mount.side--l { background-image: url("../assets/frames/slip-l.jpg"); }
-.art-frame[data-mount="slip"] .mount.side--r { background-image: url("../assets/frames/slip-r.jpg"); }
+/* bezel: satin black, flush with the TV bezel */
+.art-frame[data-moulding="bezel"] { --m-mm: 12; --m-lip: 6; }
+.art-frame[data-moulding="bezel"] .mould.side--t { background-image: url("../assets/frames/bezel-t.jpg"); }
+.art-frame[data-moulding="bezel"] .mould.side--b { background-image: url("../assets/frames/bezel-b.jpg"); }
+.art-frame[data-moulding="bezel"] .mould.side--l { background-image: url("../assets/frames/bezel-l.jpg"); }
+.art-frame[data-moulding="bezel"] .mould.side--r { background-image: url("../assets/frames/bezel-r.jpg"); }
+/* bezelfloat: satin black, flush with the TV bezel */
+.art-frame[data-moulding="bezelfloat"] { --m-mm: 6; --m-lip: 0; }
+.art-frame[data-moulding="bezelfloat"] .mould.side--t { background-image: url("../assets/frames/bezelfloat-t.jpg"); }
+.art-frame[data-moulding="bezelfloat"] .mould.side--b { background-image: url("../assets/frames/bezelfloat-b.jpg"); }
+.art-frame[data-moulding="bezelfloat"] .mould.side--l { background-image: url("../assets/frames/bezelfloat-l.jpg"); }
+.art-frame[data-moulding="bezelfloat"] .mould.side--r { background-image: url("../assets/frames/bezelfloat-r.jpg"); }
+/* goldline: burnished gilt bead */
+.art-frame[data-mount="goldline"] { --l-mm: 5; --l-lip: 3; }
+.art-frame[data-mount="goldline"] .mount.side--t { background-image: url("../assets/frames/goldline-t.jpg"); }
+.art-frame[data-mount="goldline"] .mount.side--b { background-image: url("../assets/frames/goldline-b.jpg"); }
+.art-frame[data-mount="goldline"] .mount.side--l { background-image: url("../assets/frames/goldline-l.jpg"); }
+.art-frame[data-mount="goldline"] .mount.side--r { background-image: url("../assets/frames/goldline-r.jpg"); }
 /* float: floater gap: the black tray floor between the moulding and the canvas */
 .art-frame[data-mount="float"] { --l-mm: 9; --l-lip: 0; }
 .art-frame[data-mount="float"] .mount.side--t { background-image: url("../assets/frames/float-t.jpg"); }

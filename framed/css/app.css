@@ -128,50 +128,51 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   background: var(--fr-color-bg);
   box-shadow: var(--fr-shadow-panel);
 }
-.panel__status { display: none; }  /* the Picture row already says where the slideshow is */
 .panel__sensor { padding: 16px 32px 0; font-size: 16px; opacity: 0.8; }
 .panel__body { flex: 1; overflow-y: auto; padding: var(--fr-space-7) var(--fr-space-7); scrollbar-width: none; }
 .panel__body::-webkit-scrollbar { display: none; }
 
-/* ---------- art stage: matte + frame + image ----------
- * The stage IS the matte: its background is the matte colour, its padding is the matte width
- * (in vmin so the band is equal on all sides) plus an optional extra bottom weight.
- * The frame box is sized by JS (art.js layout()) to hug the image (contain) or fill (cover). */
-.screen--art { background: var(--fr-color-surface-sunken); overflow: hidden; }
+/* ---------- art stage: the screen, bezel-black around the 16:9 picture ----------
+ * The stage's background is the TV bezel's black, so the few mm the picture does not cover read as
+ * more bezel. The frame box is sized by JS (art.js layout()) to be the largest centred 16:9 rect
+ * inside the stage, less the frame's own thickness all round — the moulding then meets the screen's
+ * edge at top and bottom and its flat face continues the bezel black at the sides. The picture
+ * always covers: the library only holds 16:9 works, so nothing is ever cropped or matted. */
+.screen--art { background: var(--fr-bezel-black); overflow: hidden; }
 .art-stage {
-  --matte: 8;              /* % of the shorter screen edge, each side */
-  --matte-bottom: 0;       /* extra bottom %, gallery-style */
-  --matte-color: var(--fr-frame-light);  /* overridden per user setting by JS */
-  --frame-color: var(--fr-frame-dark);   /* caption ink, auto-contrast against the matte (JS) */
   --u: 1vmin; --mw: 0px; --fw: 0px;      /* mount / moulding geometry (JS, see css/frames.css) */
   position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-  background: var(--matte-color);
-  padding: calc(var(--matte) * 1vmin) calc(var(--matte) * 1vmin) calc((var(--matte) + var(--matte-bottom)) * 1vmin);
+  background: var(--fr-bezel-black);
   display: flex; align-items: center; justify-content: center;
   transition: filter var(--fr-motion-art) ease;  /* dimming glides down like gallery lights */
 }
 .screen--art.panel-open .art-stage { right: var(--fr-panel-width); }
-.art-frame { position: relative; flex: none; width: 100%; height: 100%; }
-.art-image { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background-repeat: no-repeat; background-position: center; background-size: contain; }
-.art-image[data-fit="cover"] { background-size: cover; }
+.art-frame { position: relative; flex: none; }
+.art-image { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background-repeat: no-repeat; background-position: center; background-size: cover; }
 /* slideshow cross-fade: two stacked layers; JS paints the next picture on the inactive one, then
  * flips data-active. A slow dissolve, as a gallery lights a new work. */
 .art-layer {
   position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-  background-repeat: no-repeat; background-position: center; background-size: contain;
+  background-repeat: no-repeat; background-position: center; background-size: cover;
   opacity: 0; transition: opacity var(--fr-motion-art);
 }
 .art-layer[data-active="true"] { opacity: 1; }
-.art-image[data-fit="cover"] .art-layer { background-size: cover; }
 
-/* caption: a one-line museum label in the bottom matte band */
-.art-label {
-  position: absolute; left: calc(var(--matte) * 1vmin); bottom: calc(var(--matte) * 0.3vmin);
-  display: flex; align-items: baseline; gap: var(--fr-space-4);
-  color: var(--frame-color); font-size: var(--fr-font-size-body); line-height: 1.2;
+/* picture grid at the top of the Art panel: thumbnails cropped exactly as the screen shows them.
+ * The one on the wall carries the seal bar beneath (like a committed choice); the cursor is the
+ * focus ring. OK hangs the focused picture. */
+.pictures {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--fr-space-4);
+  margin-bottom: var(--fr-space-6);
 }
-.art-label__title { font-family: var(--fr-font-display); font-style: italic; font-weight: var(--fr-font-weight-label); font-size: var(--fr-font-size-label); }
-.art-label__meta { opacity: var(--fr-label-meta-opacity); }
+.pick { position: relative; display: block; padding: 0; padding-top: 56.25%; background: var(--fr-color-surface); }  /* 16:9, the screen's shape */
+.pick__img {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+  outline: var(--fr-focus-ring-width) solid transparent; outline-offset: var(--fr-focus-gap);
+  transition: outline-color var(--fr-motion);
+}
+.pick[aria-current="true"] { box-shadow: 0 0.6rem 0 0 var(--fr-color-selected); }
+.pick:focus .pick__img, .pick.is-focused .pick__img { outline-color: var(--fr-color-focus); }
 
 /* corner affordance: the only focusable on the stage while the panel is closed.
  * Fully hidden while art is shown; any d-pad key reveals it (.show-chrome) already focused,
@@ -197,7 +198,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   align-items: start; padding: var(--fr-space-7) var(--fr-gutter) 0;
 }
 .settings__col .control { margin-bottom: var(--fr-space-3); }
-.floor-preview { position: relative; width: 48rem; height: 27rem; margin-top: var(--fr-space-3); background: url("../assets/art/landscape.jpg") center / cover no-repeat; }
+.floor-preview { position: relative; width: 48rem; height: 27rem; margin-top: var(--fr-space-3); background: url("../assets/art/marsh.jpg") center / cover no-repeat; }
 .floor-preview::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: var(--fr-floor-black); opacity: var(--floor-dim, 0.9); }
 .about { padding: 0 var(--fr-gutter) var(--fr-space-7); color: var(--fr-color-text-faint); }
 
