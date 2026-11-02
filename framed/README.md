@@ -132,17 +132,27 @@ var MEDIA_ADDONS = [
   and the detail screen refuses it with a toast — the TV has no torrent engine.
 - **Secret-bearing addon URLs** (debrid-configured addons like
   `https://torrentio.strem.fun/torbox=<key>` produced by
-  [torrentio.strem.fun/configure](https://torrentio.strem.fun/configure)) contain API keys —
-  keep them out of git. Drop a gitignored `addons.local.json` next to `index.html`:
+  [torrentio.strem.fun/configure](https://torrentio.strem.fun/configure), or a TorBox
+  manifest URL `https://stremio.torbox.app/<api_key>/manifest.json`) contain API keys —
+  keep them out of git. Two local-only installs:
 
-  ```json
-  {"addons": [{"name": "Torrentio", "base": "https://torrentio.strem.fun/torbox=<key>"}]}
-  ```
+  1. **Watch → Addons → “Install addon from URL”** — paste the URL on the on-screen
+     keyboard; it persists in `localStorage`, never in git. Easiest TorBox hook-up:
+     paste `https://stremio.torbox.app/<api_key>/manifest.json` (the key stays on the TV).
+  2. A gitignored `addons.local.json` next to `index.html`:
 
-  On the first `catalogs()` call the file is fetched once; entries whose `name` matches a
-  default entry replace its `base`, unknown names are prepended. Absent file → quiet no-op.
-  With a debrid-backed base, `stream/` responses become HTTPS `…/resolve/…` URLs the TV's
-  `<video>` can play directly.
+     ```json
+     {"addons": [{"name": "TorBox", "base": "https://stremio.torbox.app/<api_key>"}]}
+     ```
+
+     On the first `catalogs()` call the file is fetched once; entries whose `name` matches a
+     default entry replace its `base`, unknown names are prepended. Absent file → quiet no-op.
+
+  Either way the addon is a normal `<base>` — `<base>/manifest.json` declares its
+  resources, `<base>/stream/<type>/<id>.json` answers stream requests. With a
+  debrid-backed base, `stream/` responses become HTTPS `…/resolve/…` URLs the TV's
+  `<video>` can play directly, so they land in the detail screen's “plays on this TV”
+  group instead of the dead-source fold.
 - Persisted state: `localStorage["framed.media"]` = `{ catalog, view }` (last catalog and
   shelf), and `localStorage["framed.watch"]` = the viewer's own data — `saved[]` (My List
   snapshots: item + a revivable catalog reference, newest first, cap 200) and `progress{}`
