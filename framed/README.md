@@ -49,7 +49,7 @@ framed/
 | Launcher | app list (Watch, YouTube, PC, Art, Settings; Mhach vertical list + art miniature), external → `__tvBridge.launch` via `EXTERNAL_APP_IDS`, clock+date | shipped: Mhach design |
 | Art | Matte width/bottom-weight/colour (8 presets + custom HSL), 5 frame styles, frame weight/tone, contain/cover with frame hugging the image, caption slot, persistence, panel focus-trap, `s` key, corner affordance reveal | Preset palette values, frame-style rendering refinement, caption typography, panel chrome, any motion |
 | Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / every N hours / every N days, sequential / seeded shuffle, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, "n of N" indicator in panel + Settings only, persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
-| Settings | Brightness + Art-floor ranges wired to the bridge and persisted, floor preview thumbnail, theme chooser with disabled "coming soon" slots, About | Real theme list and token blocks, all visuals |
+| Settings | Framed-level only: home-art bezel style, theme chooser with disabled "coming soon" slots, About. All art-level settings live in the Art panel | Real theme list and token blocks, all visuals |
 | Theme | `html[data-theme]` hook, single token file, `--fr-motion` switch (0ms now) | **Everything in `theme-placeholder.css`** |
 | Assets | Placeholder test cards + icon | Real imagery and icon |
 
@@ -59,7 +59,7 @@ framed/
 |---|---|---|
 | `#/launcher` (default, home) | App list: Watch · YouTube · PC · Art · Settings (+ art miniature) | ▴ ▾ move · OK open · Back does nothing |
 | `#/art` | Fullscreen picture on a matte with a frame; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
-| `#/settings` | Brightness · Art Mode floor · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
+| `#/settings` | Home art · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
 | `#/media` | Watch home, modelled on Stremio: **Board** (Continue + My List rows, then a row per catalog), Browse (one catalog, paged, with its genre filter), My List (sortable, type-filtered), Continue, Addons; Search over all of it | ▴ ▾ browse · ◂ ▸ switch catalog/shelf/filter · OK open · red (`s`) save · green (`w`) mark watched · Back clears search, then → home |
 | `#/media-item` | Detail: backdrop, poster, title, year/genres/rating/cert/country, cast & director, description, Save/Resume/Mark watched/Dismiss actions, episodes (series), stream list with quality tags | ▴ ▾ move · OK act / play (or quiet refusal for unplayable sources) · Back → browse |
 | `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back → detail (position kept) |
@@ -73,12 +73,10 @@ moulding (none · black · ebony · walnut · oak · gilt · silver · white), p
 cushion · ornate), frame width 1–10, caption, and **Pixel shift** — an anti-burn-in drift that
 overscans the stage by 10 px and nudges it to a new offset once per hour (on by default).
 
-Slideshow (persisted in `localStorage["framed.slideshow"]`, editable from the art panel and the
-Settings screen): **Rotate** off · hours · days, with an **Every** interval row (1–48 hours or
+Slideshow (persisted in `localStorage["framed.slideshow"]`, editable from the art panel): **Rotate** off · hours · days, with an **Every** interval row (1–48 hours or
 1–30 days); **Order** sequential · shuffle (shuffle order is a seeded permutation, so it survives
 reload and the position stays meaningful); **Picture** `n of N` range in the panel. The position
-indicator appears only in settings chrome (panel header, Settings "Showing n of N · title") —
-never on the stage.
+indicator appears only in panel chrome (panel header "n of N · title") — never on the stage.
 
 - **Timed rotation:** a timer runs only while the Art screen is shown. On entry the sequencer
   advances by however many whole periods elapsed since `lastAdvance` (so an every-2-hours show
@@ -88,13 +86,14 @@ never on the stage.
   inactive layer, then `data-active` flips. The opacity transition is `var(--fr-motion)` — 0 ms in
   the scaffold, so the designer sets the feel from the token file alone.
 
-Settings (persisted in `localStorage["framed.settings"]`): brightness 0–100, the Art Mode
-**ambient floor** 0–100 (reserved for the future adaptive-dimming sensor path), theme, home-art
-style, and **Start in** (Launcher · Art) — with Art, a fresh launch opens on the piece of art
-itself, so a remote key mapped to the app via the daemon becomes a dedicated show-art button.
+Settings (persisted in `localStorage["framed.settings"]`): theme, home-art style, plus the
+art-level values the Art panel edits — brightness 0–100, the **art floor** 0–100 (the darkest
+level adaptive dimming may reach), adaptive brightness/tone toggles, and **Start in**
+(Launcher · Art) — with Art, a fresh launch opens on the piece of art itself, so a remote key
+mapped to the app via the daemon becomes a dedicated show-art button.
 
 **Brightness is software dimming today.** The `__tvBridge` hardware path is still a stub, so the
-slider (in Settings and in the art panel) drives a CSS `brightness()` filter on the art stage
+slider (in the art panel, shown only when Adaptive brightness is Off) drives a CSS `brightness()` filter on the art stage
 instead: 100 = undimmed, 0 = near-black (≈2 %) — deliberately far below Samsung's Art Mode
 minimum, which never gets dark enough in a dim room. Tone warms (a sepia ramp) as the art dims,
 standing in for adaptive tone until a light-sensor path exists. The filter covers only the stage;
@@ -294,7 +293,7 @@ what shows at boot, and what stays if `REMOTE_ART_BASE` is empty, the desktop is
 fetch fails or times out, or the manifest is malformed. There is deliberately **no error UI**
 — one `console.info` line is logged and the bundled set is used. When the manifest arrives
 later, `F.library.set(items, 'remote')` swaps the list and fires `framed:library`; the
-slideshow re-wraps its position and the Art screen repaints. The Settings → About block
+slideshow re-wraps its position and the Art screen repaints. The Settings About line
 shows the active source and count.
 
 ### Swapping again later

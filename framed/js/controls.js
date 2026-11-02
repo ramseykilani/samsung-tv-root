@@ -97,7 +97,7 @@ window.framed = window.framed || {};
 
       row.addEventListener('framed:adjust', function (e) {
         if (spec.gated) { onChange(spec.id, state.value, spec, { rejected: true }); return; }
-        adjust(state, e.detail.delta, e.detail.fast);
+        if (!adjust(state, e.detail.delta, e.detail.fast)) e.detail.handled = false;
       });
       row.addEventListener('click', function () {
         if (spec.gated) { onChange(spec.id, state.value, spec, { rejected: true }); return; }
@@ -117,27 +117,29 @@ window.framed = window.framed || {};
       return Math.max(spec.min, Math.min(spec.max, v));
     }
 
+    // Returns whether the key actually changed (or was consumed by) the row; a
+    // no-op at the row's limit lets the nav engine fall through to spatial move.
     function adjust(state, delta, fast, wrap) {
       var spec = state.spec;
       if (spec.type === 'range') {
         var step = (spec.step || 1) * (fast ? (spec.fastStep || 2) : 1);
         var v = snap(spec, state.value + delta * step);
         if (v === state.value && wrap) v = spec.min; // Enter at max wraps to min
-        commit(state, v);
+        return commit(state, v);
       } else if (spec.type === 'choice' || spec.type === 'swatch') {
         var opts = spec.options, n = opts.length;
         var idx = indexOf(opts, state.value);
         for (var k = 1; k <= n; k++) {
           var j = idx + delta * k;
-          if (wrap) j = ((j % n) + n) % n; else if (j < 0 || j >= n) return;
+          if (wrap) j = ((j % n) + n) % n; else if (j < 0 || j >= n) return false;
           if (opts[j].disabled) {
             onChange(spec.id, opts[j].value, spec, { rejected: true });
-            if (!wrap) return; else continue;
+            if (!wrap) return true; else continue;
           }
-          commit(state, opts[j].value);
-          return;
+          return commit(state, opts[j].value);
         }
       }
+      return false;
     }
 
     function indexOf(opts, v) {
@@ -146,10 +148,11 @@ window.framed = window.framed || {};
     }
 
     function commit(state, v) {
-      if (v === state.value) return;
+      if (v === state.value) return false;
       state.value = v;
       paint(state);
       onChange(state.spec.id, v, state.spec);
+      return true;
     }
 
     function paint(state) {

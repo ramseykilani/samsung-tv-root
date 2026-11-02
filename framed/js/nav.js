@@ -5,7 +5,10 @@
  * screen, or a modal panel). Arrow keys pick the geometrically nearest focusable in that
  * direction; Enter clicks; Back (Tizen 10009 / Backspace / Escape) bubbles to the router.
  * Elements with data-adjust="horizontal" consume Left/Right as a value change
- * (a 'framed:adjust' CustomEvent with detail.delta = ±1) instead of moving focus.
+ * (a 'framed:adjust' CustomEvent with detail.delta = ±1) instead of moving focus —
+ * unless the adjust is a no-op at the row's limit, in which case the press falls
+ * through to spatial navigation. At a grid's edge, Left continues to the row
+ * above and Right to the row below.
  */
 window.framed = window.framed || {};
 (function (F) {
@@ -143,6 +146,10 @@ window.framed = window.framed || {};
     var cur = current();
     if (!cur) { focus(recall(scope)) || focusFirst(); return true; }
     var next = pick(cur, dir);
+    // At a grid's edge, Left continues to the row above and Right to the row
+    // below, so lateral movement is never a dead end on the outermost column.
+    if (!next && dir === 'left') next = pick(cur, 'up');
+    if (!next && dir === 'right') next = pick(cur, 'down');
     if (next) { focus(next); return true; }
     return false; // edge — stay put (focus never lost)
   }
@@ -180,8 +187,13 @@ window.framed = window.framed || {};
     if (!dir) return;
     e.preventDefault();
     if (cur && cur.getAttribute('data-adjust') === 'horizontal' && (dir === 'left' || dir === 'right')) {
-      cur.dispatchEvent(new CustomEvent('framed:adjust', { detail: { delta: dir === 'right' ? 1 : -1, fast: e.repeat }, bubbles: true }));
-      return;
+      var detail = { delta: dir === 'right' ? 1 : -1, fast: e.repeat, handled: true };
+      cur.dispatchEvent(new CustomEvent('framed:adjust', { detail: detail, bubbles: true }));
+      // The adjust listener sets detail.handled = false when the key was a no-op
+      // (slider already at min/max, choice at its first/last option). The press
+      // then falls through to spatial navigation instead of being swallowed, so
+      // a column of adjustable rows can never strand the cursor.
+      if (detail.handled !== false) return;
     }
     move(dir);
   }

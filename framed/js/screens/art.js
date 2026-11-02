@@ -198,8 +198,12 @@ window.framed = window.framed || {};
   function applyDim() {
     F.adaptive.apply();
   }
+  function setting(key, fallback) {
+    var v = F.store.get('settings', {})[key];
+    return v === undefined ? fallback : v;
+  }
   function brightness() {
-    var b = F.store.get('settings', {}).brightness;
+    var b = setting('brightness', 100);
     return typeof b === 'number' ? Math.max(0, Math.min(100, b)) : 100;
   }
   applyDim();
@@ -300,13 +304,20 @@ window.framed = window.framed || {};
       { id: 'cadence', name: 'Slideshow', type: 'choice', value: ss.cadence, options: F.slideshow.CADENCES },
       { id: 'every', name: 'Every', type: 'range', value: ss.every, min: 1, max: F.slideshow.everyMax(ss), step: 1, hidden: ss.cadence === 'off', format: everyLabel },
       { id: 'order', name: 'Order', type: 'choice', value: ss.order, options: F.slideshow.ORDERS },
+      { id: 'startScreen', name: 'Start in', type: 'choice', value: setting('startScreen', 'launcher'), options: [
+        { value: 'launcher', label: 'Launcher' }, { value: 'art', label: 'Art' }],
+        help: 'Which screen a fresh framed launch opens on' },
       { id: 'brightness', name: 'Brightness', type: 'range', value: brightness(), min: 0, max: 100, step: 1, fastStep: 5,
-        hidden: (F.store.get('settings', {}).adaptiveBrightness || 'on') === 'on',
+        hidden: setting('adaptiveBrightness', 'on') === 'on',
         format: function (v) { return v + '%'; },
         help: 'Software dimming; 0 is near-black, below the panel minimum' },
-      { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: F.store.get('settings', {}).adaptiveBrightness || 'on', options: [
-        { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
-      { id: 'adaptiveTone', name: 'Adaptive tone', type: 'choice', value: F.store.get('settings', {}).adaptiveTone || 'on', options: [
+      { id: 'artFloor', name: 'Art floor', type: 'range', value: setting('artFloor', 10), min: 0, max: 100, step: 1, fastStep: 5,
+        format: function (v) { return v + '%'; },
+        help: 'The darkest level dimming may reach' },
+      { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: setting('adaptiveBrightness', 'on'), options: [
+        { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }],
+        help: 'Sensor dims the art with the room; Off shows a manual slider' },
+      { id: 'adaptiveTone', name: 'Adaptive tone', type: 'choice', value: setting('adaptiveTone', 'on'), options: [
         { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
@@ -360,6 +371,12 @@ window.framed = window.framed || {};
         F.store.merge('settings', { brightness: value }, {});
         window.__tvBridge.setBrightness(value);
         window.dispatchEvent(new CustomEvent('framed:settings'));
+      } else if (id === 'artFloor') {
+        F.store.merge('settings', { artFloor: value }, {});
+        window.__tvBridge.setArtFloor(value);
+        window.dispatchEvent(new CustomEvent('framed:settings'));
+      } else if (id === 'startScreen') {
+        F.store.merge('settings', { startScreen: value }, {});
       } else if (id === 'picture') {
         F.slideshow.goTo(value - 1);
       } else {
