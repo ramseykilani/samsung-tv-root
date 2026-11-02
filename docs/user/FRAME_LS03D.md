@@ -125,8 +125,8 @@ Notes:
   desktop is off, Home falls back to stock Smart Hub. Pressing Home
   while `framed` is already in front simply re-launches it.
 - **A dedicated "show art" button**: map any spare key to the framed
-  package the same way Home is mapped, then set **Settings → Start in →
-  Art** inside framed. A fresh launch then opens on the piece of art
+  package the same way Home is mapped, then set **Start in →
+  Art** in framed's Art settings panel (art screen → `s`). A fresh launch then opens on the piece of art
   itself (Back still reaches the launcher), so the key behaves like
   Samsung's Art-mode toggle. Example:
   `{ device = "Smart Control", key = "XF86Red", action = "app.launch", app = "cmfrmdlnch" }`.
