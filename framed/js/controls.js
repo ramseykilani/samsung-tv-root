@@ -2,8 +2,12 @@
  * framed — declarative TV controls. Each control is one focusable row:
  *   Up/Down move between rows (nav engine), Left/Right adjust the value, Enter cycles/acts.
  * spec: { id, name, type: 'range'|'choice'|'swatch'|'action', value, min, max, step, unit,
- *         options:[{value,label,color,disabled}], help, format(v), hidden }
- * render(container, specs, onChange(id, value, spec)) -> { get, set, setHidden, el(id) }
+ *         options:[{value,label,color,disabled}], help, format(v), hidden,
+ *         note, gated, fault }
+ * render(container, specs, onChange(id, value, spec)) -> { get, set, setHidden, el(id),
+ *         setNote, setGated, setFault }
+ * note: a visible reason line (.control__note); gated: reachable but unusable, reason in
+ * the note; fault: breach bar + note, OK retries via onChange(id, true, spec, {retry:true}).
  */
 window.framed = window.framed || {};
 (function (F) {
@@ -34,6 +38,8 @@ window.framed = window.framed || {};
       row.setAttribute('role', spec.type === 'action' ? 'button' : 'group');
       if (spec.type !== 'action') row.setAttribute('data-adjust', 'horizontal');
       if (spec.hidden) row.hidden = true;
+      if (spec.gated) row.setAttribute('data-gated', 'true');
+      if (spec.fault) row.setAttribute('data-fault', 'true');
 
       var name = h('span', 'control__name', spec.name);
       var value = h('span', 'control__value');
@@ -41,7 +47,13 @@ window.framed = window.framed || {};
       row.appendChild(name); row.appendChild(value); row.appendChild(track);
       if (spec.help) row.appendChild(h('div', 'control__help', spec.help));
 
-      var state = { spec: spec, row: row, value: spec.value, valueEl: value, trackEl: track };
+      var state = { spec: spec, row: row, value: spec.value, valueEl: value, trackEl: track, noteEl: null };
+      if (spec.note != null) {
+        row.classList.add('control--noted');
+        state.noteEl = h('div', 'control__note');
+        state.noteEl.innerHTML = spec.note;
+        row.appendChild(state.noteEl);
+      }
       rows[spec.id] = state;
 
       if (spec.type === 'range') {
@@ -84,9 +96,12 @@ window.framed = window.framed || {};
       }
 
       row.addEventListener('framed:adjust', function (e) {
+        if (spec.gated) { onChange(spec.id, state.value, spec, { rejected: true }); return; }
         adjust(state, e.detail.delta, e.detail.fast);
       });
       row.addEventListener('click', function () {
+        if (spec.gated) { onChange(spec.id, state.value, spec, { rejected: true }); return; }
+        if (spec.fault) { onChange(spec.id, true, spec, { retry: true }); return; }
         if (spec.type === 'action') onChange(spec.id, true, spec);
         else if (spec.type === 'choice' || spec.type === 'swatch') adjust(state, 1, false, true);
         else if (spec.type === 'range') adjust(state, 1, false, true);
@@ -159,11 +174,44 @@ window.framed = window.framed || {};
       F.nav.focus(rows[prevFocusId].row);
     }
 
+    function setNote(id, note) {
+      var st = rows[id];
+      if (!st) return;
+      if (note == null || note === '') {
+        if (st.noteEl) { st.noteEl.remove(); st.noteEl = null; }
+        st.row.classList.remove('control--noted');
+        return;
+      }
+      if (!st.noteEl) {
+        st.row.classList.add('control--noted');
+        st.noteEl = h('div', 'control__note');
+        st.row.appendChild(st.noteEl);
+      }
+      st.noteEl.innerHTML = note;
+    }
+    function setGated(id, gated, note) {
+      var st = rows[id];
+      if (!st) return;
+      st.spec.gated = !!gated;
+      if (gated) st.row.setAttribute('data-gated', 'true'); else st.row.removeAttribute('data-gated');
+      if (note !== undefined) setNote(id, note);
+    }
+    function setFault(id, fault, note) {
+      var st = rows[id];
+      if (!st) return;
+      st.spec.fault = !!fault;
+      if (fault) st.row.setAttribute('data-fault', 'true'); else st.row.removeAttribute('data-fault');
+      if (note !== undefined) setNote(id, note);
+    }
+
     return {
       get: function (id) { return rows[id] ? rows[id].value : undefined; },
       set: function (id, v) { if (rows[id]) { rows[id].value = v; paint(rows[id]); } },
       setHidden: function (id, hidden) { if (rows[id]) rows[id].row.hidden = !!hidden; },
-      el: function (id) { return rows[id] ? rows[id].row : null; }
+      el: function (id) { return rows[id] ? rows[id].row : null; },
+      setNote: setNote,
+      setGated: setGated,
+      setFault: setFault
     };
   }
 

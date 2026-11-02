@@ -48,16 +48,31 @@ window.framed = window.framed || {};
   var wantInitialFocus = false; // entering Watch should land on content, not the toolbar
 
   function setStatus(t) { statusEl.textContent = t || ''; }
+  // grid recede: .has-cursor is the JS mirror of :focus-within (risk-list engine)
+  gridEl.addEventListener('focusin', function () { gridEl.classList.add('has-cursor'); });
+  gridEl.addEventListener('focusout', function (e) {
+    if (!e.relatedTarget || !gridEl.contains(e.relatedTarget)) gridEl.classList.remove('has-cursor');
+  });
   function savedCount() { return F.media.savedItems().length; }
   function continueCount() { return F.media.continueItems().length; }
 
+  function leftWords(p) {
+    var sec = Math.max(0, (p.dur || 0) - (p.pos || 0)), min = Math.ceil(sec / 60);
+    if (min >= 90) return Math.floor(min / 60) + ' h ' + Math.round(min % 60) + ' min left';
+    return min + ' min left';
+  }
+
   function cardSub(it) {
     var bits = [];
+    var p = F.media.progressFor(it.type, it.id);
+    if (p && p.dur > 0 && p.pos > 0) {
+      if (p.episodeLabel) bits.push(p.episodeLabel.split(' · ')[0]);
+      bits.push(leftWords(p));
+      return bits.join(' · ');
+    }
     if (it.year) bits.push(it.year);
     if (F.media.isSaved(it.type, it.id)) bits.push('In My List');
-    if (F.media.isWatched(it.type, it.id)) bits.push('✓ Watched');
-    var p = F.media.progressFor(it.type, it.id);
-    if (p && p.dur > 0) bits.push(Math.round(p.pos / p.dur * 100) + '% watched');
+    if (F.media.isWatched(it.type, it.id)) bits.push('Watched');
     return bits.join('  ·  ') || it.type || '';
   }
 
@@ -71,6 +86,17 @@ window.framed = window.framed || {};
     var poster = document.createElement('div');
     poster.className = 'media-card__poster';
     if (it.poster) poster.style.backgroundImage = 'url("' + String(it.poster).replace(/"/g, '') + '")';
+    var p = F.media.progressFor(it.type, it.id);
+    if (p && p.dur > 0 && p.pos > 0) {
+      var prog = document.createElement('div');
+      prog.className = 'media-card__progress';
+      var bar = document.createElement('div');
+      bar.className = 'progress';
+      var fill = document.createElement('div');
+      fill.className = 'progress__fill';
+      fill.style.width = Math.min(100, Math.round(p.pos / p.dur * 100)) + '%';
+      bar.appendChild(fill); prog.appendChild(bar); poster.appendChild(prog);
+    }
     var title = document.createElement('span');
     title.className = 'media-card__title';
     title.textContent = it.name;
@@ -176,7 +202,7 @@ window.framed = window.framed || {};
       if (!items || !items.length) { setStatus(genre ? 'Nothing in ' + cat.label + ' for that genre.' : 'Nothing to show in this catalog.'); return; }
       items = dedupe(items);
       showEntries(items.map(function (it) { return { cat: cat, item: it }; }), '');
-      setStatus(items.length + ' titles · OK opens · red saves · green marks watched');
+      setStatus(items.length + ' titles');
     }, genreExtra(0) || undefined);
   }
 

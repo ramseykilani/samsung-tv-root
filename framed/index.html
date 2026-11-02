@@ -143,31 +143,114 @@
           <div class="media-detail__cast" id="md-cast"></div>
           <p class="media-detail__desc" id="md-desc"></p>
           <div class="media-actions">
-            <button class="media-action" id="md-save" data-focusable tabindex="-1">Save to My List</button>
-            <button class="media-action" id="md-resume" data-focusable tabindex="-1" hidden>Resume</button>
-            <button class="media-action" id="md-watched" data-focusable tabindex="-1">Mark watched</button>
-            <button class="media-action" id="md-dismiss" data-focusable tabindex="-1" hidden>Remove from Continue Watching</button>
+            <button class="act act--fill" id="md-play" data-focusable tabindex="-1" data-gated="true">
+              <span class="act__name">Play</span><span class="act__value"></span>
+            </button>
+            <span class="act__why" id="md-play-why" hidden></span>
+            <button class="act" id="md-save" data-focusable tabindex="-1"><span class="act__name">Save to My List</span></button>
+            <button class="act" id="md-watched" data-focusable tabindex="-1"><span class="act__name">Mark watched</span></button>
+            <button class="act" id="md-dismiss" data-focusable tabindex="-1" hidden><span class="act__name">Forget my place</span></button>
           </div>
-          <div class="media-episodes" id="md-episodes"></div>
-          <h3 class="media-detail__streams-head">Streams</h3>
-          <div class="media-streams" id="md-streams"></div>
+          <div class="media-section-head" id="md-episodes-head" hidden>Episodes</div>
+          <div class="media-episodes" id="md-episodes">
+            <div class="season-pick" id="md-season"></div>
+          </div>
+          <div class="media-section-head" id="md-sources-head" hidden>Sources<span class="media-section-head__count" id="md-sources-count"></span></div>
+          <div class="media-streams sources" id="md-streams"></div>
           <div class="status" id="md-status" aria-live="polite"></div>
         </div>
       </div>
     </section>
 
     <!-- ============ MEDIA: PLAYBACK ============ -->
+    <!-- state contract: .player carries the machine as data-* attributes; media-play.js
+         owns the machine + timers and writes attributes, text and inline widths/lefts. -->
     <section id="screen-media-play" class="screen screen--media-play" data-screen="media-play" hidden>
-      <div class="media-player" id="mp-surface" data-focusable tabindex="-1" role="button" aria-label="Play or pause">
-        <video class="media-player__video" id="mp-video" playsinline></video>
-        <div class="media-player__status" id="mp-status" aria-live="polite"></div>
-        <div class="media-next" id="mp-next" hidden>
-          <button class="media-action" id="mp-next-btn" data-focusable tabindex="-1">Next episode</button>
+      <div class="player" id="mp" data-state="starting" data-chrome="shown" data-scrub="idle" data-slow="false" data-panel="closed" data-upnext="none">
+
+        <video class="player__video" id="mp-video" playsinline></video>
+        <div class="player__dim" aria-hidden="true"></div>
+
+        <header class="player__top">
+          <div class="player__title" id="mp-title"><span class="player__ep" id="mp-ep"></span></div>
+          <div class="player__clock" id="mp-clock"></div>
+        </header>
+
+        <div class="player__band">
+          <div class="upnext" id="mp-upnext">
+            <div class="upnext__kicker">Up next</div>
+            <div class="upnext__title" id="mp-upnext-title"></div>
+            <div class="upnext__count">
+              <div class="progress"><div class="progress__fill" id="mp-upnext-fill" style="width:100%"></div></div>
+              <span class="upnext__words" id="mp-upnext-words"></span>
+            </div>
+            <p class="upnext__missing">None of this episode’s sources play on this TV.</p>
+            <div class="acts">
+              <button class="act act--fill" id="mp-upnext-go" data-focusable tabindex="-1"><span class="act__name">Play now</span></button>
+              <button class="act" id="mp-upnext-stay" data-focusable tabindex="-1"><span class="act__name">Keep watching</span></button>
+            </div>
+          </div>
+
+          <div class="player__line">
+            <span class="player__state" id="mp-state" aria-live="polite"></span>
+            <span class="player__times"><span class="player__now" id="mp-now">0:00</span> / <span id="mp-dur">0:00</span></span>
+          </div>
+
+          <div class="timeline" id="mp-timeline" data-focusable tabindex="-1" data-adjust="horizontal"
+               role="slider" aria-label="Position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00 of 0:00">
+            <div class="timeline__track">
+              <div class="timeline__buffered" id="mp-buffered"></div>
+              <div class="timeline__played" id="mp-played"></div>
+              <div class="timeline__span" id="mp-span"></div>
+              <div class="timeline__preview" id="mp-preview"></div>
+              <div class="timeline__tip" id="mp-tip"><span class="timeline__delta" id="mp-tip-delta"></span></div>
+              <div class="timeline__head" id="mp-head"></div>
+            </div>
+          </div>
+
+          <div class="player__strip">
+            <button class="act player__toggle" id="mp-toggle" data-focusable tabindex="-1"><span class="act__name">Pause</span></button>
+            <button class="act" id="mp-subs" data-focusable tabindex="-1" data-row="lang"><span class="act__name">Subtitles</span><span class="act__value">Off</span></button>
+            <button class="act" id="mp-speed" data-focusable tabindex="-1" data-row="speed"><span class="act__name">Speed</span><span class="act__value">1×</span></button>
+            <button class="act" id="mp-sound" data-focusable tabindex="-1" data-row="sound"><span class="act__name">Sound</span><span class="act__value"></span></button>
+            <button class="act" id="mp-next" data-focusable tabindex="-1" hidden><span class="act__name">Next episode</span></button>
+            <span class="legend" id="mp-legend"></span>
+          </div>
         </div>
-        <div class="media-panel" id="mp-panel" hidden>
-          <div class="media-panel__title">Playback · green button or C closes</div>
-          <div id="mp-panel-list"></div>
+
+        <div class="player__badge" aria-hidden="true">Buffering<div class="wait wait--inline"><span class="wait__tick"></span></div></div>
+
+        <div class="player__veil" id="mp-veil">
+          <div class="veil" role="status" aria-live="polite">
+            <div class="veil__kicker" id="mp-veil-kicker"></div>
+            <div class="veil__title" id="mp-veil-title"></div>
+            <div class="veil__sub" id="mp-veil-sub"></div>
+            <div class="wait" id="mp-veil-wait"><span class="wait__tick"></span></div>
+            <p class="veil__msg" id="mp-veil-msg"></p>
+            <p class="veil__cause" id="mp-veil-cause" hidden></p>
+            <div class="veil__slow"><p class="veil__cause" id="mp-veil-slowcause"></p></div>
+            <div class="acts" id="mp-veil-acts">
+              <button class="act act--fill" id="mp-veil-go" data-focusable tabindex="-1"><span class="act__name"></span><span class="act__value"></span></button>
+              <button class="act" id="mp-veil-alt" data-focusable tabindex="-1" hidden><span class="act__name"></span></button>
+            </div>
+            <span class="legend" id="mp-veil-legend"></span>
+          </div>
         </div>
+
+        <aside class="panel" id="mp-panel" aria-label="Options" hidden>
+          <div class="panel__body">
+            <div class="panel__title">Options</div>
+            <div class="panel__group">Subtitles</div>
+            <div id="mp-ctl-subs"></div>
+            <div class="panel__group">Playback</div>
+            <div id="mp-ctl-play"></div>
+            <div class="panel__group" id="mp-grp-series" hidden>Series</div>
+            <div id="mp-ctl-series"></div>
+          </div>
+          <div class="panel__foot">
+            <span class="legend"><span class="legend__item"><span class="key">◂ ▸</span> Change</span><span class="legend__item"><span class="key">Back</span> Close</span></span>
+          </div>
+        </aside>
       </div>
     </section>
 
