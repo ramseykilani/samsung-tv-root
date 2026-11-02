@@ -3,7 +3,9 @@
  * optional matte; the slideshow sequencer (js/slideshow.js) decides which library picture is current.
  * No chrome while art is shown; the corner affordance (or the `s` key) opens the settings panel.
  * While the panel is closed: Left/Right = previous/next picture, `p` / MediaPlayPause = slideshow
- * on/off. Frame/matte settings persist under "framed.art"; slideshow prefs under "framed.slideshow".
+ * on/off. Frame/matte settings persist under "framed.art" (the default look) and per picture under
+ * "framed.artPer": editing dials in the current picture's own look, which wins on every revisit;
+ * pictures without their own memory inherit the most recent look. Slideshow prefs: "framed.slideshow".
  * Rendering of mounts and mouldings lives in css/frames.css; this file sets their geometry.
  */
 window.framed = window.framed || {};
@@ -55,10 +57,38 @@ window.framed = window.framed || {};
     moulding: 'walnut',
     profile: 'scoop',
     frameWeight: 5,
-    label: 'off'
+    label: 'off',
+    drift: 'on'
   };
 
-  var s = F.store.merge('art', {}, DEFAULTS);
+  // Anti-burn-in drift: the whole stage is oversized by DRIFT_MAX px on every side and nudged
+  // within that overscan once per hour, so the art shifts a few pixels without ever revealing
+  // an edge — the same idea as Samsung's periodic image shift, derived from the hour-of-epoch
+  // so it survives reloads and needs no stored state.
+  var DRIFT_MAX = 10; // logical px each way (~20 px on the 4K panel)
+  function driftAxis(h, salt) {
+    var a = (h ^ salt) >>> 0;
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) % (2 * DRIFT_MAX + 1) - DRIFT_MAX;
+  }
+  function applyDrift() {
+    if (s.drift === 'off') {
+      stage.style.top = stage.style.bottom = stage.style.left = stage.style.right = stage.style.transform = '';
+      return;
+    }
+    var h = Math.floor(Date.now() / 3600000);
+    stage.style.top = -DRIFT_MAX + 'px';
+    stage.style.bottom = -DRIFT_MAX + 'px';
+    stage.style.left = -DRIFT_MAX + 'px';
+    stage.style.right = panelOpen ? '' : -DRIFT_MAX + 'px'; // while the panel is open, CSS owns right
+    stage.style.transform = 'translate(' + driftAxis(h, 0x9E3779B1) + 'px,' + driftAxis(h, 0x85EBCA6B) + 'px)';
+  }
+
+  var s = globalLook();
+  F.store.set('art', s);
   var api = null;
   var natural = { w: 3, h: 2 };
   var naturals = {};         // src -> { w, h }, for the launcher's miniature
@@ -66,13 +96,41 @@ window.framed = window.framed || {};
   var shownSrc = null;
   var panelOpen = false;
   var chromeTimer;
+  var driftTimer = null;
+  var driftHour = 0;
   var KEY = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, PLAY_PAUSE: 179, TIZEN_PLAY_PAUSE: 10252 };
 
-  function save(patch) { s = F.store.merge('art', patch, DEFAULTS); }
+  function mix() {
+    var out = {}, i, k;
+    for (i = 0; i < arguments.length; i++) {
+      var o = arguments[i] || {};
+      for (k in o) if (o.hasOwnProperty(k)) out[k] = o[k];
+    }
+    return out;
+  }
+  function globalLook() { return mix(DEFAULTS, F.store.get('art', {})); }
+  function effective(id) {
+    var per = F.store.get('artPer', {});
+    return id && per[id] ? mix(DEFAULTS, per[id]) : globalLook();
+  }
 
-  function matteHex() {
-    if (s.matteColor === 'custom') return hsl(s.customHue, s.customSat, s.customLight);
-    for (var i = 0; i < MATTES.length; i++) if (MATTES[i].value === s.matteColor) return MATTES[i].color;
+  // An edit dials in the current picture's own look AND becomes the default for
+  // pictures that don't have their own yet; other pictures' memories are untouched.
+  function save(patch) {
+    s = mix(s, patch);
+    F.store.set('art', s);
+    var item = F.slideshow.current();
+    if (item) {
+      var per = F.store.get('artPer', {});
+      per[item.id] = s;
+      F.store.set('artPer', per);
+    }
+  }
+
+  function matteHex(eff) {
+    eff = eff || s;
+    if (eff.matteColor === 'custom') return hsl(eff.customHue, eff.customSat, eff.customLight);
+    for (var i = 0; i < MATTES.length; i++) if (MATTES[i].value === eff.matteColor) return MATTES[i].color;
     return MATTES[0].color;
   }
   function hsl(hue, sat, light) { return 'hsl(' + hue + ', ' + sat + '%, ' + light + '%)'; }
@@ -92,20 +150,21 @@ window.framed = window.framed || {};
   }
 
   // caption ink: auto-contrast against the matte
-  function captionColor() {
-    return isLight(matteHex()) ? tone('--fr-frame-dark') : tone('--fr-frame-light');
+  function captionColor(eff) {
+    return isLight(matteHex(eff)) ? tone('--fr-frame-dark') : tone('--fr-frame-light');
   }
 
-  // Dress any stage (the Art screen, or the launcher's miniature) in the current settings and
+  // Dress any stage (the Art screen, or the launcher's miniature) in the given settings (eff) and
   // size the picture so picture + mount + moulding fit inside the matte opening.
   // n = the picture's natural size (only used for Contain).
-  function dress(st, fr, im, n) {
+  function dress(st, fr, im, n, eff) {
+    eff = eff || s;
     var r = st.getBoundingClientRect();
     var u = Math.min(r.width, r.height) / 100;
-    var framed = s.moulding !== 'none';
-    var mw = (s.mount === 'float' ? (framed ? FLOAT_GAP : 0) : (MOUNT_DEPTH[s.mount] || 0)) * u;
-    var fw = framed ? s.frameWeight * MOULDING_STEP * u : 0;
-    var pad = s.matte * u, padB = (s.matte + s.matteBottom) * u;
+    var framed = eff.moulding !== 'none';
+    var mw = (eff.mount === 'float' ? (framed ? FLOAT_GAP : 0) : (MOUNT_DEPTH[eff.mount] || 0)) * u;
+    var fw = framed ? eff.frameWeight * MOULDING_STEP * u : 0;
+    var pad = eff.matte * u, padB = (eff.matte + eff.matteBottom) * u;
 
     st.style.padding = pad + 'px ' + pad + 'px ' + padB + 'px';
     st.style.setProperty('--u', u + 'px');
@@ -113,20 +172,20 @@ window.framed = window.framed || {};
     st.style.setProperty('--fw', fw + 'px');
     st.style.setProperty('--b', BEVEL * u + 'px');
     st.style.setProperty('--r', REVEAL * u + 'px');
-    st.style.setProperty('--mat-grain', s.matteColor === 'black' ? 0 : isLight(matteHex()) ? 0.55 : 0.35);
-    st.style.setProperty('--matte', s.matte);
-    st.style.setProperty('--matte-color', matteHex());
-    st.style.setProperty('--frame-color', captionColor());
-    fr.setAttribute('data-mount', s.mount);
-    fr.setAttribute('data-moulding', s.moulding);
-    fr.setAttribute('data-profile', s.profile);
-    fr.setAttribute('data-core', isLight(matteHex()) ? 'light' : 'dark');
-    im.setAttribute('data-fit', s.fit);
+    st.style.setProperty('--mat-grain', eff.matteColor === 'black' ? 0 : isLight(matteHex(eff)) ? 0.55 : 0.35);
+    st.style.setProperty('--matte', eff.matte);
+    st.style.setProperty('--matte-color', matteHex(eff));
+    st.style.setProperty('--frame-color', captionColor(eff));
+    fr.setAttribute('data-mount', eff.mount);
+    fr.setAttribute('data-moulding', eff.moulding);
+    fr.setAttribute('data-profile', eff.profile);
+    fr.setAttribute('data-core', isLight(matteHex(eff)) ? 'light' : 'dark');
+    im.setAttribute('data-fit', eff.fit);
 
     var ring = 2 * (mw + fw);
     var aw = Math.max(1, r.width - pad * 2 - ring), ah = Math.max(1, r.height - pad - padB - ring);
     var w = aw, h = ah;
-    if (s.fit === 'contain') {
+    if (eff.fit === 'contain') {
       var k = Math.min(aw / n.w, ah / n.h);
       w = Math.round(n.w * k); h = Math.round(n.h * k);
     }
@@ -134,10 +193,44 @@ window.framed = window.framed || {};
     fr.style.height = h + 'px';
   }
 
+  // Software dimming: the Settings brightness (same row in this panel) dims the whole stage
+  // through a CSS filter, down to near-black — far below Samsung's Art Mode minimum, which is
+  // the point of the feature. Tone warms as it dims, standing in for adaptive tone until a
+  // sensor path exists. The panel and corner chrome are siblings of the stage, so the UI
+  // stays readable while the art goes dark.
+  function applyDim() {
+    var b = brightness();
+    var k = 0.02 + 0.98 * (b / 100);
+    var warm = b < 50 ? ((50 - b) / 50) * 0.28 : 0;
+    stage.style.filter = 'brightness(' + k.toFixed(3) + ')' + (warm > 0.005 ? ' sepia(' + warm.toFixed(3) + ')' : '');
+  }
+  function brightness() {
+    var b = F.store.get('settings', {}).brightness;
+    return typeof b === 'number' ? Math.max(0, Math.min(100, b)) : 100;
+  }
+  applyDim();
+  window.addEventListener('framed:settings', applyDim);
+
+  // (Re)apply state: load the current picture's own look (or the default), repaint, resync panel.
   function apply() {
+    var item = F.slideshow.current();
+    s = effective(item && item.id);
     label.hidden = s.label !== 'on';
-    showPicture(F.slideshow.current());
+    showPicture(item);
     layout();
+    syncPanel();
+  }
+
+  // When the picture changes (slideshow tick, Picture row), every settings row must show the new
+  // picture's own look — not the previous picture's values. Runs whether or not the panel is open.
+  var SYNC_IDS = ['fit', 'moulding', 'profile', 'frameWeight', 'mount', 'matte', 'matteBottom', 'matteColor', 'customHue', 'customSat', 'customLight', 'label', 'drift'];
+  function syncPanel() {
+    if (!api) return;
+    for (var i = 0; i < SYNC_IDS.length; i++) api.set(SYNC_IDS[i], s[SYNC_IDS[i]]);
+    var none = s.moulding === 'none';
+    api.setHidden('frameWeight', none); api.setHidden('profile', none);
+    var custom = s.matteColor === 'custom';
+    api.setHidden('customHue', !custom); api.setHidden('customSat', !custom); api.setHidden('customLight', !custom);
   }
 
   // Paint the picture on the inactive layer, then flip — the opacity transition is --fr-motion-art.
@@ -167,12 +260,17 @@ window.framed = window.framed || {};
   function paintStatus() {
     var p = F.slideshow.position(), ss = F.slideshow.get();
     panelStatus.textContent = p.item
-      ? (p.index + 1) + ' of ' + p.count + ' · ' + p.item.title + ' · ' + F.slideshow.cadenceLabel(ss.cadence) + (ss.cadence === 'off' ? '' : ', ' + ss.order)
+      ? (p.index + 1) + ' of ' + p.count + ' · ' + p.item.title + ' · ' + F.slideshow.cadenceLabel(ss) + (ss.cadence === 'off' ? '' : ', ' + ss.order)
       : 'Library is empty';
     if (api) api.set('picture', p.index + 1);
   }
 
-  function layout() { dress(stage, frame, image, natural); }
+  function everyLabel(v) {
+    var c = F.slideshow.get().cadence;
+    return v + ' ' + (c === 'days' ? (v === 1 ? 'day' : 'days') : (v === 1 ? 'hour' : 'hours'));
+  }
+
+  function layout() { dress(stage, frame, image, natural, s); applyDrift(); }
 
   function showChrome(ms) {
     el.classList.add('show-chrome');
@@ -206,7 +304,11 @@ window.framed = window.framed || {};
       { id: 'picture', name: 'Picture', type: 'range', value: pos.index + 1, min: 1, max: Math.max(1, pos.count), step: 1,
         format: function (v) { return v + ' of ' + pos.count; } },
       { id: 'cadence', name: 'Slideshow', type: 'choice', value: ss.cadence, options: F.slideshow.CADENCES },
+      { id: 'every', name: 'Every', type: 'range', value: ss.every, min: 1, max: F.slideshow.everyMax(ss), step: 1, hidden: ss.cadence === 'off', format: everyLabel },
       { id: 'order', name: 'Order', type: 'choice', value: ss.order, options: F.slideshow.ORDERS },
+      { id: 'brightness', name: 'Brightness', type: 'range', value: brightness(), min: 0, max: 100, step: 1, fastStep: 5,
+        format: function (v) { return v + '%'; },
+        help: 'Software dimming; 0 is near-black, below the panel minimum' },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
       { id: 'moulding', name: 'Frame', type: 'choice', value: s.moulding, options: [
@@ -229,17 +331,31 @@ window.framed = window.framed || {};
       { id: 'customLight', name: 'Custom lightness', type: 'range', value: s.customLight, min: 0, max: 100, step: 2, unit: '%', fastStep: 4, hidden: s.matteColor !== 'custom' },
       { id: 'label', name: 'Caption', type: 'choice', value: s.label, options: [
         { value: 'on', label: 'Shown' }, { value: 'off', label: 'Hidden' }] },
+      { id: 'drift', name: 'Pixel shift', type: 'choice', value: s.drift, options: [
+        { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }],
+        help: 'Nudges the art a few pixels each hour against burn-in' },
       { id: 'reset', name: 'Reset', type: 'action' }
     ];
     api = F.controls.render(controlsEl, specs, function (id, value) {
       if (id === 'reset') {
-        s = F.store.set('art', F.store.merge('art', DEFAULTS, DEFAULTS));
-        F.slideshow.set({ cadence: F.slideshow.DEFAULTS.cadence, order: F.slideshow.DEFAULTS.order });
+        var per = F.store.get('artPer', {});
+        var cur = F.slideshow.current();
+        if (cur && per[cur.id]) { delete per[cur.id]; F.store.set('artPer', per); }
+        s = mix(DEFAULTS);
+        F.store.set('art', s);
+        F.slideshow.set({ cadence: F.slideshow.DEFAULTS.cadence, every: F.slideshow.DEFAULTS.every, order: F.slideshow.DEFAULTS.order });
         buildControls();
         F.nav.setScope(panel, { remember: false, initial: api.el('reset') });
         F.toast('Reset', 'ok');
-      } else if (id === 'cadence' || id === 'order') {
+      } else if (id === 'cadence') {
+        F.slideshow.set({ cadence: value });
+        buildControls();   // the Every row hides on Off and re-ranges to the unit
+      } else if (id === 'every' || id === 'order') {
         var sp = {}; sp[id] = value; F.slideshow.set(sp);
+      } else if (id === 'brightness') {
+        F.store.merge('settings', { brightness: value }, {});
+        window.__tvBridge.setBrightness(value);
+        window.dispatchEvent(new CustomEvent('framed:settings'));
       } else if (id === 'picture') {
         F.slideshow.goTo(value - 1);
       } else {
@@ -254,19 +370,21 @@ window.framed = window.framed || {};
     });
   }
 
-  // The launcher's miniature uses the same renderer, painting the current picture directly.
+  // The launcher's miniature uses the same renderer, painting the current picture directly
+  // in that picture's own remembered look.
   F.art = {
     paintInto: function (st, fr, im) {
       var item = F.slideshow.current();
       if (!item) return;
       im.style.backgroundImage = 'url("' + item.src + '")';
       var n = naturals[item.src];
-      dress(st, fr, im, n || natural);
+      var eff = effective(item.id);
+      dress(st, fr, im, n || natural, eff);
       if (!n) {
         var img = new Image();
         img.onload = function () {
           naturals[item.src] = { w: img.naturalWidth || 3, h: img.naturalHeight || 2 };
-          dress(st, fr, im, naturals[item.src]);
+          dress(st, fr, im, naturals[item.src], eff);
         };
         img.src = item.src;
       }
@@ -284,13 +402,19 @@ window.framed = window.framed || {};
   F.router.register('art', {
     el: el,
     enter: function () {
-      F.slideshow.start();   // catch up (daily / elapsed periods) and tick while art is shown
+      F.slideshow.start();   // catch up on elapsed periods and tick while art is shown
+      apply();               // load this picture's own look first — the panel rows are built from it
       buildControls();
-      apply();
+      driftHour = Math.floor(Date.now() / 3600000);
+      clearInterval(driftTimer);
+      driftTimer = setInterval(function () {
+        var h = Math.floor(Date.now() / 3600000);
+        if (h !== driftHour) { driftHour = h; applyDrift(); }
+      }, 60000);
       F.nav.setScope(el, { initial: corner, remember: false });
       showChrome(3000);
     },
-    leave: function () { F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); },
+    leave: function () { F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); },
     back: function () {
       if (panelOpen) { closePanel(); return true; }
       return false;
@@ -302,7 +426,7 @@ window.framed = window.framed || {};
       if (e.keyCode === KEY.LEFT) { F.slideshow.prev(); return true; }
       if (e.key === 'p' || e.key === 'P' || e.keyCode === KEY.PLAY_PAUSE || e.keyCode === KEY.TIZEN_PLAY_PAUSE) {
         var c = F.slideshow.toggle();
-        F.toast(c === 'off' ? 'Slideshow off' : 'Slideshow: ' + F.slideshow.cadenceLabel(c), 'info');
+        F.toast(c === 'off' ? 'Slideshow off' : 'Slideshow: ' + F.slideshow.cadenceLabel(F.slideshow.get()), 'info');
         return true;
       }
       if (e.keyCode === KEY.UP || e.keyCode === KEY.DOWN) {

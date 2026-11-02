@@ -147,6 +147,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   background: var(--matte-color);
   padding: calc(var(--matte) * 1vmin) calc(var(--matte) * 1vmin) calc((var(--matte) + var(--matte-bottom)) * 1vmin);
   display: flex; align-items: center; justify-content: center;
+  transition: filter var(--fr-motion-art) ease;  /* dimming glides down like gallery lights */
 }
 .screen--art.panel-open .art-stage { right: var(--fr-panel-width); }
 .art-frame { position: relative; flex: none; width: 100%; height: 100%; }

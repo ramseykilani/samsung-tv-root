@@ -5,7 +5,7 @@
 window.framed = window.framed || {};
 (function (F) {
   var el = document.getElementById('screen-settings');
-  var DEFAULTS = { brightness: 100, artFloor: 10, theme: 'mhach', homeTv: 'on' };
+  var DEFAULTS = { brightness: 100, artFloor: 10, theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
   var s = F.store.merge('settings', {}, DEFAULTS);
 
   var floorSwatch = document.getElementById('floor-swatch');
@@ -13,6 +13,28 @@ window.framed = window.framed || {};
   var aboutLibrary = document.getElementById('about-library');
 
   function pct(v) { return v + '%'; }
+
+  // Rotate Off / Hours / Days, with an "Every N" interval row that hides on Off and
+  // re-ranges to the unit (1–48 hours, 1–30 days). Rebuilt on unit change.
+  function buildSlideshow() {
+    var g = F.slideshow.get();
+    F.controls.render(document.getElementById('settings-slideshow'), [
+      { id: 'cadence', name: 'Slideshow', type: 'choice', value: g.cadence, options: F.slideshow.CADENCES },
+      { id: 'every', name: 'Every', type: 'range', value: g.every, min: 1, max: F.slideshow.everyMax(g), step: 1, hidden: g.cadence === 'off',
+        format: function (v) {
+          var c = F.slideshow.get().cadence;
+          return v + ' ' + (c === 'days' ? (v === 1 ? 'day' : 'days') : (v === 1 ? 'hour' : 'hours'));
+        } },
+      { id: 'order', name: 'Order', type: 'choice', value: g.order, options: F.slideshow.ORDERS }
+    ], function (id, v) {
+      if (id === 'cadence') {
+        F.slideshow.set({ cadence: v });
+        buildSlideshow();
+        return;
+      }
+      var patch = {}; patch[id] = v; F.slideshow.set(patch);
+    });
+  }
 
   function paintFloor() {
     floorSwatch.style.setProperty('--floor-dim', String(1 - s.artFloor / 100));
@@ -32,6 +54,7 @@ window.framed = window.framed || {};
     ], function (id, v) {
       s = F.store.merge('settings', { brightness: v }, DEFAULTS);
       window.__tvBridge.setBrightness(v);
+      window.dispatchEvent(new CustomEvent('framed:settings'));   // the art stage dims live
       paintAbout();
     });
 
@@ -40,23 +63,24 @@ window.framed = window.framed || {};
     ], function (id, v) {
       s = F.store.merge('settings', { artFloor: v }, DEFAULTS);
       window.__tvBridge.setArtFloor(v);
+      window.dispatchEvent(new CustomEvent('framed:settings'));
       paintFloor();
       paintAbout();
     });
 
-    F.controls.render(document.getElementById('settings-slideshow'), [
-      { id: 'cadence', name: 'Slideshow', type: 'choice', value: F.slideshow.get().cadence, options: F.slideshow.CADENCES },
-      { id: 'order', name: 'Order', type: 'choice', value: F.slideshow.get().order, options: F.slideshow.ORDERS }
-    ], function (id, v) {
-      var patch = {}; patch[id] = v; F.slideshow.set(patch);
-    });
+    buildSlideshow();
 
-    // home miniature: drawn inside the TV's own bezel, or the art alone (read by launcher.js)
+    // home miniature: drawn inside the TV's own bezel, or the art alone (read by launcher.js).
+    // Start in: which screen a fresh launch shows — with "Art", a remote rule that launches
+    // framed (docs/user/FRAME_LS03D.md) becomes a dedicated show-the-art button.
     F.controls.render(document.getElementById('settings-home'), [
       { id: 'homeTv', name: 'Home art', type: 'choice', value: s.homeTv, options: [
-        { value: 'on', label: 'TV frame' }, { value: 'off', label: 'Art only' }] }
+        { value: 'on', label: 'TV frame' }, { value: 'off', label: 'Art only' }] },
+      { id: 'startScreen', name: 'Start in', type: 'choice', value: s.startScreen, options: [
+        { value: 'launcher', label: 'Launcher' }, { value: 'art', label: 'Art' }] }
     ], function (id, v) {
-      s = F.store.merge('settings', { homeTv: v }, DEFAULTS);
+      var patch = {}; patch[id] = v;
+      s = F.store.merge('settings', patch, DEFAULTS);
     });
 
     F.controls.render(document.getElementById('settings-theme'), [
