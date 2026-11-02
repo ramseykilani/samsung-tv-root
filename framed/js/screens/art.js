@@ -301,11 +301,12 @@ window.framed = window.framed || {};
       { id: 'every', name: 'Every', type: 'range', value: ss.every, min: 1, max: F.slideshow.everyMax(ss), step: 1, hidden: ss.cadence === 'off', format: everyLabel },
       { id: 'order', name: 'Order', type: 'choice', value: ss.order, options: F.slideshow.ORDERS },
       { id: 'brightness', name: 'Brightness', type: 'range', value: brightness(), min: 0, max: 100, step: 1, fastStep: 5,
+        hidden: (F.store.get('settings', {}).adaptiveBrightness || 'on') === 'on',
         format: function (v) { return v + '%'; },
         help: 'Software dimming; 0 is near-black, below the panel minimum' },
-      { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: F.store.get('settings', {}).adaptiveBrightness || 'off', options: [
+      { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: F.store.get('settings', {}).adaptiveBrightness || 'on', options: [
         { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
-      { id: 'adaptiveTone', name: 'Adaptive tone', type: 'choice', value: F.store.get('settings', {}).adaptiveTone || 'off', options: [
+      { id: 'adaptiveTone', name: 'Adaptive tone', type: 'choice', value: F.store.get('settings', {}).adaptiveTone || 'on', options: [
         { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
       { id: 'fit', name: 'Image fit', type: 'choice', value: s.fit, options: [
         { value: 'contain', label: 'Contain' }, { value: 'cover', label: 'Cover' }] },
@@ -354,6 +355,7 @@ window.framed = window.framed || {};
         var adaptivePatch = {}; adaptivePatch[id] = value;
         F.store.merge('settings', adaptivePatch, {});
         window.dispatchEvent(new CustomEvent('framed:settings'));
+        if (id === 'adaptiveBrightness') buildControls();
       } else if (id === 'brightness') {
         F.store.merge('settings', { brightness: value }, {});
         window.__tvBridge.setBrightness(value);

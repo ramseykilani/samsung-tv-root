@@ -3,7 +3,14 @@
   var pollTimer = null, paintTimer = null, previousTime = 0, current = null, error = '';
   var matrix = document.getElementById('adaptive-color-matrix');
   var stage = document.getElementById('art-stage');
-  function settings() { return F.store.get('settings', {}); }
+  function settings() {
+    var s = F.store.get('settings', {});
+    if (!s.adaptiveDefaulted) {   // one-time migration: adaptive brightness/tone on by default
+      F.store.merge('settings', { adaptiveBrightness: 'on', adaptiveTone: 'on', adaptiveDefaulted: true }, {});
+      s = F.store.get('settings', {});
+    }
+    return s;
+  }
   function enabled() { var s = settings(); return s.adaptiveBrightness === 'on' || s.adaptiveTone === 'on'; }
   function paint(immediate) {
     var now = Date.now(), target = core.target(settings(), sensor, now);

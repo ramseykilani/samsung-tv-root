@@ -5,7 +5,7 @@
 window.framed = window.framed || {};
 (function (F) {
   var el = document.getElementById('screen-settings');
-  var DEFAULTS = { brightness: 100, artFloor: 10, adaptiveBrightness: 'off', adaptiveTone: 'off', theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
+  var DEFAULTS = { brightness: 100, artFloor: 10, adaptiveBrightness: 'on', adaptiveTone: 'on', theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
   var s = F.store.merge('settings', {}, DEFAULTS);
 
   var floorSwatch = document.getElementById('floor-swatch');
@@ -50,6 +50,9 @@ window.framed = window.framed || {};
 
   function build() {
     s = F.store.merge('settings', {}, DEFAULTS);
+    if (!s.adaptiveDefaulted) {   // same one-time migration as adaptive.js
+      s = F.store.merge('settings', { adaptiveBrightness: 'on', adaptiveTone: 'on', adaptiveDefaulted: true }, DEFAULTS);
+    }
     F.controls.render(document.getElementById('settings-adaptive'), [
       { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: s.adaptiveBrightness, options: [
         { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
@@ -58,9 +61,11 @@ window.framed = window.framed || {};
     ], function (id, v) {
       var patch = {}; patch[id] = v; s = F.store.merge('settings', patch, DEFAULTS);
       window.dispatchEvent(new CustomEvent('framed:settings'));
+      if (id === 'adaptiveBrightness') build();
     });
     F.controls.render(document.getElementById('settings-brightness'), [
-      { id: 'brightness', name: 'Brightness', type: 'range', value: s.brightness, min: 0, max: 100, step: 1, fastStep: 5, format: pct }
+      // manual brightness only matters when the sensor isn't driving it
+      { id: 'brightness', name: 'Brightness', type: 'range', value: s.brightness, min: 0, max: 100, step: 1, fastStep: 5, format: pct, hidden: s.adaptiveBrightness === 'on' }
     ], function (id, v) {
       s = F.store.merge('settings', { brightness: v }, DEFAULTS);
       window.__tvBridge.setBrightness(v);
