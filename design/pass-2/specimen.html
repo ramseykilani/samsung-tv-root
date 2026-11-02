@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mhach">
+<head>
+  <meta charset="utf-8">
+  <title>framed — pass 2 specimen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/theme.css">
+  <!-- the product bundles these as woff2 under assets/fonts; the specimen borrows Google's copies (declared later, so they win) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=block">
+  <link rel="stylesheet" href="../css/app.css">
+  <style>
+    /* specimen chrome only — never shipped */
+    html, body { height: auto; overflow: auto; }
+    body { background: var(--fr-color-surface-sunken); cursor: default; }
+    .spec-head { padding: var(--fr-space-7) var(--fr-gutter) var(--fr-space-5); }
+    .spec-head h1 { margin: 0; font-family: var(--fr-font-display); font-weight: 300; font-size: var(--fr-font-size-title); }
+    .spec-head p { margin: var(--fr-space-3) 0 0; max-width: 140rem; color: var(--fr-color-text-muted); }
+    .spec-cap { padding: var(--fr-space-7) var(--fr-gutter) var(--fr-space-3); font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); font-weight: 300; }
+    .spec-cap small { display: block; margin-top: var(--fr-space-1); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+    .board { position: relative; width: 100vw; height: calc(100vw * 9 / 16); overflow: hidden; background: var(--fr-color-bg); }
+    .board > .screen { display: flex; }
+    /* a cue drawn the way ::cue will draw it (a fixture can't host a real text track) */
+    .cue-sim { position: absolute; left: 0; right: 0; bottom: 9%; z-index: 1; text-align: center; pointer-events: none; }
+    .cue-sim span { padding: 0.2em 0.4em; font-family: var(--fr-cue-font); font-size: 5.2rem; line-height: 1.5; color: var(--fr-cue-ink); background: var(--fr-cue-ground); }
+    .player[data-chrome="shown"] .cue-sim { bottom: 31%; }  /* cues lift above the band while it is shown */
+    .spec-toc { display: flex; flex-wrap: wrap; gap: var(--fr-space-2) var(--fr-space-5); padding: 0 var(--fr-gutter); }
+    .spec-toc a { color: var(--fr-color-focus-text); font-size: var(--fr-font-size-body); }
+  </style>
+</head>
+<body>
+  <header class="spec-head">
+    <h1>framed · pass 2 specimen</h1>
+    <p>Every state of the player, detail and browse surfaces drawn from <code>css/theme.css</code> + <code>css/app.css</code>, on fixture data, at the 1920×1080 canvas. Focus is shown with <code>.is-focused</code>, the class the nav engine already sets. Titles and files are invented.</p>
+  </header>
+  <nav class="spec-toc" id="toc"></nav>
+  <main id="boards"></main>
+
+<script>
+(function () {
+  /* ---------------- fixture art ---------------- */
+  function svg(s) { return "url('data:image/svg+xml," + encodeURIComponent(s).replace(/'/g, '%27') + "')"; }
+  var NIGHT = svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1a24"/><stop offset=".55" stop-color="#2b4352"/><stop offset="1" stop-color="#6b7f7a"/></linearGradient></defs><rect width="1920" height="1080" fill="url(#s)"/><circle cx="1420" cy="250" r="70" fill="#d9d6c4" opacity=".85"/><path d="M0 720 L260 560 L470 650 L760 470 L1010 640 L1290 520 L1560 660 L1920 540 L1920 1080 L0 1080Z" fill="#17252c"/><path d="M0 860 L340 760 L700 830 L1100 740 L1500 820 L1920 760 L1920 1080 L0 1080Z" fill="#0b1317"/><rect x="0" y="930" width="1920" height="150" fill="#1d2d33" opacity=".7"/><path d="M820 930 l40 -120 l40 120z" fill="#0b1317"/><rect x="852" y="760" width="16" height="40" fill="#e8c77a" opacity=".9"/></svg>');
+  var SNOW = svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfd8da"/><stop offset=".6" stop-color="#eef0ea"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs><rect width="1920" height="1080" fill="url(#s)"/><path d="M0 640 L380 470 L640 600 L980 420 L1300 590 L1620 480 L1920 600 L1920 1080 L0 1080Z" fill="#dfe4e2"/><path d="M0 780 L520 700 L1000 760 L1500 690 L1920 740 L1920 1080 L0 1080Z" fill="#f7f7f3"/><g fill="#3b4a46"><rect x="300" y="610" width="10" height="190"/><rect x="1180" y="560" width="12" height="230"/><rect x="1560" y="640" width="8" height="140"/></g><rect x="900" y="820" width="140" height="70" fill="#7a3b2e"/></svg>');
+  var PALETTE = [['#2e3b3a','#c9b37e'],['#3d2a33','#d8a28c'],['#1f2f45','#9fb7c9'],['#4a3b25','#e0c48a'],['#273a2c','#b9c99a'],['#3a2f4a','#c4a7dc'],['#452622','#e6a77a'],['#22383d','#8fc2c0'],['#38352d','#d6d0b8'],['#2d2b3f','#a9a3d6'],['#3f3a22','#d9cf86'],['#2a2f33','#c2c7cc']];
+  function poster(i, title) {
+    var p = PALETTE[i % PALETTE.length];
+    var shapes = [
+      '<circle cx="200" cy="230" r="110" fill="' + p[1] + '" opacity=".85"/>',
+      '<rect x="70" y="120" width="260" height="260" fill="none" stroke="' + p[1] + '" stroke-width="10"/>',
+      '<path d="M0 420 L200 160 L400 420Z" fill="' + p[1] + '" opacity=".8"/>',
+      '<rect x="0" y="300" width="400" height="80" fill="' + p[1] + '" opacity=".7"/><circle cx="290" cy="170" r="60" fill="' + p[1] + '"/>'
+    ][i % 4];
+    return svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600"><rect width="400" height="600" fill="' + p[0] + '"/>' + shapes +
+      '<text x="200" y="520" text-anchor="middle" font-family="Georgia,serif" font-size="34" letter-spacing="3" fill="' + p[1] + '">' + title.toUpperCase() + '</text></svg>');
+  }
+
+  /* ---------------- tiny builders (fixture only; product markup is in markup/*.html) ---------------- */
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function key(k) { return '<span class="key">' + k + '</span>'; }
+  function legend(items) { return '<span class="legend">' + items.map(function (i) { return '<span class="legend__item">' + key(i[0]) + ' ' + i[1] + '</span>'; }).join('') + '</span>'; }
+  function act(label, o) {
+    o = o || {};
+    return '<button class="act' + (o.fill ? ' act--fill' : '') + (o.cls ? ' ' + o.cls : '') + (o.focus ? ' is-focused' : '') + '"' +
+      (o.gated ? ' data-gated="true"' : '') + ' data-focusable tabindex="-1">' +
+      '<span class="act__name">' + label + '</span>' + (o.value ? '<span class="act__value">' + o.value + '</span>' : '') + '</button>' +
+      (o.why ? '<span class="act__why">' + o.why + '</span>' : '');
+  }
+  function choice(name, opts, sel, o) {
+    o = o || {};
+    return '<div class="control control--choice' + (o.note ? ' control--noted' : '') + (o.focus ? ' is-focused' : '') + '" data-focusable tabindex="-1" role="group" data-adjust="horizontal"' +
+      (o.gated ? ' data-gated="true"' : '') + (o.fault ? ' data-fault="true"' : '') + '>' +
+      '<span class="control__name">' + name + '</span><span class="control__value"></span><div class="control__track"><div class="choice">' +
+      opts.map(function (x) { return '<button class="choice__opt" tabindex="-1" data-selected="' + (x === sel) + '">' + x + '</button>'; }).join('') +
+      '</div></div>' + (o.note ? '<div class="control__note">' + o.note + '</div>' : '') + '</div>';
+  }
+  function wait(inline) { return '<div class="wait' + (inline ? ' wait--inline' : '') + '"><span class="wait__tick"></span></div>'; }
+  function progress(pct, cls) { return '<div class="progress' + (cls ? ' ' + cls : '') + '"><div class="progress__fill" style="width:' + pct + '%"></div></div>'; }
+
+  /* ---------------- player ---------------- */
+  var DUR = 52 * 60 + 40;
+  function fmt(s) { var m = Math.floor(s / 60), x = Math.floor(s % 60); return m + ':' + (x < 10 ? '0' : '') + x; }
+  function player(o) {
+    var pos = o.pos != null ? o.pos : 31 * 60 + 4;
+    var pct = pos / DUR * 100, buf = Math.min(100, pct + 9);
+    var state = o.state || 'playing';
+    var stateWord = o.stateWord != null ? o.stateWord : (state === 'paused' ? 'Paused' : (state === 'buffering' ? 'Buffering' + wait(true) : ''));
+    var focus = o.focus || 'timeline';
+    var scrub = '';
+    if (o.scrubTo != null) {
+      var sp = o.scrubTo / DUR * 100;
+      scrub = '<div class="timeline__span" style="left:' + Math.min(pct, sp) + '%;width:' + Math.abs(sp - pct) + '%"></div>' +
+        '<div class="timeline__preview" style="left:' + sp + '%"></div>' +
+        '<div class="timeline__tip" style="left:' + sp + '%">' + fmt(o.scrubTo) + '<span class="timeline__delta">' + (o.scrubTo >= pos ? '+' : '−') + fmt(Math.abs(o.scrubTo - pos)) + '</span></div>';
+    }
+    var strip =
+      act(state === 'paused' ? 'Play' : 'Pause', { cls: 'player__toggle', focus: focus === 'toggle' }) +
+      act('Subtitles', { value: o.subs || 'English', focus: focus === 'subs' }) +
+      act('Speed', { value: o.speed || '1×', focus: focus === 'speed' }) +
+      act('Sound', { value: 'English 5.1', focus: focus === 'sound' }) +
+      (o.series === false ? '' : act('Next episode', { focus: focus === 'next' })) +
+      legend(o.legend || (state === 'paused' ? [['OK', 'Play'], ['Back', 'Leave · your place is kept']] : [['OK', 'Pause'], ['Back', 'Hide']]));
+    var veil = o.veil ? '<div class="player__veil"><div class="veil">' + o.veil + '</div></div>' : '';
+    var upnext = o.upnext ? '<div class="upnext">' + o.upnext + '</div>' : '';
+    var panel = o.panel ? '<aside class="panel"><div class="panel__body">' + o.panel + '</div><div class="panel__foot">' + legend([['◂ ▸', 'Change'], ['Back', 'Close']]) + '</div></aside>' : '';
+    return '<section class="screen screen--media-play"><div class="player" data-state="' + state + '" data-chrome="' + (o.chrome || 'shown') + '" data-scrub="' + (o.scrubTo != null ? 'active' : 'idle') + '"' +
+      ' data-slow="' + (!!o.slow) + '" data-panel="' + (o.panel ? 'open' : 'closed') + '" data-upnext="' + (o.upnextState || 'none') + '">' +
+      '<div class="player__video" style="background:' + (o.scene || NIGHT) + ' center / cover no-repeat"></div>' +
+      (o.cue ? '<div class="cue-sim"><span>' + o.cue + '</span></div>' : '') +
+      '<div class="player__dim"></div>' +
+      '<header class="player__top"><div class="player__title">' + (o.title || 'Lantern Coast') + (o.series === false ? '' : '<span class="player__ep">S2 · E5  The Long Night</span>') + '</div>' +
+      '<div class="player__clock">21:47 · ends <b>22:09</b></div></header>' +
+      '<div class="player__band">' + upnext +
+      '<div class="player__line"><span class="player__state">' + stateWord + '</span><span class="player__times"><span class="player__now">' + fmt(pos) + '</span> / ' + fmt(DUR) + '</span></div>' +
+      '<div class="timeline' + (focus === 'timeline' ? ' is-focused' : '') + '" data-focusable tabindex="-1" role="slider" data-adjust="horizontal">' +
+      '<div class="timeline__track"><div class="timeline__buffered" style="width:' + buf + '%"></div><div class="timeline__played" style="width:' + pct + '%"></div>' + scrub +
+      '<div class="timeline__head" style="left:' + pct + '%"></div></div></div>' +
+      '<div class="player__strip">' + strip + '</div></div>' +
+      '<div class="player__badge">Buffering' + wait(true) + '</div>' +
+      veil + panel + '</div></section>';
+  }
+
+  var subsPanel = function (o) {
+    o = o || {};
+    return '<div class="panel__title">Options</div>' +
+      '<div class="panel__group">Subtitles</div>' +
+      (o.lang || choice('Language', ['Off', 'English', 'Español', 'Français', 'Deutsch'], 'English', { focus: true, note: 'From OpenSubtitles' })) +
+      (o.version === false ? '' : choice('Version', ['1', '2', '3'], '1', { note: '3 files for English. Try another if lines run early or late.' })) +
+      choice('Size', ['Small', 'Medium', 'Large', 'Larger'], 'Medium') +
+      '<div class="panel__group">Playback</div>' +
+      choice('Speed', ['0.75×', '1×', '1.25×', '1.5×', '2×'], '1×') +
+      choice('Sound', ['English 5.1'], 'English 5.1', { gated: true, note: 'This stream has one sound track.' }) +
+      '<div class="panel__group">Series</div>' +
+      choice('Next episode', ['Play automatically', 'Ask me'], 'Play automatically');
+  };
+
+  /* ---------------- detail ---------------- */
+  var EPS = [['Low Tide', '48 min · 2 Oct 2024'], ['The Ferryman', '51 min · 9 Oct 2024'], ['Salt and Iron', '49 min · 16 Oct 2024'], ['A House on Stilts', '55 min · 23 Oct 2024'], ['The Long Night', '53 min · 30 Oct 2024'], ['Breakwater', '50 min · 6 Nov 2024'], ['Fog Signal', '52 min · 13 Nov 2024'], ['What the Sea Keeps', '61 min · 20 Nov 2024']];
+  function src(q, name, size, file, flag, o) {
+    o = o || {};
+    return '<button class="src' + (o.focus ? ' is-focused' : '') + '" data-focusable tabindex="-1" data-playable="' + (o.dead ? 'false' : 'true') + '"' + (o.ready ? ' data-ready="true"' : '') + '>' +
+      '<span class="src__q">' + q + '</span><span class="src__name">' + name + '</span><span class="src__size">' + size + '</span>' +
+      '<span class="src__file">' + file + '</span><span class="src__flag">' + flag + '</span></button>';
+  }
+  var TB_SOURCES = function (focusIdx) {
+    return src('4K', 'Torrentio via TorBox', '18.2 GB', 'Lantern.Coast.S02E05.2160p.WEB-DL.DDP5.1.HDR.H265', 'Ready · HDR', { ready: true, focus: focusIdx === 0 }) +
+      src('1080p', 'Torrentio via TorBox', '3.1 GB', 'Lantern.Coast.S02E05.1080p.WEB-DL.DDP5.1.H264', 'Ready', { ready: true, focus: focusIdx === 1 }) +
+      src('1080p', 'Torrentio via TorBox', '2.4 GB', 'Lantern.Coast.S02E05.1080p.BluRay.x265.10bit.DTS', 'Ready · sound may not play (DTS)', { ready: true, focus: focusIdx === 2 }) +
+      src('720p', 'Torrentio via TorBox', '1.1 GB', 'Lantern.Coast.S02E05.720p.HDTV.x264', 'TorBox fetches it first', { focus: focusIdx === 3 }) +
+      '<button class="src-more' + (focusIdx === 4 ? ' is-focused' : '') + '" data-focusable tabindex="-1" aria-expanded="false"><span>6 more can’t play on this TV</span><span class="src-more__why">plain torrents, from addons without TorBox</span><span class="src-more__sign">Show</span></button>';
+  };
+  function detail(o) {
+    var it = o.movie ? { t: 'The Glass Orchard', m: '2023  ·  1 h 58 min  ·  Drama · Mystery  ·  ★ 7.4  ·  PG-13', p: 4 } : { t: 'Lantern Coast', m: '2024 –  ·  Drama · Mystery  ·  ★ 8.1  ·  TV-14', p: 7 };
+    var html = '<section class="screen screen--media-item"><div class="media-detail__backdrop" style="background-image:' + (o.movie ? SNOW : NIGHT) + '"></div><div class="media-detail" ' + (o.scroll ? 'data-scroll="' + o.scroll + '"' : '') + '>' +
+      '<div class="media-detail__poster" style="background-image:' + poster(it.p, it.t) + '"></div><div class="media-detail__info">' +
+      '<h2 class="media-detail__title">' + it.t + '</h2><div class="media-detail__meta">' + it.m + '</div>' +
+      '<div class="media-detail__cast">Cast: Ines Varga, Tomas Ellery, Mara Quill   ·   Created by J. Hollin</div>' +
+      '<p class="media-detail__desc">A harbour pilot on a fog-bound coast starts keeping a log of ships that arrive without crews. Each one carries the same cargo manifest, dated a year in the future, and the town would rather she stopped counting.</p>' +
+      '<div class="media-actions">' + o.actions + '</div>' + (o.body || '') + '</div></div></section>';
+    return html;
+  }
+  function seriesBody(o) {
+    o = o || {};
+    var rows = EPS.map(function (e, i) {
+      var n = i + 1, attrs = '', mark = '', prog = '';
+      if (n <= 4) { attrs = ' data-watched="true"'; mark = '✓ Watched'; }
+      if (n === 5) { attrs = ' data-upnext="true" data-open="true"'; mark = 'Up next · 21 min left'; prog = progress(59, 'ep__progress'); }
+      var row = '<button class="ep' + (o.focusEp === n ? ' is-focused' : '') + '" data-focusable tabindex="-1"' + attrs + '>' +
+        '<span class="ep__num">' + n + '</span><span class="ep__title"><span>' + e[0] + '</span></span><span class="ep__mark">' + mark + '</span>' +
+        '<span class="ep__meta">' + e[1] + '</span>' + prog + '</button>';
+      if (n === 5) row += '<div class="ep-sources sources"><div class="note">Sources for this episode · 4 play on this TV. Ready ones start at once.</div>' + TB_SOURCES(o.focusSrc) + '</div>';
+      return row;
+    }).join('');
+    return '<div class="media-section-head">Episodes</div><div class="media-episodes">' +
+      '<div class="season-pick">' + choice('Season', ['1', '2', '3'], '2', { focus: o.focusSeason }) + '</div>' + rows + '</div>';
+  }
+
+  /* ---------------- browse ---------------- */
+  var TITLES = ['The Glass Orchard', 'Lantern Coast', 'Iron Meridian', 'Paper Saints', 'The Quiet Engine', 'North of Ash', 'Low Country', 'A Field of Bells', 'Hollow Water', 'The Cartographer', 'Small Hours', 'Red Season'];
+  function card(i, o) {
+    o = o || {};
+    return '<button class="media-card' + (o.focus ? ' is-focused' : '') + '" data-focusable tabindex="-1"><div class="media-card__poster" style="background-image:' + poster(i, TITLES[i % 12]) + '">' +
+      (o.pct ? '<div class="media-card__progress">' + progress(o.pct) + '</div>' : '') + '</div>' +
+      '<span class="media-card__title">' + TITLES[i % 12] + '</span><span class="media-card__sub">' + (o.sub || (2018 + i % 7)) + '</span></button>';
+  }
+  function shelves(sel, focus) {
+    return '<div class="media-shelves">' + ['Search', 'Board', 'Browse', 'My List', 'Continue', 'Addons'].map(function (s) {
+      return '<button class="shelf-btn' + (focus === s ? ' is-focused' : '') + '" data-focusable tabindex="-1" data-selected="' + (s === sel) + '">' + s + '</button>';
+    }).join('') + '</div>';
+  }
+  function browse(inner) {
+    return '<section class="screen screen--media"><header class="mast mast--tight"><span class="mast__word">Watch</span></header><div class="media-browse">' + inner + '</div></section>';
+  }
+
+  /* ---------------- the boards ---------------- */
+  var B = [];
+  function board(id, title, sub, html) { B.push({ id: id, title: title, sub: sub, html: html }); }
+
+  board('p-quiet', 'Player · playing', 'Nothing over the picture. Subtitles in the body serif on a stone ground.',
+    player({ chrome: 'hidden', cue: 'She kept the log for eleven nights before anyone asked to read it.' }));
+  board('p-shown', 'Player · playing, overlay shown', 'Any key brings the overlay up. The cursor is on a strip option: name, then its current value.',
+    player({ focus: 'subs', legend: [['OK', 'Change subtitles'], ['Back', 'Hide']], cue: 'She kept the log for eleven nights.' }));
+  board('p-paused', 'Player · paused', 'The picture steps back, the overlay stays, and the state is a word. The cursor is on the timeline. This is the bright-scene check.',
+    player({ state: 'paused', scene: SNOW }));
+  board('p-scrub', 'Player · scrubbing', '◂ ▸ move a preview head. Nothing is fetched until OK or the scrub settles. Back puts it back.',
+    player({ scrubTo: 33 * 60 + 24, legend: [['OK', 'Jump here'], ['Back', 'Cancel']] }));
+  board('p-options', 'Player · Options', 'The Art panel’s drawer and controls. ◂ ▸ changes a value in one gesture. Sound is gated, and it says why.',
+    player({ panel: subsPanel() }));
+  board('p-subs-wait', 'Player · Options, finding subtitles', 'The wait is on the row that is waiting. Off still works.',
+    player({ subs: 'Off', panel: subsPanel({ version: false, lang: choice('Language', ['Off'], 'Off', { focus: true, gated: true, note: 'Finding subtitles' + wait(true) }) }) }));
+  board('p-subs-fault', 'Player · Options, a subtitle file failed', 'The fault stays on its row and offers the retry there. The rest of the drawer still works.',
+    player({ panel: subsPanel({ lang: choice('Language', ['Off', 'English', 'Español', 'Français', 'Deutsch'], 'English', { focus: true, fault: true, note: 'These English subtitles didn’t arrive. OK tries again.' }) }) }));
+  board('p-upnext', 'Player · up next, counting', 'In the last minute the overlay is pinned and the card takes the cursor. Back means keep watching.',
+    player({ pos: 51 * 60 + 52, upnextState: 'counting', focus: 'none', legend: [['Back', 'Keep watching']],
+      upnext: '<div class="upnext__kicker">Up next</div><div class="upnext__title">S2 · E6  Breakwater</div>' +
+        '<div class="upnext__count">' + progress(40) + '<span class="upnext__words">Starts in 6 seconds</span></div>' +
+        '<div class="acts">' + act('Play now', { fill: true, focus: true }) + act('Keep watching') + '</div>' }));
+  board('p-upnext-missing', 'Player · up next, nothing playable', 'The next episode has no source this TV can play. It says so and offers the way to fix it.',
+    player({ pos: 52 * 60 + 10, upnextState: 'missing', focus: 'none', legend: [['Back', 'Keep watching']],
+      upnext: '<div class="upnext__kicker">Up next</div><div class="upnext__title">S2 · E6  Breakwater</div>' +
+        '<p class="upnext__missing">None of this episode’s sources play on this TV.</p>' +
+        '<div class="acts">' + act('Choose a source', { fill: true, focus: true }) + '</div>' }));
+  board('p-starting', 'Player · starting', 'The wait shows the moment the screen opens: what is starting, from where, and how to cancel.',
+    player({ state: 'starting', veil: '<div class="veil__kicker">Starting</div><div class="veil__title">Lantern Coast</div>' +
+      '<div class="veil__sub">S2 · E5  The Long Night  ·  1080p from Torrentio via TorBox</div>' + wait() +
+      '<p class="veil__msg">Connecting to the stream</p>' + legend([['Back', 'Cancel']]) }));
+  board('p-slow', 'Player · starting, slow', 'After 8 seconds a second line explains the wait and offers another source.',
+    player({ state: 'starting', slow: true, veil: '<div class="veil__kicker">Starting</div><div class="veil__title">Lantern Coast</div>' +
+      '<div class="veil__sub">S2 · E5  The Long Night  ·  720p from Torrentio via TorBox</div>' + wait() +
+      '<p class="veil__msg">Still connecting</p><div class="veil__slow"><p class="veil__cause">TorBox is fetching this one before it can stream. That can take a few minutes. A source marked Ready starts at once.</p>' +
+      '<div class="acts">' + act('Try a Ready source', { fill: true, focus: true }) + '</div></div>' + legend([['Back', 'Cancel']]) }));
+  board('p-refused', 'Player · can’t play this format', 'A refusal names the cause in plain words. The retry moves on to the next source, so pressing it twice can’t start the same failure twice.',
+    player({ state: 'refused', veil: '<div class="veil__kicker">Can’t play</div><div class="veil__title">This TV can’t play this file</div>' +
+      '<div class="veil__sub">4K from Torrentio via TorBox  ·  DTS-HD sound</div>' +
+      '<p class="veil__cause">The TV’s player stopped before the first frame. This file’s sound is DTS, which Samsung TVs no longer decode. Another source of the same episode, with AAC or Dolby sound, usually plays.</p>' +
+      '<div class="acts">' + act('Try the next source', { fill: true, focus: true, value: '4K · Dolby' }) + act('Choose a source') + '</div>' + legend([['Back', 'Back to Lantern Coast']]) }));
+  board('p-stall', 'Player · the stream stopped', 'Buffering that runs past 20 seconds becomes a refusal with a retry from the same place.',
+    player({ state: 'refused', veil: '<div class="veil__kicker">Stopped</div><div class="veil__title">The stream stopped sending</div>' +
+      '<div class="veil__sub">S2 · E5  The Long Night  ·  at 31:04</div>' +
+      '<p class="veil__cause">Nothing has arrived for 20 seconds. The source may be busy, or the network dropped.</p>' +
+      '<div class="acts">' + act('Try again', { fill: true, focus: true, value: 'from 31:04' }) + act('Try the next source') + '</div>' + legend([['Back', 'Back to Lantern Coast']]) }));
+  board('p-buffering', 'Player · buffering', 'With the overlay away, buffering is one quiet corner and leaves the picture alone.',
+    player({ state: 'buffering', chrome: 'hidden' }));
+  board('p-ended', 'Player · finished (film)', 'The last frame stays behind the scrim. One way on, one way back to the start.',
+    player({ state: 'ended', series: false, title: 'The Glass Orchard', scene: SNOW, veil: '<div class="veil__kicker">Finished</div><div class="veil__title">The Glass Orchard</div>' +
+      '<div class="veil__sub">Marked as watched</div><div class="acts">' + act('Back to The Glass Orchard', { fill: true, focus: true }) + act('Watch from the start') + '</div>' }));
+
+  board('d-series', 'Detail · series', 'One filled action: Resume, which names the episode and the time. The viewer’s own actions are quiet beside it.',
+    detail({ actions: act('Resume', { fill: true, focus: true, value: 'S2 · E5 · from 31:04' }) + act('Save to My List') + act('Mark S2 · E5 watched') + act('Forget my place'), body: seriesBody() }));
+  board('d-episodes', 'Detail · episodes and sources', 'Season is a choice row. The open episode’s sources hang beneath it. Watched carries the seal, Up next is plain ink, and the cursor is on a Ready source.',
+    detail({ scroll: 'episodes', actions: act('Resume', { fill: true, value: 'S2 · E5 · from 31:04' }) + act('Save to My List') + act('Mark S2 · E5 watched') + act('Forget my place'), body: seriesBody({ focusSrc: 1 }) }));
+  board('d-nodebrid', 'Detail · nothing playable (no debrid)', 'This failure takes the space: what happened, why, and one way on. The struck rows below stay reachable, and OK on one says why it can’t play.',
+    detail({ movie: true, scroll: 'sources', actions: act('Play', { fill: true, gated: true, why: 'Nothing here plays on this TV yet' }) + act('Save to My List') + act('Mark watched'),
+      body: '<div class="media-section-head">Sources<span class="media-section-head__count">0 of 14 play on this TV</span></div><div class="sources">' +
+        '<div class="empty"><div class="empty__head">Nothing here plays on this TV yet</div><p class="empty__cause">All 14 sources are torrents. A TV can only play a torrent through a debrid service such as TorBox: it fetches the torrent and hands the TV an ordinary video link.</p>' +
+        '<div class="acts">' + act('Set one up in Addons') + '</div></div>' +
+        '<div class="note">What the addons found</div><div class="src-dead">' +
+        src('1080p', 'Torrentio', '2.2 GB', 'The.Glass.Orchard.2023.1080p.WEB-DL.DDP5.1.H264', 'Torrent · needs a debrid service', { dead: true, focus: true }) +
+        src('4K', 'Torrentio', '14.9 GB', 'The.Glass.Orchard.2023.2160p.WEB-DL.DV.HDR.H265', 'Torrent · needs a debrid service', { dead: true }) +
+        src('720p', 'Torrentio', '1.0 GB', 'The.Glass.Orchard.2023.720p.WEBRip.x264', 'Torrent · needs a debrid service', { dead: true }) +
+        src('—', 'Local demo', '—', 'Opens in another app', 'Plays outside framed only', { dead: true }) + '</div></div>' }));
+  board('d-loading', 'Detail · finding sources', 'Play is gated while sources load and says why in words. The wait shows in the list.',
+    detail({ movie: true, actions: act('Play', { fill: true, gated: true, focus: true, why: 'Finding sources…' }) + act('Save to My List') + act('Mark watched'),
+      body: '<div class="media-section-head">Sources</div><div class="sources">' + wait() + '<div class="note">Asking your 3 addons</div></div>' }));
+  board('d-fault', 'Detail · addons unreachable', 'A fault takes the breach bar. The retry is on the same request and is ignored while it is running.',
+    detail({ movie: true, actions: act('Play', { fill: true, gated: true, why: 'No sources yet' }) + act('Save to My List') + act('Mark watched'),
+      body: '<div class="media-section-head">Sources</div><div class="sources"><div class="empty empty--fault"><div class="empty__head">Couldn’t reach your addons</div>' +
+        '<p class="empty__cause">None of them answered within 6 seconds. The TV may be offline, or the addons are down.</p><div class="acts">' + act('Ask again', { focus: true }) + '</div></div></div>' }));
+
+  var cont = [card(1, { pct: 59, sub: 'S2 · E5 · 21 min left', focus: true }), card(0, { pct: 22, sub: '1 h 32 min left' }), card(5, { pct: 81, sub: '12 min left' }), card(9, { pct: 8, sub: 'S1 · E2 · 44 min left' }), card(3, { pct: 47 }), card(7, { pct: 66 })].join('');
+  var pop = [2, 4, 6, 8, 10, 11].map(function (i) { return card(i); }).join('');
+  board('b-board', 'Browse · Board', 'Posters are one size in rows and in the grid. A resume hairline replaces “59% watched”. The rest of the wall recedes while the cursor is on a poster.',
+    browse(shelves('Board') + '<div class="media-grid is-board has-cursor"><div class="media-row-wrap"><div class="media-row__title">Continue Watching</div><div class="media-row">' + cont + '</div></div>' +
+      '<div class="media-row-wrap"><div class="media-row__title">Popular · Films</div><div class="media-row">' + pop + '</div></div></div>'));
+  var grid = ''; for (var g = 0; g < 12; g++) grid += card(g, { focus: g === 7, sub: g === 1 ? '2024 · In My List' : (g === 4 ? '2019 · Watched' : null) });
+  board('b-grid', 'Browse · one catalog', 'Six across. Titles and sub-lines are one line each, cut with an ellipsis (no line-clamp).',
+    browse(shelves('Browse') + '<div class="media-cats">' + choice('Catalog', ['Popular · Films', 'Popular · Series', 'New · Films', 'Featured'], 'Popular · Films') + '</div>' +
+      '<div class="media-grid has-cursor">' + grid + '</div>'));
+
+  /* ---------------- paint ---------------- */
+  var main = document.getElementById('boards'), toc = document.getElementById('toc');
+  B.forEach(function (b) {
+    var cap = document.createElement('div'); cap.className = 'spec-cap'; cap.id = b.id;
+    cap.innerHTML = esc(b.title) + '<small>' + esc(b.sub) + '</small>';
+    var el = document.createElement('div'); el.className = 'board app'; el.setAttribute('data-board', b.id); el.innerHTML = b.html;
+    main.appendChild(cap); main.appendChild(el);
+    var a = document.createElement('a'); a.href = '#' + b.id; a.textContent = b.title; toc.appendChild(a);
+  });
+  // scroll fixture detail screens to the part they are about
+  Array.prototype.forEach.call(document.querySelectorAll('.media-detail[data-scroll]'), function (d) {
+    var target = d.getAttribute('data-scroll') === 'episodes' ? d.querySelector('.ep-sources') : d.querySelector('.media-section-head');
+    var px = window.innerWidth / 1920;
+    if (target) d.scrollTop = target.getBoundingClientRect().top - d.getBoundingClientRect().top - (d.getAttribute('data-scroll') === 'episodes' ? 470 : 380) * px;
+  });
+})();
+</script>
+</body>
+</html>
