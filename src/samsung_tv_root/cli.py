@@ -253,12 +253,39 @@ def command_service(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def command_ambient(arguments: argparse.Namespace) -> int:
+    from .ambient import AmbientSensorError, SENSOR_COMMAND, parse_ambient_result
+    configuration = load_configuration(arguments.config)
+    if configuration.television(arguments.television).model != "ls03d":
+        raise CommandError("The ambient sensor adapter is validated only on LS03D")
+    result = asyncio.run(send_control_request(arguments.control_file.expanduser().resolve(), {
+        "action": "execute", "television": arguments.television,
+        "command": SENSOR_COMMAND, "timeout": 5.0,
+    }, timeout=arguments.timeout))
+    try:
+        sensor = parse_ambient_result(result)
+    except AmbientSensorError as error:
+        raise CommandError(str(error)) from error
+    emit({"sensor": sensor}, arguments.output)
+    return 0
+
+
 def command_bridge(arguments: argparse.Namespace) -> int:
     from .bridge import bridge_token_path, run_bridge
 
     art_dir = arguments.art_dir.expanduser().resolve()
     if not art_dir.is_dir():
         raise CommandError(f"art directory does not exist: {art_dir}")
+    sensor_token = None
+    if arguments.sensor_token_file:
+        if not arguments.television:
+            raise CommandError("--television is required for an ambient sensor")
+        configuration = load_configuration(arguments.config)
+        if configuration.television(arguments.television).model != "ls03d":
+            raise CommandError("The ambient sensor adapter is validated only on LS03D")
+        sensor_token = arguments.sensor_token_file.read_text(encoding="utf-8").strip()
+        if len(sensor_token) < 32:
+            raise CommandError("Sensor token must contain at least 32 characters")
 
     async def main() -> None:
         server, token = await run_bridge(
@@ -268,6 +295,7 @@ def command_bridge(arguments: argparse.Namespace) -> int:
             control_file=arguments.control_file.expanduser().resolve(),
             television=arguments.television,
             timeout=arguments.timeout,
+            sensor_token=sensor_token,
         )
         emit(
             {
@@ -829,6 +857,13 @@ def build_parser() -> argparse.ArgumentParser:
         controller_action="capabilities",
     )
 
+    sensor = commands.add_parser("sensor")
+    sensor_commands = sensor.add_subparsers(dest="sensor_command", required=True)
+    ambient = sensor_commands.add_parser("ambient")
+    ambient.add_argument("television")
+    ambient.add_argument("--timeout", type=float, default=10.0)
+    ambient.set_defaults(handler=command_ambient)
+
     root = commands.add_parser("root")
     root_commands = root.add_subparsers(dest="root_command", required=True)
     root_acquire = root_commands.add_parser("acquire")
@@ -1006,6 +1041,7 @@ def build_parser() -> argparse.ArgumentParser:
     bridge.add_argument("--art-dir", type=Path, required=True)
     bridge.add_argument("--television")
     bridge.add_argument("--timeout", type=float, default=20.0)
+    bridge.add_argument("--sensor-token-file", type=Path, help="Enable read-only LS03D /sensor/ambient with a separate token")
     bridge.set_defaults(handler=command_bridge)
 
     events = commands.add_parser("events")

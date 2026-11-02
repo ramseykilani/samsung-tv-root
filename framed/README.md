@@ -48,7 +48,7 @@ framed/
 | D-pad | Geometric focus engine, focus never lost, `Left/Right` adjust rows, pointer-remote hover, Tizen RETURN (10009) | Focus **look** (ring colour/width/scale are tokens) |
 | Launcher | app list (Watch, YouTube, PC, Art, Settings; Mhach vertical list + art miniature), external → `__tvBridge.launch` via `EXTERNAL_APP_IDS`, clock+date | shipped: Mhach design |
 | Art | Matte width/bottom-weight/colour (8 presets + custom HSL), 5 frame styles, frame weight/tone, contain/cover with frame hugging the image, caption slot, persistence, panel focus-trap, `s` key, corner affordance reveal | Preset palette values, frame-style rendering refinement, caption typography, panel chrome, any motion |
-| Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / 30 s / hourly / daily, sequential / seeded shuffle, daily = day-of-epoch pick on open, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, "n of N" indicator in panel + Settings only, persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
+| Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / every N hours / every N days, sequential / seeded shuffle, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, "n of N" indicator in panel + Settings only, persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
 | Settings | Brightness + Art-floor ranges wired to the bridge and persisted, floor preview thumbnail, theme chooser with disabled "coming soon" slots, About | Real theme list and token blocks, all visuals |
 | Theme | `html[data-theme]` hook, single token file, `--fr-motion` switch (0ms now) | **Everything in `theme-placeholder.css`** |
 | Assets | Placeholder test cards + icon | Real imagery and icon |
@@ -64,30 +64,41 @@ framed/
 | `#/media-item` | Detail: backdrop, poster, title, year/genres/rating/cert/country, cast & director, description, Save/Resume/Mark watched/Dismiss actions, episodes (series), stream list with quality tags | ▴ ▾ move · OK act / play (or quiet refusal for unplayable sources) · Back → browse |
 | `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back → detail (position kept) |
 
-Art options (persisted in `localStorage["framed.art"]`): artwork, image fit (contain hugs the image
-with the frame; cover fills the matte opening), matte width 0–30 % (of the shorter screen edge, each
-side), bottom weight 0–10 %, matte colour (8 presets + custom H/S/L), frame (none · thin · double line
-· shadow box · corner marks), frame weight 1–6 px, frame tone (auto-contrast · dark · light), caption.
+Art options (persisted **per picture** in `localStorage["framed.artPer"]`; the most recent look lives
+in `localStorage["framed.art"]` as the default for pictures without their own memory): image fit
+(contain hugs the image with the frame; cover fills the matte opening), matte width 0–30 % (of the
+shorter screen edge, each side), bottom weight 0–10 %, matte colour (8 presets + custom H/S/L),
+liner/mount (none · gold fillet · linen · black slip · bevel · double mat · shadowbox · float),
+moulding (none · black · ebony · walnut · oak · gilt · silver · white), profile (flat · scoop ·
+cushion · ornate), frame width 1–10, caption, and **Pixel shift** — an anti-burn-in drift that
+overscans the stage by 10 px and nudges it to a new offset once per hour (on by default).
 
 Slideshow (persisted in `localStorage["framed.slideshow"]`, editable from the art panel and the
-Settings screen): **Rotate** off · every 30 s · hourly · daily; **Order** sequential · shuffle
-(shuffle order is a seeded permutation, so it survives reload and the position stays meaningful);
-**Picture** `n of N` range in the panel. The position indicator appears only in settings chrome
-(panel header, Settings "Showing n of N · title") — never on the stage.
+Settings screen): **Rotate** off · hours · days, with an **Every** interval row (1–48 hours or
+1–30 days); **Order** sequential · shuffle (shuffle order is a seeded permutation, so it survives
+reload and the position stays meaningful); **Picture** `n of N` range in the panel. The position
+indicator appears only in settings chrome (panel header, Settings "Showing n of N · title") —
+never on the stage.
 
-- **Daily** ("wake up to a new picture"): on each entry to the Art screen, if the day-of-epoch
-  (`Math.floor(Date.now() / 86400000)`) differs from the stored `lastDay`, the position becomes
-  `day % N` (mapped through the shuffle permutation when shuffled). Only `Date` is used — no clock
-  service. Stepping manually keeps that picture for the rest of the day.
-- **30 s / hourly:** a timer runs only while the Art screen is shown. On entry the sequencer
-  advances by however many whole periods elapsed since `lastAdvance` (so an hourly show that was
-  closed for 3 h is 3 pictures on), then ticks on the remainder. Manual steps restart the period.
+- **Timed rotation:** a timer runs only while the Art screen is shown. On entry the sequencer
+  advances by however many whole periods elapsed since `lastAdvance` (so an every-2-hours show
+  that was closed for 5 h comes back 2 pictures on), then ticks on the remainder. Manual steps
+  restart the period; changing the cadence or interval restarts it too.
 - **Cross-fade:** two stacked `.art-layer`s; the next picture is preloaded and painted on the
   inactive layer, then `data-active` flips. The opacity transition is `var(--fr-motion)` — 0 ms in
   the scaffold, so the designer sets the feel from the token file alone.
 
-Settings (persisted in `localStorage["framed.settings"]`): brightness 0–100 and the Art Mode
-**ambient floor** 0–100 — the lowest level ambient dimming may take the art to (0 = fully black).
+Settings (persisted in `localStorage["framed.settings"]`): brightness 0–100, the Art Mode
+**ambient floor** 0–100 (reserved for the future adaptive-dimming sensor path), theme, home-art
+style, and **Start in** (Launcher · Art) — with Art, a fresh launch opens on the piece of art
+itself, so a remote key mapped to the app via the daemon becomes a dedicated show-art button.
+
+**Brightness is software dimming today.** The `__tvBridge` hardware path is still a stub, so the
+slider (in Settings and in the art panel) drives a CSS `brightness()` filter on the art stage
+instead: 100 = undimmed, 0 = near-black (≈2 %) — deliberately far below Samsung's Art Mode
+minimum, which never gets dark enough in a dim room. Tone warms (a sepia ramp) as the art dims,
+standing in for adaptive tone until a light-sensor path exists. The filter covers only the stage;
+panel and chrome stay at full brightness.
 
 ## The media seam (`js/media.js`)
 
@@ -121,17 +132,27 @@ var MEDIA_ADDONS = [
   and the detail screen refuses it with a toast — the TV has no torrent engine.
 - **Secret-bearing addon URLs** (debrid-configured addons like
   `https://torrentio.strem.fun/torbox=<key>` produced by
-  [torrentio.strem.fun/configure](https://torrentio.strem.fun/configure)) contain API keys —
-  keep them out of git. Drop a gitignored `addons.local.json` next to `index.html`:
+  [torrentio.strem.fun/configure](https://torrentio.strem.fun/configure), or a TorBox
+  manifest URL `https://stremio.torbox.app/<api_key>/manifest.json`) contain API keys —
+  keep them out of git. Two local-only installs:
 
-  ```json
-  {"addons": [{"name": "Torrentio", "base": "https://torrentio.strem.fun/torbox=<key>"}]}
-  ```
+  1. **Watch → Addons → “Install addon from URL”** — paste the URL on the on-screen
+     keyboard; it persists in `localStorage`, never in git. Easiest TorBox hook-up:
+     paste `https://stremio.torbox.app/<api_key>/manifest.json` (the key stays on the TV).
+  2. A gitignored `addons.local.json` next to `index.html`:
 
-  On the first `catalogs()` call the file is fetched once; entries whose `name` matches a
-  default entry replace its `base`, unknown names are prepended. Absent file → quiet no-op.
-  With a debrid-backed base, `stream/` responses become HTTPS `…/resolve/…` URLs the TV's
-  `<video>` can play directly.
+     ```json
+     {"addons": [{"name": "TorBox", "base": "https://stremio.torbox.app/<api_key>"}]}
+     ```
+
+     On the first `catalogs()` call the file is fetched once; entries whose `name` matches a
+     default entry replace its `base`, unknown names are prepended. Absent file → quiet no-op.
+
+  Either way the addon is a normal `<base>` — `<base>/manifest.json` declares its
+  resources, `<base>/stream/<type>/<id>.json` answers stream requests. With a
+  debrid-backed base, `stream/` responses become HTTPS `…/resolve/…` URLs the TV's
+  `<video>` can play directly, so they land in the detail screen's “plays on this TV”
+  group instead of the dead-source fold.
 - Persisted state: `localStorage["framed.media"]` = `{ catalog, view }` (last catalog and
   shelf), and `localStorage["framed.watch"]` = the viewer's own data — `saved[]` (My List
   snapshots: item + a revivable catalog reference, newest first, cap 200) and `progress{}`

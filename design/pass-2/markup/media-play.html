@@ -1,0 +1,133 @@
+<!-- ============ MEDIA: PLAYBACK — pass 2 ============
+  Replaces the #screen-media-play section in index.html.
+
+  CONTRACT. The root .player carries the whole state machine as attributes. media-play.js owns the
+  machine and its timers and only ever writes these attributes, text, and the inline widths/lefts
+  marked "JS: value" below. CSS draws every state (css/app.css § media: playback).
+
+    data-state   starting | playing | paused | buffering | ended | refused
+    data-chrome  shown | hidden     always "shown" unless state=playing and no key for --fr-chrome-linger ms
+    data-scrub   idle | active
+    data-slow    true | false       starting/buffering past --fr-slow-start ms
+    data-panel   open | closed
+    data-upnext  none | offered | counting | missing
+
+  FOCUS. The surface itself is no longer focusable. Focusables, in order:
+    timeline → strip buttons (left to right) → [upnext acts when offered] → [veil acts when shown]
+  Chrome hides by opacity, so the cursor stays on the timeline (or wherever it was) while hidden.
+  When the veil is up (starting/refused/ended), nav scope = .player__veil.
+  When the drawer is open, nav scope = .panel (as the Art panel does).
+-->
+<section id="screen-media-play" class="screen screen--media-play" data-screen="media-play" hidden>
+  <div class="player" id="mp" data-state="starting" data-chrome="shown" data-scrub="idle" data-slow="false" data-panel="closed" data-upnext="none">
+
+    <video class="player__video" id="mp-video" playsinline></video>
+    <!-- paused: the picture steps back by --fr-pause-dim -->
+    <div class="player__dim" aria-hidden="true"></div>
+
+    <!-- top line: what this is, and when it ends -->
+    <header class="player__top">
+      <div class="player__title" id="mp-title">Lantern Coast<span class="player__ep" id="mp-ep">S2 · E5  The Long Night</span></div>
+      <!-- JS: "21:47 · ends <b>22:09</b>"; "ends" = now + (duration − position) / playbackRate. Update once a minute and on seek. -->
+      <div class="player__clock" id="mp-clock"></div>
+    </header>
+
+    <div class="player__band">
+      <!-- up next: a child of the band so it sits on top of it; the band is pinned while it shows -->
+      <div class="upnext" id="mp-upnext">
+        <div class="upnext__kicker">Up next</div>
+        <div class="upnext__title" id="mp-upnext-title">S2 · E6  Breakwater</div>
+        <div class="upnext__count">
+          <!-- JS: value. width = remaining / --fr-upnext-count, set once a second (CSS eases each step over 1s) -->
+          <div class="progress"><div class="progress__fill" id="mp-upnext-fill" style="width:100%"></div></div>
+          <span class="upnext__words" id="mp-upnext-words">Starts in 10 seconds</span>
+        </div>
+        <p class="upnext__missing">None of this episode’s sources play on this TV.</p>
+        <div class="acts">
+          <!-- offered/counting: "Play now"; missing: "Choose a source" (opens detail at that episode). One fill. -->
+          <button class="act act--fill" id="mp-upnext-go" data-focusable tabindex="-1"><span class="act__name">Play now</span></button>
+          <!-- offered/counting only; same as Back -->
+          <button class="act" id="mp-upnext-stay" data-focusable tabindex="-1"><span class="act__name">Keep watching</span></button>
+        </div>
+      </div>
+
+      <div class="player__line">
+        <!-- the state word. Empty while playing. "Paused" | "Buffering" + <div class="wait wait--inline">…</div> -->
+        <span class="player__state" id="mp-state" aria-live="polite"></span>
+        <span class="player__times"><span class="player__now" id="mp-now">0:00</span> / <span id="mp-dur">0:00</span></span>
+      </div>
+
+      <!-- the timeline: a horizontal-adjust focusable (nav dispatches framed:adjust; e.detail.fast on key repeat) -->
+      <div class="timeline" id="mp-timeline" data-focusable tabindex="-1" data-adjust="horizontal"
+           role="slider" aria-label="Position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00 of 0:00">
+        <div class="timeline__track">
+          <div class="timeline__buffered" id="mp-buffered"></div>   <!-- JS: value. width % = buffered.end(last) / duration -->
+          <div class="timeline__played" id="mp-played"></div>       <!-- JS: value. width % = position / duration -->
+          <div class="timeline__span" id="mp-span"></div>           <!-- JS: value. left/width % between head and preview -->
+          <div class="timeline__preview" id="mp-preview"></div>     <!-- JS: value. left % = scrub target -->
+          <!-- JS: value. left % = scrub target; data-edge="start|end" within 6% of either end, so the tip never leaves the screen -->
+          <div class="timeline__tip" id="mp-tip">33:24<span class="timeline__delta">+2:20</span></div>
+          <div class="timeline__head" id="mp-head"></div>           <!-- JS: value. left % = position -->
+        </div>
+      </div>
+
+      <div class="player__strip">
+        <!-- label is the ACTION: "Pause" while playing, "Play" while paused. min-width keeps the strip from shifting. -->
+        <button class="act player__toggle" id="mp-toggle" data-focusable tabindex="-1"><span class="act__name">Pause</span></button>
+        <!-- OK opens the Options drawer with the cursor on that row. Values mirror the drawer. -->
+        <button class="act" id="mp-subs" data-focusable tabindex="-1" data-row="lang"><span class="act__name">Subtitles</span><span class="act__value">Off</span></button>
+        <button class="act" id="mp-speed" data-focusable tabindex="-1" data-row="speed"><span class="act__name">Speed</span><span class="act__value">1×</span></button>
+        <button class="act" id="mp-sound" data-focusable tabindex="-1" data-row="sound"><span class="act__name">Sound</span><span class="act__value">English 5.1</span></button>
+        <!-- series with a next episode only (hidden otherwise). OK = playNext(). -->
+        <button class="act" id="mp-next" data-focusable tabindex="-1" hidden><span class="act__name">Next episode</span></button>
+        <!-- legend: what OK and Back do right now. Swapped by state (COMPONENT-SHEETS.md §1 Legend). -->
+        <span class="legend" id="mp-legend">
+          <span class="legend__item"><span class="key">OK</span> Pause</span><span class="legend__item"><span class="key">Back</span> Hide</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- buffering while the chrome is away -->
+    <div class="player__badge" aria-hidden="true">Buffering<div class="wait wait--inline"><span class="wait__tick"></span></div></div>
+
+    <!-- veil: starting / refused / ended. Content swapped per state; copy keys in COMPONENT-SHEETS.md §1 Copy. -->
+    <div class="player__veil" id="mp-veil">
+      <div class="veil" role="status" aria-live="polite">
+        <div class="veil__kicker" id="mp-veil-kicker">Starting</div>
+        <div class="veil__title" id="mp-veil-title">Lantern Coast</div>
+        <div class="veil__sub" id="mp-veil-sub">S2 · E5  The Long Night  ·  1080p from Torrentio via TorBox</div>
+        <!-- starting only -->
+        <div class="wait" id="mp-veil-wait"><span class="wait__tick"></span></div>
+        <p class="veil__msg" id="mp-veil-msg">Connecting to the stream</p>
+        <!-- refused only -->
+        <p class="veil__cause" id="mp-veil-cause" hidden></p>
+        <!-- starting + data-slow=true only -->
+        <div class="veil__slow">
+          <p class="veil__cause">TorBox is fetching this one before it can stream. That can take a few minutes. A source marked Ready starts at once.</p>
+        </div>
+        <div class="acts" id="mp-veil-acts">
+          <!-- one fill. data-busy="true" while it works; a second OK is ignored. data-gated="true" + .act__why when there's no other source. -->
+          <button class="act act--fill" id="mp-veil-go" data-focusable tabindex="-1"><span class="act__name">Try another source</span><span class="act__value"></span></button>
+          <button class="act" id="mp-veil-alt" data-focusable tabindex="-1" hidden><span class="act__name">Choose a source</span></button>
+        </div>
+        <span class="legend" id="mp-veil-legend"><span class="legend__item"><span class="key">Back</span> Cancel</span></span>
+      </div>
+    </div>
+
+    <!-- Options drawer: the Art panel's drawer + js/controls.js choice rows. Render with F.controls.render(). -->
+    <aside class="panel" id="mp-panel" aria-label="Options" hidden>
+      <div class="panel__body">
+        <div class="panel__title">Options</div>
+        <div class="panel__group">Subtitles</div>
+        <div id="mp-ctl-subs"></div>      <!-- lang (Off + one option per language), version (only when >1 file), size -->
+        <div class="panel__group">Playback</div>
+        <div id="mp-ctl-play"></div>      <!-- speed, sound -->
+        <div class="panel__group" id="mp-grp-series">Series</div>
+        <div id="mp-ctl-series"></div>    <!-- next episode: Play automatically | Ask me -->
+      </div>
+      <div class="panel__foot">
+        <span class="legend"><span class="legend__item"><span class="key">◂ ▸</span> Change</span><span class="legend__item"><span class="key">Back</span> Close</span></span>
+      </div>
+    </aside>
+  </div>
+</section>

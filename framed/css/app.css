@@ -129,6 +129,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   box-shadow: var(--fr-shadow-panel);
 }
 .panel__status { display: none; }  /* the Picture row already says where the slideshow is */
+.panel__sensor { padding: 16px 32px 0; font-size: 16px; opacity: 0.8; }
 .panel__body { flex: 1; overflow-y: auto; padding: var(--fr-space-7) var(--fr-space-7); scrollbar-width: none; }
 .panel__body::-webkit-scrollbar { display: none; }
 
@@ -147,6 +148,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   background: var(--matte-color);
   padding: calc(var(--matte) * 1vmin) calc(var(--matte) * 1vmin) calc((var(--matte) + var(--matte-bottom)) * 1vmin);
   display: flex; align-items: center; justify-content: center;
+  transition: filter var(--fr-motion-art) ease;  /* dimming glides down like gallery lights */
 }
 .screen--art.panel-open .art-stage { right: var(--fr-panel-width); }
 .art-frame { position: relative; flex: none; width: 100%; height: 100%; }
@@ -214,53 +216,177 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
 .status { margin-top: var(--fr-space-3); font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
 .status:empty { display: none; }
 
+
+/* =====================================================================================
+ * PASS 2 — shared parts. Media screens and the player compose these; they add no parts of
+ * their own. Each is shown with fixture data in specimen/index.html before any screen uses it.
+ *   .act        the one button kind (quiet), .act--fill the single loud one per surface
+ *   .wait       a wait with a form: stepped tick on a hairline
+ *   .progress   resume hairline (posters, episode rows)
+ *   .note       one quiet sentence that explains a list (why rows are struck, what "Ready" means)
+ *   .empty      emptiness that is a failure: plain words, the cause, one way on
+ *   .key        a remote key named in a legend
+ *   .control--noted / [data-gated]   a control row with a visible reason line
+ * ===================================================================================== */
+
+/* ---------- act ----------
+ * .shelf-btn, .media-more, .media-key and .media-action are this part under older names; they keep
+ * working (same rules) until the markup is renamed. New markup uses .act only. */
+.act, .shelf-btn, .media-more, .media-key, .media-action {
+  display: inline-block; padding: var(--fr-space-2) var(--fr-space-5);
+  font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); white-space: nowrap;
+  border-radius: var(--fr-radius);
+  transition: background-color var(--fr-motion), box-shadow var(--fr-motion), color var(--fr-motion), outline-color var(--fr-motion);
+}
+.act__name { color: inherit; }
+.act__value {
+  margin-left: var(--fr-space-2); font-family: var(--fr-font-display); font-weight: var(--fr-font-weight-strong);
+  color: var(--fr-color-text); font-variant-numeric: lining-nums tabular-nums;
+}
+.act:focus, .act.is-focused,
+.shelf-btn:focus, .shelf-btn.is-focused,
+.media-more:focus, .media-more.is-focused,
+.media-key:focus, .media-key.is-focused,
+.media-action:focus, .media-action.is-focused {
+  background: var(--fr-color-surface-raised); color: var(--fr-color-text);
+  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus);
+}
+/* the loud one: bone ground. Its cursor is the poster's charge rule, held off the edge. */
+.act--fill {
+  color: var(--fr-color-on-act); background: var(--fr-color-act);
+  outline: var(--fr-focus-ring-width) solid transparent; outline-offset: var(--fr-focus-gap);
+}
+.act--fill .act__value { color: var(--fr-color-on-act); }
+.act--fill:focus, .act--fill.is-focused {
+  color: var(--fr-color-on-act); background: var(--fr-color-act); box-shadow: none;
+  outline-color: var(--fr-color-focus);
+}
+/* gated: stays on screen and reachable; OK does nothing; the reason sits in .act__why beside it */
+.act[data-gated="true"], .act[data-gated="true"]:focus, .act[data-gated="true"].is-focused { color: var(--fr-color-disabled); }
+.act--fill[data-gated="true"], .act--fill[data-gated="true"]:focus, .act--fill[data-gated="true"].is-focused {
+  color: var(--fr-color-on-act-gated); background: var(--fr-color-act-gated);
+}
+.act--fill[data-gated="true"] .act__value { color: var(--fr-color-on-act-gated); }
+.act[data-gated="true"]:focus, .act[data-gated="true"].is-focused { box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus-dim); }
+.act--fill[data-gated="true"]:focus, .act--fill[data-gated="true"].is-focused { box-shadow: none; outline-color: var(--fr-color-focus-dim); }
+.act[data-busy="true"] { cursor: progress; }  /* pressed and working: a second OK is ignored (JS), the label says so */
+.act__why {
+  display: inline-block; margin-left: var(--fr-space-4);
+  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
+}
+.acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fr-space-3) var(--fr-space-4); }
+
+/* ---------- wait ---------- */
+.wait { position: relative; width: 48rem; max-width: 100%; height: 0.4rem; overflow: hidden; background: var(--fr-color-track); }
+.wait__tick {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 12.5%;   /* one of 8 cuts */
+  background: var(--fr-color-working);
+  -webkit-animation: fr-wait var(--fr-wait-cycle) steps(8, end) infinite; animation: fr-wait var(--fr-wait-cycle) steps(8, end) infinite;
+}
+.wait--inline { display: inline-block; vertical-align: middle; width: 16rem; margin-left: var(--fr-space-3); }
+@-webkit-keyframes fr-wait { from { -webkit-transform: translateX(0); transform: translateX(0); } to { -webkit-transform: translateX(800%); transform: translateX(800%); } }
+@keyframes fr-wait { from { transform: translateX(0); } to { transform: translateX(800%); } }
+/* less motion: the tick stops and the whole hairline is lit at half. The words still say "working". */
+@media (prefers-reduced-motion: reduce) { .wait__tick { -webkit-animation: none; animation: none; width: 100%; opacity: 0.5; } }
+html[data-motion="reduced"] .wait__tick { -webkit-animation: none; animation: none; width: 100%; opacity: 0.5; }
+
+/* ---------- progress ---------- */
+.progress { position: relative; height: var(--fr-progress-h); background: var(--fr-color-track); }
+.progress__fill { position: absolute; top: 0; bottom: 0; left: 0; background: var(--fr-color-played); }  /* width: inline %, a value not a paint */
+
+/* ---------- note ---------- */
+.note {
+  margin: var(--fr-space-2) 0 var(--fr-space-4); max-width: 104rem;
+  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
+}
+
+/* ---------- empty (a failure, so it takes the space) ---------- */
+.empty {
+  max-width: 112rem; margin-top: var(--fr-space-4); padding: var(--fr-space-5) var(--fr-space-6);
+  background: var(--fr-color-surface);
+  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-border-strong);
+}
+.empty--fault { box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-error); }
+.empty__head {
+  font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-heading);
+  line-height: 1.15; color: var(--fr-color-text);
+}
+.empty__cause { margin: var(--fr-space-3) 0 0; max-width: 92rem; color: var(--fr-color-text-muted); }
+.empty .acts { margin-top: var(--fr-space-5); }
+
+/* ---------- key: a remote key named in a legend ---------- */
+.key {
+  display: inline-block; min-width: 4rem; margin-right: var(--fr-space-1); padding: 0 var(--fr-space-2);
+  font-family: var(--fr-font-family); font-style: normal; font-size: var(--fr-font-size-body); line-height: 1.3; text-align: center;
+  color: var(--fr-color-text); border: var(--fr-border-width) solid var(--fr-color-border-strong); border-radius: var(--fr-radius);
+}
+.legend {
+  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted);
+  white-space: nowrap;
+}
+.legend__item + .legend__item { margin-left: var(--fr-space-5); }
+
+/* ---------- controls: a visible reason line, and gated rows ---------- */
+.control--noted { grid-template-areas: "name value" "track track" "note note"; }
+.control__note {
+  grid-area: note; margin-top: calc(var(--fr-space-2) * -1);
+  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted);
+}
+.control[data-gated="true"] .control__name,
+.control[data-gated="true"]:focus .control__name, .control[data-gated="true"].is-focused .control__name { color: var(--fr-color-text-muted); }
+.control[data-gated="true"] .choice__opt { color: var(--fr-color-disabled); }
+.control[data-gated="true"] .choice__opt[data-selected="true"] { color: var(--fr-color-text-muted); box-shadow: inset 0 -0.3rem 0 0 var(--fr-color-disabled); }
+.control[data-gated="true"]:focus, .control[data-gated="true"].is-focused { box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus-dim); }
+.control[data-fault="true"] .control__note { color: var(--fr-color-text); }
+.control[data-fault="true"] { box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-error); }
+.control[data-fault="true"]:focus, .control[data-fault="true"].is-focused { box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus); }
+
 /* ---------- media: browse ----------
- * Title, then the catalog tabs on the left (so ▾ lands on the first poster), then posters six
- * across with no card chrome. The focused poster takes a charge rule held off its edge like a
- * frame's reveal; the rest of the wall dims slightly while the grid has the cursor. */
+ * Title, then the toolbar and catalog tabs, then posters six across with no card chrome. The
+ * focused poster takes a charge rule held off its edge like a frame's reveal; the rest of the wall
+ * recedes while the grid has the cursor. Board rows use the same poster measure as the grid,
+ * so a poster is one size wherever it hangs. */
 .mast--tight { padding-top: var(--fr-space-4); }
 .screen--media .mast__word, .screen--media-item .mast__word { font-size: var(--fr-font-size-heading); }
 .media-cats { display: inline-block; min-width: 48rem; max-width: 100%; }
 .media-cats .control { grid-template-areas: "track track"; padding-top: var(--fr-space-2); padding-bottom: var(--fr-space-2); }
 .media-cats .control__name { display: none; }
-.media-browse { flex: 1; overflow-y: auto; padding: var(--fr-space-4) var(--fr-gutter) var(--fr-space-8); scrollbar-width: none; }
+.media-browse { --poster-gap: var(--fr-space-5); flex: 1; overflow-y: auto; padding: var(--fr-space-4) var(--fr-gutter) var(--fr-space-8); scrollbar-width: none; }
 .media-browse::-webkit-scrollbar { display: none; }
 .media-status { margin-top: 0; }
-.media-grid { margin-top: var(--fr-space-5); }
-.media-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--fr-space-6) var(--fr-space-5); }
+.media-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--fr-space-6) var(--poster-gap); margin-top: var(--fr-space-5); }
 .media-card {
   display: flex; flex-direction: column; padding: 0; text-align: left; min-width: 0;
   /* no transition: animating opacity on every card made each d-pad step repaint the wall */
 }
 .media-card__poster {
-  width: 100%; padding-top: 150%;            /* 2:3 */
+  position: relative; width: 100%; padding-top: 150%;            /* 2:3 */
   background: var(--fr-color-surface) center / cover no-repeat;
   outline: var(--fr-focus-ring-width) solid transparent; outline-offset: var(--fr-focus-gap);
   transition: outline-color var(--fr-motion);
 }
-.media-card, .media-stream, .media-addon, .control, .media-action, .shelf-btn { scroll-margin-top: var(--fr-space-4); scroll-margin-bottom: var(--fr-space-4); }
-.media-card__title {
-  margin-top: var(--fr-space-3); font-size: var(--fr-font-size-body); line-height: 1.2; color: var(--fr-color-text-muted);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+/* resume point: a hairline along the poster's foot, inside the image (replaces "37% watched" in words) */
+.media-card__progress { position: absolute; left: 0; right: 0; bottom: 0; }
+.media-card, .media-stream, .media-addon, .control, .media-action, .act, .shelf-btn, .ep, .src, .src-more {
+  scroll-margin-top: var(--fr-space-4); scroll-margin-bottom: var(--fr-space-4);
 }
-.media-card__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-faint); }
+/* one line each, by nowrap + ellipsis: -webkit-line-clamp is on the risk list */
+.media-card__title, .media-card__sub { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.media-card__title { margin-top: var(--fr-space-3); font-size: var(--fr-font-size-body); line-height: 1.25; color: var(--fr-color-text-muted); }
+.media-card__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); line-height: 1.25; color: var(--fr-color-text-muted); }
+.media-card:focus .media-card__poster, .media-card.is-focused .media-card__poster { outline-color: var(--fr-color-focus); }
+.media-card:focus .media-card__title, .media-card.is-focused .media-card__title { color: var(--fr-color-text); }
+/* recede: .has-cursor is set by media.js on focusin/focusout of the grid (works everywhere);
+ * :focus-within is kept as its own rule so an engine without it drops only that line. */
+.media-grid.has-cursor .media-card { opacity: var(--fr-recede); }
 .media-grid:focus-within .media-card { opacity: var(--fr-recede); }
 .media-grid .media-card:focus, .media-grid .media-card.is-focused { opacity: 1; }
 
 /* browse toolbar: Search + shelves as one strip of peer buttons above the catalog row */
 .media-shelves { display: flex; flex-wrap: wrap; gap: var(--fr-space-2) var(--fr-space-6); }
-.shelf-btn, .media-more, .media-key {
-  padding: var(--fr-space-2) var(--fr-space-5);
-  font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
-  border-radius: var(--fr-radius);
-  transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
-}
 .shelf-btn[data-selected="true"] { color: var(--fr-color-text); box-shadow: inset 0 -0.3rem 0 0 var(--fr-color-selected); }
-.shelf-btn:focus, .shelf-btn.is-focused,
-.media-more:focus, .media-more.is-focused,
-.media-key:focus, .media-key.is-focused {
-  background: var(--fr-color-surface-raised); color: var(--fr-color-text);
-  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus);
+.shelf-btn[data-selected="true"]:focus, .shelf-btn[data-selected="true"].is-focused {
+  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus), inset 0 -0.3rem 0 0 var(--fr-color-selected);
 }
 .media-more { margin-top: var(--fr-space-6); }
 
@@ -272,9 +398,13 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-display);
   color: var(--fr-color-text);
 }
-.media-row { display: flex; gap: var(--fr-space-5); overflow-x: auto; scrollbar-width: none; padding-bottom: var(--fr-space-2); }
+/* the row pads its own top/left so the held-off focus rule is never clipped by overflow */
+.media-row {
+  display: flex; gap: var(--poster-gap); overflow-x: auto; scrollbar-width: none;
+  padding: calc(var(--fr-focus-gap) + var(--fr-focus-ring-width)); margin: calc((var(--fr-focus-gap) + var(--fr-focus-ring-width)) * -1);
+}
 .media-row::-webkit-scrollbar { display: none; }
-.media-row .media-card { flex: 0 0 27rem; }
+.media-row .media-card { flex: 0 0 calc((100% - var(--poster-gap) * 5) / 6); }
 
 /* Addons shelf rows */
 .media-addon {
@@ -284,7 +414,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
 }
 .media-addon__name { font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
-.media-addon__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-faint); }
+.media-addon__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted); }
 .media-addon:focus, .media-addon.is-focused { background: var(--fr-color-surface-raised); box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus); }
 .media-addon:focus .media-addon__name, .media-addon.is-focused .media-addon__name { color: var(--fr-color-text); }
 
@@ -307,101 +437,274 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
 .media-keys__grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: var(--fr-space-2); }
 .media-key { min-width: 7.2rem; text-align: center; }
 .media-key--wide { grid-column: span 2; }
-.media-card:focus .media-card__poster, .media-card.is-focused .media-card__poster { outline-color: var(--fr-color-focus); }
-.media-card:focus .media-card__title, .media-card.is-focused .media-card__title { color: var(--fr-color-text); }
 
-/* ---------- media: detail ---------- */
+/* ---------- media: detail ----------
+ * Poster left; on the right the title, one filled Play, the viewer's own quiet actions, then
+ * (series) a season row and that season's episodes, with the chosen episode's sources opening
+ * in place beneath it. Movies show the sources straight after the actions. */
 .media-detail {
-  flex: 1; overflow-y: auto; scrollbar-width: none;
+  position: relative; flex: 1; overflow-y: auto; scrollbar-width: none;
   display: flex; gap: var(--fr-space-8); padding: var(--fr-space-8) var(--fr-gutter); align-items: flex-start;
 }
 .media-detail::-webkit-scrollbar { display: none; }
-.media-detail { position: relative; }
 .media-detail__backdrop {
   position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
-  background: center / cover no-repeat; opacity: 0.22;
+  background: center / cover no-repeat; opacity: var(--fr-backdrop-opacity);
 }
-.media-detail__cast { margin-top: var(--fr-space-3); font-size: var(--fr-font-size-body); color: var(--fr-color-text-faint); max-width: 112rem; }
+.media-detail__cast { margin-top: var(--fr-space-3); font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted); max-width: 112rem; }
 .media-detail__poster { position: relative; flex: none; width: 43.2rem; height: 64.8rem; background: var(--fr-color-surface) center / cover no-repeat; }
 .media-detail__info { position: relative; flex: 1; min-width: 0; }
 .media-detail__title {
   margin: 0; font-family: var(--fr-font-display); font-size: var(--fr-font-size-title); font-weight: var(--fr-font-weight-display); line-height: 1.05;
 }
 .media-detail__meta { margin-top: var(--fr-space-3); font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+/* five lines: clamp where the engine has it, and a height cap that crops cleanly where it doesn't */
 .media-detail__desc {
   margin: var(--fr-space-5) 0 0; max-width: 96rem; color: var(--fr-color-text-muted);
+  max-height: calc(var(--fr-font-size-body) * var(--fr-line-height) * 5);
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical;
 }
 .media-detail__streams-head { display: none; }
-.media-actions { display: flex; gap: var(--fr-space-4); margin-top: var(--fr-space-6); }
-.media-action {
-  padding: var(--fr-space-2) var(--fr-space-5);
+.media-actions { display: flex; flex-wrap: wrap; align-items: center; margin-top: var(--fr-space-6); }
+/* two tiers, whatever the label lengths: Play (and, when gated, its reason) alone on the first line;
+ * the viewer's quiet actions on the second. The ::before is the line break. */
+.media-actions { gap: var(--fr-space-4) var(--fr-space-4); }
+.media-actions > .act--fill { order: 0; }
+.media-actions > .act__why { order: 1; margin-left: var(--fr-space-2); }
+.media-actions::before { content: ""; order: 2; flex-basis: 100%; height: 0; }
+.media-actions > .act:not(.act--fill) { order: 3; }
+.media-section-head {
+  margin: var(--fr-space-7) 0 var(--fr-space-3);
+  font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-heading); line-height: 1.15;
+  color: var(--fr-color-text);
+}
+.media-section-head__count { margin-left: var(--fr-space-4); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+
+/* ---------- episodes ----------
+ * Season is a choice control (◂ ▸ changes season, one gesture). Episode rows: number, title, mark
+ * on the right (Up next / Watched / time left), then air date and runtime, then the resume hairline. */
+.media-episodes { max-width: 112rem; }
+.season-pick { margin-bottom: var(--fr-space-3); }
+.ep {
+  position: relative; display: grid; width: 100%; text-align: left;
+  grid-template-columns: 6.4rem 1fr auto; grid-template-areas: "num title mark" "num meta meta" ". prog prog";
+  gap: 0 var(--fr-space-4); padding: var(--fr-space-3) var(--fr-space-5); margin: 0 calc(var(--fr-space-5) * -1);
+  border-radius: var(--fr-radius);
+  transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
+}
+.ep__num {
+  grid-area: num; font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-display);
+  line-height: 1; color: var(--fr-color-text-muted); font-variant-numeric: lining-nums tabular-nums; padding-top: 0.4rem;
+}
+.ep__title { grid-area: title; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ep__meta { grid-area: meta; font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted); }
+.ep__mark { grid-area: mark; align-self: baseline; font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); white-space: nowrap; }
+.ep__progress { grid-area: prog; margin-top: var(--fr-space-2); }
+.ep:focus, .ep.is-focused { background: var(--fr-color-surface-raised); box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus); }
+.ep:focus .ep__title, .ep.is-focused .ep__title, .ep:focus .ep__num, .ep.is-focused .ep__num { color: var(--fr-color-text); }
+/* watched: committed, so the mark carries the seal; the row itself goes quieter */
+.ep[data-watched="true"] .ep__mark { color: var(--fr-color-selected-text); font-style: normal; }
+/* up next: plain ink, no colour (it's a fact, not a cursor and not a commitment) */
+.ep[data-upnext="true"] .ep__mark { color: var(--fr-color-text); }
+/* the open episode: seal bar under its title, its sources hang beneath it */
+.ep[data-open="true"] .ep__title { color: var(--fr-color-text); }
+.ep[data-open="true"] .ep__title span { box-shadow: inset 0 -0.3rem 0 0 var(--fr-color-selected); }
+.ep-sources { margin: var(--fr-space-2) 0 var(--fr-space-5) calc(6.4rem + var(--fr-space-4)); }   /* hangs under the title column: num column + gap */
+/* rows hang their focus ground out into the margin on both sides, so text lines up with the column */
+.ep, .src, .src-more { width: calc(100% + var(--fr-space-5) * 2); }
+
+/* ---------- sources ----------
+ * One row per stream: quality, source name and size; the file line and one plain flag beneath.
+ * Playable first. Rows a TV can't play stay reachable (OK says why) but are struck through and,
+ * while anything playable exists, folded behind one .src-more row so they don't wall off the list. */
+.sources { max-width: 112rem; }
+.media-streams { margin-top: 0; max-width: 112rem; }
+.src {
+  display: grid; width: 100%; text-align: left;
+  grid-template-columns: 12rem 1fr auto; grid-template-areas: "q name size" "q file flag";
+  gap: 0 var(--fr-space-4); padding: var(--fr-space-3) var(--fr-space-5); margin: 0 calc(var(--fr-space-5) * -1);
+  border-radius: var(--fr-radius);
+  transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
+}
+.src__q {
+  grid-area: q; font-family: var(--fr-font-display); font-size: var(--fr-font-size-label); font-weight: var(--fr-font-weight-strong);
+  color: var(--fr-color-text); font-variant-numeric: lining-nums tabular-nums;
+}
+.src__name { grid-area: name; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.src__size { grid-area: size; font-family: var(--fr-font-display); font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); font-variant-numeric: lining-nums tabular-nums; text-align: right; }
+.src__file { grid-area: file; font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+.src__flag { grid-area: flag; font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted); text-align: right; white-space: nowrap; }
+.src[data-ready="true"] .src__flag { color: var(--fr-color-text); }
+.src:focus, .src.is-focused { background: var(--fr-color-surface-raised); box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus); }
+.src:focus .src__name, .src.is-focused .src__name { color: var(--fr-color-text); }
+/* can't play here: struck, disabled ink, cursor drawn dimmer. The reason (.src__flag) stays readable. */
+.src[data-playable="false"] .src__q,
+.src[data-playable="false"] .src__name,
+.src[data-playable="false"] .src__size,
+.src[data-playable="false"] .src__file,
+.src[data-playable="false"]:focus .src__name, .src[data-playable="false"].is-focused .src__name { color: var(--fr-color-disabled); }
+.src[data-playable="false"] .src__name, .src[data-playable="false"] .src__q { text-decoration: line-through; }
+.src[data-playable="false"] .src__flag { color: var(--fr-color-text-muted); }
+.src[data-playable="false"]:focus, .src[data-playable="false"].is-focused { box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus-dim); }
+/* the fold */
+.src-more {
+  display: flex; align-items: baseline; gap: var(--fr-space-4); width: 100%; text-align: left;
+  padding: var(--fr-space-3) var(--fr-space-5); margin: var(--fr-space-2) calc(var(--fr-space-5) * -1) 0;
   font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
-  border-radius: var(--fr-radius);
+  border-top: var(--fr-border-width) solid var(--fr-color-border);
   transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
 }
-.media-action:focus, .media-action.is-focused {
-  background: var(--fr-color-surface-raised); color: var(--fr-color-text);
-  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus);
-}
-.media-episodes { margin-top: var(--fr-space-6); max-width: 112rem; }
-.media-episodes__head {
-  margin-bottom: var(--fr-space-3);
-  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
-}
-.media-stream--selected .media-stream__name { color: var(--fr-color-text); box-shadow: inset 0 -0.3rem 0 0 var(--fr-color-selected); }
-.media-streams { margin-top: var(--fr-space-6); max-width: 112rem; }
-.media-stream {
-  display: flex; flex-direction: column; gap: var(--fr-space-1); width: 100%; text-align: left;
-  padding: var(--fr-space-3) var(--fr-space-5); margin: 0 calc(var(--fr-space-5) * -1);
-  border-radius: var(--fr-radius);
-  transition: background-color var(--fr-motion), box-shadow var(--fr-motion);
-}
-.media-stream__name { font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
-.media-stream__sub { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-faint); }
-.media-stream:focus, .media-stream.is-focused { background: var(--fr-color-surface-raised); box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus); }
-.media-stream:focus .media-stream__name, .media-stream.is-focused .media-stream__name { color: var(--fr-color-text); }
-/* not playable: struck through, still reachable (OK gives the refusal), cursor drawn dimmer */
-.media-stream--dead .media-stream__name,
-.media-stream--dead:focus .media-stream__name, .media-stream--dead.is-focused .media-stream__name {
-  color: var(--fr-color-disabled); text-decoration: line-through;
-}
-.media-stream--dead .media-stream__sub { color: var(--fr-color-disabled); }
-.media-stream--dead:focus, .media-stream--dead.is-focused { box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus-dim); }
+.src-more__why { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); }
+.src-more__sign { margin-left: auto; font-family: var(--fr-font-display); }
+.src-more:focus, .src-more.is-focused { background: var(--fr-color-surface-raised); color: var(--fr-color-text); box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-focus); }
+.src-dead { margin-top: var(--fr-space-2); }
 
 /* ---------- media: playback ----------
- * Nothing over the picture. The surface is the only focusable, so its cursor is a charge rule
- * along the bottom edge that shows on arrival and then gets out of the way. */
-.media-player { position: relative; flex: 1; background: var(--fr-color-surface-sunken); }
-.media-player__video { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; background: var(--fr-color-surface-sunken); }
-.media-player::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--fr-focus-bar);
-  background: var(--fr-color-focus); opacity: 0; pointer-events: none;
+ * One root carries the whole machine as attributes. CSS draws each state; js/screens/media-play.js
+ * only flips them (component sheet: COMPONENT-SHEETS.md §1).
+ *   data-state   starting | playing | paused | buffering | ended | refused
+ *   data-chrome  shown | hidden     the band + top line. Always shown unless playing.
+ *   data-scrub   idle | active     ◂ ▸ are previewing a position; nothing has been sought yet
+ *   data-slow    true             starting/buffering has run past --fr-slow-start
+ *   data-panel   open | closed     the Options drawer
+ *   data-upnext  none | offered | counting | missing
+ * Chrome hides by opacity, never display: the cursor stays on the timeline so the first key after
+ * a quiet spell lands somewhere real. */
+.player { position: relative; flex: 1; overflow: hidden; background: var(--fr-color-veil); }
+.player__video { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; background: var(--fr-color-veil); }
+.player__video::cue {
+  font-family: var(--fr-cue-font); font-size: var(--cue-size, 100%);
+  color: var(--fr-cue-ink); background: var(--fr-cue-ground);
 }
-.media-player:focus::after, .media-player.is-focused::after { -webkit-animation: fr-arrive 3s ease-out both; animation: fr-arrive 3s ease-out both; }
-@-webkit-keyframes fr-arrive { 0% { opacity: 0; } 4% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes fr-arrive { 0% { opacity: 0; } 4% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
-.media-player__status {
-  position: absolute; left: 50%; bottom: var(--fr-space-9); transform: translateX(-50%);
-  padding: var(--fr-space-3) var(--fr-space-5);
-  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label);
-  color: var(--fr-color-text); background: var(--fr-color-surface-raised);
-  box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-info);
-  border-radius: var(--fr-radius);
+.player__dim {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
+  background: var(--fr-color-veil); opacity: 0; transition: opacity var(--fr-motion-reveal);
 }
-.media-player__status:empty { display: none; }
-.media-player__video::cue { font-size: var(--cue-size, 100%); }
+.player[data-state="paused"] .player__dim { opacity: var(--fr-pause-dim); }
 
-/* next-episode popup + playback panel (speed / subtitles / audio) */
-.media-next { position: absolute; right: var(--fr-space-7); bottom: var(--fr-space-9); }
-.media-next .media-action { background: var(--fr-color-surface-raised); }
-.media-panel {
-  position: absolute; top: 0; right: 0; bottom: 0; width: var(--fr-panel-width);
-  padding: var(--fr-space-7); overflow-y: auto; scrollbar-width: none;
-  background: var(--fr-color-bg);
+/* chrome: top line + bottom band */
+.player__top, .player__band { position: absolute; left: 0; right: 0; z-index: 2; background: var(--fr-color-scrim); transition: opacity var(--fr-motion-reveal); }
+.player[data-chrome="hidden"] .player__top, .player[data-chrome="hidden"] .player__band { opacity: 0; pointer-events: none; transition: opacity var(--fr-motion); }  /* exits are faster */
+.player__top {
+  top: 0; display: flex; align-items: baseline; justify-content: space-between; gap: var(--fr-space-6);
+  padding: var(--fr-space-5) var(--fr-player-gutter) var(--fr-space-4);
 }
-.media-panel::-webkit-scrollbar { display: none; }
-.media-panel__title {
-  margin-bottom: var(--fr-space-4);
+.player__title {
+  font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-heading); line-height: 1.1;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0;
+}
+.player__ep { margin-left: var(--fr-space-4); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+.player__clock { flex: none; font-family: var(--fr-font-display); font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); font-variant-numeric: lining-nums tabular-nums; }
+.player__clock b { font-weight: var(--fr-font-weight-label); color: var(--fr-color-text); }
+
+.player__band { bottom: 0; padding: var(--fr-space-4) var(--fr-player-gutter) var(--fr-space-5); }
+.player__line { display: flex; align-items: baseline; gap: var(--fr-space-4); min-height: 6.4rem; }
+/* the state word: only for states that differ from "it's playing" */
+.player__state {
+  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-heading);
+  line-height: 1.1; color: var(--fr-color-text);
+}
+.player__state .wait { margin-left: var(--fr-space-3); }
+.player__times { margin-left: auto; font-family: var(--fr-font-display); font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); font-variant-numeric: lining-nums tabular-nums; }
+.player__now { color: var(--fr-color-text); }
+
+/* timeline: the focusable is the tall padded box; the track is the hairline inside it */
+.timeline { position: relative; display: block; width: 100%; padding: var(--fr-space-4) 0; }
+.timeline__track { position: relative; height: var(--fr-timeline-h); background: var(--fr-color-track); transition: height var(--fr-motion); }
+.timeline__buffered, .timeline__played, .timeline__span { position: absolute; top: 0; bottom: 0; left: 0; }
+.timeline__buffered { background: var(--fr-color-buffered); }
+.timeline__played { background: var(--fr-color-played); }
+.timeline__head, .timeline__preview {
+  position: absolute; top: 50%; width: var(--fr-thumb-w); height: var(--fr-thumb-h);
+  margin-left: calc(var(--fr-thumb-w) / -2); -webkit-transform: translateY(-50%); transform: translateY(-50%);
+  background: var(--fr-color-played);
+}
+.timeline:focus .timeline__track, .timeline.is-focused .timeline__track { height: var(--fr-timeline-h-focus); }
+.timeline:focus .timeline__head, .timeline.is-focused .timeline__head { background: var(--fr-color-focus); }
+/* scrubbing: the real head goes back to bone; the preview head is the cursor, the span shows the jump */
+.timeline__span, .timeline__preview, .timeline__tip { display: none; }
+.player[data-scrub="active"] .timeline__span { display: block; background: var(--fr-color-focus-dim); }
+.player[data-scrub="active"] .timeline__preview { display: block; background: var(--fr-color-focus); }
+.player[data-scrub="active"] .timeline .timeline__head { background: var(--fr-color-played); }
+.timeline__tip {
+  position: absolute; bottom: calc(var(--fr-thumb-h) / 2 + var(--fr-space-3)); left: 0;
+  -webkit-transform: translateX(-50%); transform: translateX(-50%);
+  padding: var(--fr-space-1) var(--fr-space-3); white-space: nowrap;
+  background: var(--fr-color-surface-raised); color: var(--fr-color-focus-text);
+  font-family: var(--fr-font-display); font-size: var(--fr-font-size-label); font-weight: var(--fr-font-weight-strong);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.timeline__tip[data-edge="start"] { -webkit-transform: none; transform: none; }
+.timeline__tip[data-edge="end"] { -webkit-transform: translateX(-100%); transform: translateX(-100%); }
+.timeline__delta { margin-left: var(--fr-space-2); font-weight: var(--fr-font-weight-label); color: var(--fr-color-text-muted); }
+.player[data-scrub="active"] .timeline__tip { display: block; }
+
+/* strip: play/pause, then the options as name + current value, then the legend */
+.player__strip { display: flex; align-items: center; gap: var(--fr-space-3); margin: var(--fr-space-2) 0 0 calc(var(--fr-space-5) * -1); }
+.player__strip .legend { margin-left: auto; }
+.player__toggle { min-width: 16rem; text-align: left; }
+
+/* buffering while the chrome is away: one quiet corner, not the whole band */
+.player__badge {
+  position: absolute; left: var(--fr-player-gutter); bottom: var(--fr-space-7); z-index: 2; display: none;
+  padding: var(--fr-space-2) var(--fr-space-4); background: var(--fr-color-scrim);
+  font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text);
+}
+.player[data-state="buffering"][data-chrome="hidden"] .player__badge { display: block; }
+
+/* veil: starting / refused / ended. Black, one message, one way on. */
+.player__veil {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 3; display: none;
+  align-items: center; padding: 0 var(--fr-gutter); background: var(--fr-color-veil);
+}
+.player[data-state="starting"] .player__veil, .player[data-state="refused"] .player__veil, .player[data-state="ended"] .player__veil { display: flex; }
+.player[data-state="ended"] .player__veil { background: var(--fr-color-scrim); }  /* the last frame stays, stepped back */
+.veil { max-width: 128rem; }
+.veil__kicker { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+.veil__title {
+  margin-top: var(--fr-space-2);
+  font-family: var(--fr-font-display); font-size: var(--fr-font-size-title); font-weight: var(--fr-font-weight-display); line-height: 1.05;
+}
+.veil__sub { margin-top: var(--fr-space-2); font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+.veil .wait { margin-top: var(--fr-space-6); }
+.veil__msg { margin: var(--fr-space-5) 0 0; font-size: var(--fr-font-size-label); color: var(--fr-color-text); }
+.veil__cause { margin: var(--fr-space-2) 0 0; max-width: 104rem; color: var(--fr-color-text-muted); }
+.veil__slow { display: none; }
+.player[data-slow="true"] .veil__slow { display: block; }
+.veil .acts { margin-top: var(--fr-space-6); }
+.veil .legend { display: block; margin-top: var(--fr-space-5); }
+/* a refusal is the one place breach appears in the player: a bar down the message's edge */
+.player[data-state="refused"] .veil { padding-left: var(--fr-space-6); box-shadow: inset var(--fr-focus-bar) 0 0 0 var(--fr-color-error); }
+
+/* up next: sits on top of the band (chrome is pinned while it is offered) */
+.upnext {
+  position: absolute; right: var(--fr-player-gutter); bottom: 100%; width: 80rem; display: none;
+  padding: var(--fr-space-5) var(--fr-space-6); margin-bottom: var(--fr-space-4);
+  background: var(--fr-color-surface); border-top: 0.2rem solid var(--fr-color-border-strong);
+}
+.player[data-upnext="offered"] .upnext, .player[data-upnext="counting"] .upnext, .player[data-upnext="missing"] .upnext { display: block; }
+.upnext__kicker { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted); }
+.upnext__title { margin-top: var(--fr-space-1); font-size: var(--fr-font-size-label); color: var(--fr-color-text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.upnext__count { display: none; margin-top: var(--fr-space-4); }
+.player[data-upnext="counting"] .upnext__count { display: block; }
+.upnext__count .progress { margin-bottom: var(--fr-space-2); }
+.upnext__count .progress__fill { background: var(--fr-color-working); transition: width 1s linear; }
+.upnext__words { font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-body); color: var(--fr-color-text-muted); }
+.upnext__missing { display: none; margin: var(--fr-space-3) 0 0; color: var(--fr-color-text-muted); }
+.player[data-upnext="missing"] .upnext__missing { display: block; }
+.upnext .acts { margin-top: var(--fr-space-4); }
+
+/* options drawer: the Art panel's drawer and controls, laid over the right of the picture */
+.player .panel { z-index: 4; width: var(--fr-panel-width-player); }
+.player .panel .choice { gap: var(--fr-space-2) var(--fr-space-5); }
+.panel__title {
+  margin-bottom: var(--fr-space-5);
+  font-family: var(--fr-font-display); font-size: var(--fr-font-size-heading); font-weight: var(--fr-font-weight-heading); line-height: 1.1;
+}
+.panel__group {
+  margin: var(--fr-space-6) 0 var(--fr-space-2);
   font-family: var(--fr-font-display); font-style: italic; font-size: var(--fr-font-size-label); color: var(--fr-color-text-muted);
 }
+.panel__group:first-of-type { margin-top: 0; }
+.panel__body .control { margin-bottom: var(--fr-space-2); }
+.panel__foot { padding: var(--fr-space-4) var(--fr-space-7) var(--fr-space-6); border-top: var(--fr-border-width) solid var(--fr-color-border); }

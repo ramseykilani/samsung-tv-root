@@ -30,7 +30,7 @@ html[data-theme="mhach"] {
   /* ---- lines ---- */
   --fr-color-border: #344246;
   --fr-color-border-strong: #4A5D64;
-  --fr-border-width: 1px;
+  --fr-border-width: 0.1rem;           /* pass 2: was 1px. In rem it stays one canvas pixel whether the engine lays out at 1080 or 2160 (4K panel) */
 
   /* ---- states ----
    * focus = charge (presence: where the cursor is). selected = seal (what is committed).
@@ -100,4 +100,49 @@ html[data-theme="mhach"] {
   --fr-motion-art: 900ms ease-in-out;  /* slideshow dissolve: the one slow thing, because it is the art */
   --fr-shadow-panel: none;             /* canon §2.5: no drop shadows */
   --fr-shadow-toast: none;
+
+  /* =================================================================================
+   * PASS 2 — playback and media surfaces. Every role below is new; nothing above changed.
+   * ================================================================================= */
+
+  /* ---- over the picture: a flat band of standing water. Never a gradient, never a blur. ---- */
+  --fr-color-scrim: rgba(18, 25, 28, 0.88);  /* surface-sunken held over video */
+  --fr-pause-dim: 0.45;                      /* how far the picture steps back while paused */
+  --fr-color-veil: #000;                     /* behind starting / refusals / the end: the screen is "off" */
+  --fr-backdrop-opacity: 0.12;               /* detail backdrop (was 0.22 inline): a bright still must not lift muted ink below AA */
+  --fr-player-gutter: 9.6rem;                /* band side margin: wider than the picture's own safe area */
+  --fr-panel-width-player: 88rem;            /* Options drawer: a subtitle language row fits five names on one line */
+
+  /* ---- the one filled action on a surface: bone ground, stone ink ---- */
+  --fr-color-act: #E0DFD7;
+  --fr-color-on-act: #1B2427;
+  --fr-color-act-gated: #344246;             /* a filled action that can't be used yet; its reason sits beside it */
+  --fr-color-on-act-gated: #ABA99C;
+
+  /* ---- timeline, progress hairlines ---- */
+  --fr-color-track: #4A5D64;                 /* the whole length */
+  --fr-color-buffered: #777669;              /* what has arrived */
+  --fr-color-played: #E0DFD7;                /* what has been seen */
+  --fr-timeline-h: 0.6rem;
+  --fr-timeline-h-focus: 1.2rem;             /* the track thickens under the cursor instead of changing colour */
+  --fr-thumb-w: 0.6rem;                      /* the upright head, same blade as .range__thumb */
+  --fr-thumb-h: 4.8rem;
+  --fr-progress-h: 0.6rem;                   /* resume hairline on posters and episode rows */
+
+  /* ---- waits: a stepped tick along a hairline (8 cuts per cycle). It cuts, it does not glide.
+   * Work in progress is bone, not charge: charge means "the cursor is here", and a wait is not a cursor. ---- */
+  --fr-color-working: #ABA99C;
+  --fr-wait-cycle: 1.6s;
+
+  /* ---- subtitles (::cue): the body serif on a stone ground ---- */
+  --fr-cue-font: "EB Garamond", Georgia, serif;
+  --fr-cue-ink: #E0DFD7;
+  --fr-cue-ground: rgba(18, 25, 28, 0.72);
+
+  /* ---- player timing, read by js/screens/media-play.js via getComputedStyle (unitless ms) ---- */
+  --fr-chrome-linger: 5000;                  /* overlay hides this long after the last key, while playing */
+  --fr-scrub-settle: 800;                    /* a scrub commits this long after the last ◂ ▸ */
+  --fr-slow-start: 8000;                     /* starting longer than this earns the second line + another-source action */
+  --fr-stall: 20000;                         /* buffering longer than this becomes a refusal with Retry */
+  --fr-upnext-count: 10;                     /* seconds the next-episode countdown runs (autoplay on) */
 }

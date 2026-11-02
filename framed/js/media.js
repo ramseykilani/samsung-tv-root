@@ -252,19 +252,53 @@ window.framed = window.framed || {};
     });
   }
 
+  // Row contract (design/pass-2 markup §3): { q, name, size, file, flag, playable, ready,
+  // kind, reason } — plus url/addon/binge/raw. Debrid tags ([TB+], "TorBox" …) rename the
+  // source to "<addon> via TorBox" and decide Ready vs "TorBox fetches it first"; the tag
+  // itself is never printed. DTS/DTS-HD/TrueHD is the real silent-audio offender on
+  // Samsung panels (Dolby decodes fine): flagged on the row and named in refusals.
+  var DEBRID_RE = /\b(torbox|real-?debrid|alldebrid|premiumize|easydebrid|debrid-?link|offcloud)\b|\[(tb|rd|ad|pm|ed|dl|oc)\+?\]/i;
+  var READY_RE = /\[(tb|rd|ad|pm|ed|dl|oc)\+\]|\bcached\b|\binstant\b/i;
+  var DTS_RE = /\b(dts(-?hd|-?x|-?es)?|truehd|atmos)\b/i;
   function normalizeStream(addon, s) {
     if (!s) return null;
     // direct URLs only — http(s) absolute or app/LAN-relative; reject magnet/torrent indirection
     var url = (typeof s.url === 'string' && s.url && !/^(magnet|stremio|intent):/i.test(s.url)) ? s.url : null;
-    var name = s.name || addon.name;
     var title = s.title || s.description || '';
     var hint = s.behaviorHints || {};
-    var sub = title || (url ? url.replace(/^https?:\/\//, '').split('/')[0] : '');
     var playable = !!url && !hint.notWebReady;
-    var kind = url ? 'http' : (s.infoHash ? 'torrent' : (s.externalUrl || s.ytId ? 'external' : 'unknown'));
+    var kind = url ? 'http' : (s.infoHash ? 'torrent' : (s.externalUrl ? 'external' : (s.ytId ? 'ytId' : (hint.notWebReady ? 'notWebReady' : 'unknown'))));
+    var hay = (s.name || '') + ' ' + title;
+    var debrid = DEBRID_RE.test(hay);
+    var ready = playable && debrid && READY_RE.test(hay);
+    var name = (debrid && !/torbox|debrid/i.test(addon.name)) ? addon.name + ' via TorBox' : addon.name;
     var qm = /(\d{3,4}p|4k|2160|1080|720|480)/i.exec(title || '');
-    return { addon: addon.name, name: name, label: name, sub: sub, url: url, playable: playable, kind: kind,
-      quality: qm ? qm[1].toUpperCase() : '', binge: hint.bingeGroup || null, raw: s };
+    var q = qm ? (/2160|4k/i.test(qm[1]) ? '4K' : qm[1].toLowerCase()) : '—';
+    var sm = /💾\s*([0-9.]+\s*(?:GB|MB|TB|GiB|MiB|TiB))/i.exec(title);
+    var size = sm ? sm[1] : '';
+    var file = String(title).split('\n')[0];
+    var flags = [];
+    if (playable) {
+      if (debrid) flags.push(ready ? 'Ready' : 'TorBox fetches it first');
+      if (/\b(hdr|hdr10|dolby[ -]?vision|\bdv\b)/i.test(hay)) flags.push('HDR');
+      var dm = DTS_RE.exec(hay);
+      if (dm) flags.push('sound may not play (' + (/truehd|atmos/i.test(dm[1]) ? 'TrueHD' : 'DTS') + ')');
+    }
+    var flag = flags.join(' · ');
+    var reason = playable ? '' :
+      kind === 'torrent' ? 'Torrent · needs a debrid service' :
+      kind === 'external' ? 'Plays outside framed only' :
+      kind === 'ytId' ? 'YouTube link · open in YouTube' :
+      kind === 'notWebReady' ? 'The TV’s player can’t open this link' : 'No direct file link';
+    var reasonSentence = playable ? '' :
+      kind === 'torrent' ? 'This is a torrent. A debrid service such as TorBox makes torrents playable.' :
+      kind === 'external' ? 'This source opens in another app, not in framed.' :
+      kind === 'ytId' ? 'This is a YouTube link. Open it in the YouTube app.' :
+      'The TV’s player can’t open this source’s link.';
+    var dts = playable && DTS_RE.test(hay);
+    return { addon: addon.name, name: name, q: q, size: size, file: file, flag: flag, reason: reason,
+      reasonSentence: reasonSentence, playable: playable, ready: ready, debrid: debrid, dts: dts,
+      kind: kind, url: url, binge: hint.bingeGroup || null, raw: s };
   }
 
   // Streams for an item, from every addon that declares the 'stream' resource.
@@ -593,6 +627,12 @@ window.framed = window.framed || {};
     streams: streams,
     search: search,
     addonCount: function () { return MEDIA_ADDONS.length; },
+    // a debrid addon (TorBox etc.) is installed: torrents can actually play
+    debridConfigured: function () {
+      return MEDIA_ADDONS.some(function (a) {
+        return DEBRID_RE.test(String(a.name || '') + ' ' + String(a.base || ''));
+      });
+    },
     // hand a live (cat,item) or a persisted snapshot to the detail screen
     open: function (cat, item) {
       if (!cat && item && item.cat) { cat = reviveCat(item.cat); item = snapshotItem(null, item); }

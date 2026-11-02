@@ -89,6 +89,18 @@
 }
 .mount { --o-t: var(--mw); --o-r: var(--mw); --o-b: var(--mw); --o-l: var(--mw); --w: var(--mw); z-index: 1; }
 .mould { --o-t: var(--ft); --o-r: var(--fr); --o-b: var(--fb); --o-l: var(--fl); --w: var(--fw); z-index: 3; }
+
+/* Tizen fallback: without clip-path the four sides can't mitre — give them butt joints
+ * instead (left/right stop where top/bottom end) so corners don't double-draw. */
+@supports not (clip-path: polygon(0 0, 100% 0, 0 100%)) {
+  .side--l, .side--r { top: calc(var(--w) - var(--o-t)); bottom: calc(var(--w) - var(--o-b)); }
+}
+
+/* Tizen fallback: without blend modes the paper tooth renders at full strength —
+ * halve it rather than let the texture shout over the matte. */
+@supports not (mix-blend-mode: soft-light) {
+  .art-stage::before { opacity: calc(var(--mat-grain, 0.5) * 0.4); }
+}
 .art-image { z-index: 0; }
 .art-image::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
 

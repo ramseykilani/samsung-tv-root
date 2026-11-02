@@ -1,0 +1,133 @@
+<!-- ============ MEDIA: DETAIL — pass 2 ============
+  Changes to the #screen-media-item section in index.html, and the row markup media-item.js builds.
+  Everything here composes pass-2 parts (.act, .wait, .progress, .note, .empty, .control) — no new parts.
+-->
+
+<!-- 1. ACTIONS. One fill: Play/Resume. Quiet actions follow on their own line (CSS breaks the row).
+     Order in the DOM = d-pad order: Play first, so ▴ from the list returns to it. -->
+<div class="media-actions">
+  <!-- movie, no progress:        name "Play"
+       movie, progress:           name "Resume"  value "from 1:02:13"
+       series:                    name "Play" | "Resume"  value "S2 · E5" | "S2 · E5 · from 31:04"
+       OK plays firstPlayable (Ready sources first, then quality, then same binge group as last time).
+       Gated (data-gated="true") while sources load or when none play; the reason follows in .act__why. -->
+  <button class="act act--fill" id="md-play" data-focusable tabindex="-1">
+    <span class="act__name">Resume</span><span class="act__value">S2 · E5 · from 31:04</span>
+  </button>
+  <!-- only when gated: "Finding sources…" | "Nothing here plays on this TV yet" | "No sources yet" -->
+  <span class="act__why" id="md-play-why" hidden></span>
+
+  <!-- label says the act: "Save to My List" | "Remove from My List" -->
+  <button class="act" id="md-save" data-focusable tabindex="-1"><span class="act__name">Save to My List</span></button>
+  <!-- movie: "Mark watched" | "Mark unwatched". series: scoped to the open episode, "Mark S2 · E5 watched" -->
+  <button class="act" id="md-watched" data-focusable tabindex="-1"><span class="act__name">Mark watched</span></button>
+  <!-- only with a resume point. Was "Remove from Continue Watching": says what is lost. Toast after: "Forgot your place in Lantern Coast". -->
+  <button class="act" id="md-dismiss" data-focusable tabindex="-1" hidden><span class="act__name">Forget my place</span></button>
+</div>
+<!-- md-resume is retired: md-play is Resume when there is a resume point. -->
+
+
+<!-- 2. EPISODES (series). A season choice row, then that season's episodes only. -->
+<div class="media-section-head">Episodes</div>
+<div class="media-episodes" id="md-episodes">
+  <!-- F.controls.render(seasonEl, [{ id:'season', name:'Season', type:'choice', value:2,
+         options:[{value:1,label:'1'},…,{value:0,label:'Specials'}] }]). Specials last. ◂ ▸ swaps the list below. -->
+  <div class="season-pick" id="md-season"></div>
+
+  <!-- one row per episode. Attributes, not classes, so state is legible:
+         data-watched="true"   mark "✓ Watched" (seal ink)
+         data-upnext="true"    the episode Play/Resume will play; mark "Up next" (+ " · 21 min left" when in progress)
+         data-open="true"      its sources hang beneath it; title gets the seal bar
+       Mark otherwise: "37 min left" when in progress, else empty. Meta: runtime · air date. Unaired: meta "Airs 6 Nov".
+       OK on a row: open it (close the previously open one) and move the cursor to its first playable source. -->
+  <button class="ep" data-focusable tabindex="-1" data-upnext="true" data-open="true">
+    <span class="ep__num">5</span>
+    <span class="ep__title"><span>The Long Night</span></span>
+    <span class="ep__mark">Up next · 21 min left</span>
+    <span class="ep__meta">53 min · 30 Oct 2024</span>
+    <!-- only when in progress; JS: value width % -->
+    <div class="progress ep__progress"><div class="progress__fill" style="width:59%"></div></div>
+  </button>
+  <div class="ep-sources sources">
+    <!-- the source list (3) goes here for the open episode -->
+  </div>
+</div>
+
+
+<!-- 3. SOURCES. Movies: after a .media-section-head "Sources" (count beside it). Series: inside .ep-sources. -->
+
+<!-- 3a. loading (await) -->
+<div class="sources">
+  <div class="wait"><span class="wait__tick"></span></div>
+  <div class="note">Asking your 3 addons</div>
+</div>
+
+<!-- 3b. some play (the usual TorBox world) -->
+<div class="sources">
+  <!-- note: "{n} play on this TV. Ready ones start at once." Omit the second sentence when no row is Ready. -->
+  <div class="note">Sources for this episode · 4 play on this TV. Ready ones start at once.</div>
+
+  <!-- playable row. data-ready="true" when cached at the debrid ([TB+], [RD+] … in stream.name).
+       q:    "4K" | "1080p" | "720p" | "480p" | "—"      (from title/name; 2160 → 4K)
+       name: addon name + " via TorBox" when the debrid tag is present (never print "[TB+]")
+       size: from "💾 1.4 GB" in the title, else empty
+       file: first line of stream.title (the release name)
+       flag: "Ready" | "TorBox fetches it first" | + " · HDR" | + " · sound may not play (DTS)" when DTS/TrueHD in the file name -->
+  <button class="src" data-focusable tabindex="-1" data-playable="true" data-ready="true">
+    <span class="src__q">1080p</span><span class="src__name">Torrentio via TorBox</span><span class="src__size">3.1 GB</span>
+    <span class="src__file">Lantern.Coast.S02E05.1080p.WEB-DL.DDP5.1.H264</span><span class="src__flag">Ready</span>
+  </button>
+
+  <!-- the fold: only when ≥1 playable AND ≥1 unplayable. OK toggles aria-expanded + .src-dead hidden; sign "Show" | "Hide". -->
+  <button class="src-more" data-focusable tabindex="-1" aria-expanded="false">
+    <span>6 more can’t play on this TV</span><span class="src-more__why">plain torrents, from addons without TorBox</span><span class="src-more__sign">Show</span>
+  </button>
+  <div class="src-dead" hidden>
+    <!-- unplayable row: struck, still focusable. OK → toast (info tone, not error): the flag's reason as a sentence,
+         e.g. "This is a torrent. A debrid service such as TorBox makes torrents playable." -->
+    <button class="src" data-focusable tabindex="-1" data-playable="false">
+      <span class="src__q">1080p</span><span class="src__name">Torrentio</span><span class="src__size">2.2 GB</span>
+      <span class="src__file">The.Glass.Orchard.2023.1080p.WEB-DL.DDP5.1.H264</span><span class="src__flag">Torrent · needs a debrid service</span>
+    </button>
+    <!-- other kinds' flags: external → "Plays outside framed only"; ytId → "YouTube link · open in YouTube"; notWebReady → "The TV’s player can’t open this link" -->
+  </div>
+</div>
+
+<!-- 3c. none play (no debrid). The failure takes the space; the struck rows follow, unfolded. -->
+<div class="sources">
+  <div class="empty">
+    <div class="empty__head">Nothing here plays on this TV yet</div>
+    <p class="empty__cause">All 14 sources are torrents. A TV can only play a torrent through a debrid service such as TorBox: it fetches the torrent and hands the TV an ordinary video link.</p>
+    <!-- quiet: the screen's one fill is Play (gated) -->
+    <div class="acts"><button class="act" data-focusable tabindex="-1"><span class="act__name">Set one up in Addons</span></button></div>
+  </div>
+  <div class="note">What the addons found</div>
+  <div class="src-dead"><!-- unplayable rows --></div>
+</div>
+
+<!-- 3d. no sources at all -->
+<div class="empty">
+  <div class="empty__head">No sources for this episode</div>
+  <p class="empty__cause">None of your addons listed one. A new episode can take a day to appear.</p>
+  <div class="acts"><button class="act" data-focusable tabindex="-1"><span class="act__name">Ask again</span></button></div>
+</div>
+
+<!-- 3e. addons unreachable (fault). Ask again re-runs the same request; data-busy while running, repeat OK ignored. -->
+<div class="empty empty--fault">
+  <div class="empty__head">Couldn’t reach your addons</div>
+  <p class="empty__cause">None of them answered within 6 seconds. The TV may be offline, or the addons are down.</p>
+  <div class="acts"><button class="act" data-focusable tabindex="-1"><span class="act__name">Ask again</span></button></div>
+</div>
+
+
+<!-- 4. BROWSE CARD (media.js paintCard). Progress moves from words into a hairline on the poster's foot. -->
+<button class="media-card" data-focusable tabindex="-1">
+  <div class="media-card__poster" style="background-image:url(…)">
+    <!-- only with a resume point; JS: value width % -->
+    <div class="media-card__progress"><div class="progress"><div class="progress__fill" style="width:59%"></div></div></div>
+  </div>
+  <span class="media-card__title">Lantern Coast</span>
+  <!-- sub: Continue row → "S2 · E5 · 21 min left" | "1 h 32 min left"; elsewhere year, then "In My List" / "Watched" (no "%"). -->
+  <span class="media-card__sub">S2 · E5 · 21 min left</span>
+</button>
+<!-- grid recede: media.js toggles .has-cursor on #media-grid in focusin/focusout (the :focus-within rule stays as a bonus). -->

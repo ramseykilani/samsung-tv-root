@@ -1,128 +1,387 @@
 /*
- * framed — Media playback screen: the TV's native HTML5 <video>, Stremio-style.
- *   OK / MediaPlayPause   play · pause (status shows position / duration)
- *   ◂ ▸                   seek −10 s / +30 s      ▴ ▾  ∓60 s
- *   Green / C             playback panel: speed, subtitles (embedded + addon
- *                         tracks, SRT converted to VTT), audio tracks, autoplay
- *   Back                  close panel first; else stop, keep the resume point
- * Position is written to "framed.watch" (throttled) and restored on entry.
- * Playing a title adds it to My List automatically, as Stremio's library does.
- * For series, the next episode is offered in the final minute and autoplays at
- * the end when enabled, preferring a stream from the same binge group.
+ * framed — Playback screen, design pass-2 contract.
+ * The .player root carries the machine as data-* attributes:
+ *   data-state  starting | playing | paused | buffering | ended | refused
+ *   data-chrome shown | hidden          (the band; opacity only, focus survives)
+ *   data-scrub  idle | active           (timeline preview vs committed position)
+ *   data-slow   false | true            (start took > --fr-slow-start)
+ *   data-panel  open | closed           (options drawer)
+ *   data-upnext none | offered | counting | missing
+ * This file owns the machine and every timer; lengths come from theme.css vars.
+ * Focus order: timeline (cursor home) -> strip acts -> upnext acts -> veil acts
+ * -> drawer rows. The surface itself is never focusable.
  */
 window.framed = window.framed || {};
 (function (F) {
-  var el = document.getElementById('screen-media-play');
-  var surface = document.getElementById('mp-surface');
+  var root = document.getElementById('mp');
   var video = document.getElementById('mp-video');
-  var statusEl = document.getElementById('mp-status');
-  var nextWrap = document.getElementById('mp-next');
-  var nextBtn = document.getElementById('mp-next-btn');
+  var titleEl = document.getElementById('mp-title');
+  var epEl = document.getElementById('mp-ep');
+  var clockEl = document.getElementById('mp-clock');
+  var stateEl = document.getElementById('mp-state');
+  var nowEl = document.getElementById('mp-now');
+  var durEl = document.getElementById('mp-dur');
+  var timeline = document.getElementById('mp-timeline');
+  var bufferedEl = document.getElementById('mp-buffered');
+  var playedEl = document.getElementById('mp-played');
+  var spanEl = document.getElementById('mp-span');
+  var previewEl = document.getElementById('mp-preview');
+  var tipEl = document.getElementById('mp-tip');
+  var tipDeltaEl = document.getElementById('mp-tip-delta');
+  var headEl = document.getElementById('mp-head');
+  var toggleBtn = document.getElementById('mp-toggle');
+  var subsBtn = document.getElementById('mp-subs');
+  var speedBtn = document.getElementById('mp-speed');
+  var soundBtn = document.getElementById('mp-sound');
+  var nextBtn = document.getElementById('mp-next');
+  var legendEl = document.getElementById('mp-legend');
+  var veilEl = document.getElementById('mp-veil');
+  var veilKicker = document.getElementById('mp-veil-kicker');
+  var veilTitle = document.getElementById('mp-veil-title');
+  var veilSub = document.getElementById('mp-veil-sub');
+  var veilWait = document.getElementById('mp-veil-wait');
+  var veilMsg = document.getElementById('mp-veil-msg');
+  var veilCause = document.getElementById('mp-veil-cause');
+  var veilSlow = document.getElementById('mp-veil-slowcause');
+  var veilGo = document.getElementById('mp-veil-go');
+  var veilAlt = document.getElementById('mp-veil-alt');
+  var veilLegend = document.getElementById('mp-veil-legend');
+  var upnextTitle = document.getElementById('mp-upnext-title');
+  var upnextWords = document.getElementById('mp-upnext-words');
+  var upnextFill = document.getElementById('mp-upnext-fill');
+  var upnextGo = document.getElementById('mp-upnext-go');
+  var upnextStay = document.getElementById('mp-upnext-stay');
   var panelEl = document.getElementById('mp-panel');
-  var panelList = document.getElementById('mp-panel-list');
+  var grpSeries = document.getElementById('mp-grp-series');
 
-  var lastSaved = 0;   // media time at the last progress write
-  var seeked = false;  // resume seek applied for this entry
-  var panelOpen = false;
-  var addonSubs = [];  // [{ lang, url, addon }]
-  var subTrackEls = {}; // url -> <track> element once loaded
-  var nextShown = false;
+  var ctx = null;                 // F.media.playingContext()
+  var stream = null;              // F.media.playing()
+  var addonSubs = [];             // raw subtitle resources
+  var subFiles = {};              // lang -> [sub,...]
+  var subLangs = [];              // deduped language list
+  var subLang = '';               // '' = off
+  var subUrl = null;              // chosen file within lang
+  var subTrackEls = {};           // url -> <track> element
+  var nextEp = null;              // following meta.video
+  var altStream = null;           // another playable source for the refused veil
+  var silentWarned = false;
 
-  function setStatus(t) { statusEl.textContent = t || ''; }
+  var state = 'starting';
+  var chrome = 'shown';
+  var scrub = 'idle';
+  var scrubTarget = 0;
+  var scrubStepIdx = 0;
+  var SCRUB_STEPS = [10, 30, 60, 120];
+  var panel = 'closed';
+  var upnext = 'none';
+  var upnextLeft = 0;
+
+  var hideTimer = 0, settleTimer = 0, slowTimer = 0, stallTimer = 0, upnextTimer = 0, saveTimer = 0, clockTimer = 0;
+
+  function attr(k, v) { root.setAttribute('data-' + k, v); }
+  function themeMs(name, dflt) {
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+    if (isNaN(v)) return dflt;
+    return v > 50 ? v : v * 1000; // accept both '8s' and '8000'
+  }
   function prefs() { return F.media.prefs(); }
-
   function fmt(sec) {
     sec = Math.max(0, Math.floor(sec || 0));
     var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
     return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (s < 10 ? '0' : '') + s;
   }
+  function clear(name) { clearTimeout(name); }
+  function dur() { return isFinite(video.duration) && video.duration > 0 ? video.duration : 0; }
+  function pct(t) { var d = dur(); return d ? Math.min(100, Math.max(0, t / d * 100)) : 0; }
 
-  function positionLine(prefix) {
-    if (!video.duration) return prefix || '';
-    return (prefix ? prefix + ' · ' : '') + fmt(video.currentTime) + ' / ' + fmt(video.duration);
+  /* ---------- chrome ---------- */
+
+  function showChrome() {
+    if (chrome === 'shown' && hideTimer) { clear(hideTimer); }
+    if (chrome !== 'shown') { chrome = 'shown'; attr('chrome', 'shown'); liftCues(); }
+    paintLine();
+    // linger only while actually playing: a paused or scrubbing band stays
+    if (state === 'playing' && scrub === 'idle' && panel === 'closed' && upnext === 'none') {
+      hideTimer = setTimeout(hideChrome, themeMs('--fr-chrome-linger', 5000));
+    }
+  }
+  function hideChrome() {
+    clear(hideTimer); hideTimer = 0;
+    if (panel === 'open' || scrub === 'active') return;
+    if (chrome === 'hidden') return;
+    chrome = 'hidden'; attr('chrome', 'hidden');
+    lowerCues();
+  }
+  function chromeOn() { return chrome === 'shown'; }
+
+  /* ---------- line / legend ---------- */
+
+  var STATE_WORDS = { starting: 'Opening', playing: 'Playing', paused: 'Paused', buffering: 'Buffering', ended: '', refused: '' };
+  function paintLine() {
+    stateEl.textContent = chromeOn() ? (STATE_WORDS[state] || '') : '';
+    toggleBtn.querySelector('.act__name').textContent = video.paused ? 'Play' : 'Pause';
+    nextBtn.hidden = !nextEp;
+    var legend;
+    if (scrub === 'active') legend = '<span class="legend__item"><span class="key">OK</span> Jump</span><span class="legend__item"><span class="key">Back</span> Cancel</span>';
+    else if (!chromeOn()) legend = '<span class="legend__item"><span class="key">OK</span> Pause</span><span class="legend__item"><span class="key">◂ ▸</span> Skip</span>';
+    else if (document.activeElement === timeline) legend = '<span class="legend__item"><span class="key">OK</span> ' + (video.paused ? 'Play' : 'Pause') + '</span><span class="legend__item"><span class="key">◂ ▸</span> ±10 s · hold skips farther</span><span class="legend__item"><span class="key">▾</span> Options</span>';
+    else legend = '<span class="legend__item"><span class="key">OK</span> Choose</span><span class="legend__item"><span class="key">▴</span> Timeline</span>';
+    legendEl.innerHTML = legend;
   }
 
-  function saveProgress(force) {
-    if (!video.duration || !video.currentTime) return;
-    if (!force && Math.abs(video.currentTime - lastSaved) < 5) return;
-    lastSaved = video.currentTime;
-    F.media.recordProgress(video.currentTime, video.duration);
+  /* ---------- timeline ---------- */
+
+  function paintTimeline() {
+    var d = dur(), t = video.currentTime || 0;
+    nowEl.textContent = fmt(scrub === 'active' ? scrubTarget : t);
+    durEl.textContent = fmt(d);
+    var p = pct(t);
+    playedEl.style.width = p + '%';
+    spanEl.style.left = p + '%';
+    headEl.style.left = p + '%';
+    try {
+      var b = video.buffered;
+      bufferedEl.style.width = (b.length ? pct(b.end(b.length - 1)) : 0) + '%';
+    } catch (e) { bufferedEl.style.width = '0%'; }
+    if (scrub === 'active') {
+      previewEl.style.width = pct(scrubTarget) + '%';
+      tipEl.style.left = pct(scrubTarget) + '%';
+      var delta = Math.round(scrubTarget - t);
+      tipDeltaEl.textContent = (delta >= 0 ? '+' : '−') + fmt(Math.abs(delta));
+    }
+    var d2 = dur();
+    timeline.setAttribute('aria-valuemax', String(Math.floor(d2)));
+    timeline.setAttribute('aria-valuenow', String(Math.floor(t)));
+    timeline.setAttribute('aria-valuetext', fmt(t) + ' of ' + fmt(d2));
+    var end = new Date(Date.now() + (d - t) * 1000);
+    clockEl.textContent = new Date().toTimeString().slice(0, 5) + ' · ends ' + end.toTimeString().slice(0, 5);
   }
 
-  function resumePoint() {
-    var ctx = F.media.playingContext();
-    if (!ctx || !ctx.item) return 0;
-    var p = F.media.progressFor(ctx.item.type, ctx.episodeId || ctx.item.id);
-    return p && p.dur > 0 ? p.pos : 0;
+  function scrubStep(dir, fast) {
+    if (state === 'refused' || state === 'ended') return;
+    showChrome();
+    if (scrub !== 'active') {
+      scrub = 'active'; attr('scrub', 'active');
+      scrubTarget = video.currentTime || 0;
+      scrubStepIdx = 0;
+    } else if (fast) scrubStepIdx = Math.min(scrubStepIdx + 1, SCRUB_STEPS.length - 1);
+    var step = SCRUB_STEPS[fast ? scrubStepIdx : 0];
+    scrubTarget = Math.max(0, Math.min(dur() || scrubTarget + step, scrubTarget + dir * step));
+    clear(settleTimer);
+    settleTimer = setTimeout(commitScrub, themeMs('--fr-scrub-settle', 800));
+    paintTimeline(); paintLine();
   }
+  function commitScrub() {
+    clear(settleTimer);
+    if (scrub !== 'active') return;
+    scrub = 'idle'; attr('scrub', 'idle');
+    try { video.currentTime = scrubTarget; } catch (e) { /* out of range */ }
+    paintTimeline(); paintLine(); showChrome();
+  }
+  function cancelScrub() {
+    clear(settleTimer);
+    if (scrub !== 'active') return false;
+    scrub = 'idle'; attr('scrub', 'idle');
+    paintTimeline(); paintLine();
+    return true;
+  }
+
+  timeline.addEventListener('framed:adjust', function (e) { scrubStep(e.detail.delta, e.detail.fast); });
+  timeline.addEventListener('click', function () { toggle(); });
+  timeline.addEventListener('focus', paintLine);
+  timeline.addEventListener('blur', paintLine);
+
+  /* ---------- veil ---------- */
+
+  function paintVeil(kind) {
+    var t = ctx && ctx.item ? ctx.item.name : '';
+    var se = ctx && ctx.episodeLabel ? ctx.episodeLabel : '';
+    veilWait.hidden = true; veilMsg.hidden = false; veilCause.hidden = true;
+    veilSlow.parentElement.hidden = true;
+    veilGo.hidden = true; veilAlt.hidden = true; veilActsOn = false;
+    veilLegend.innerHTML = '<span class="legend__item"><span class="key">Back</span> Back to the detail</span>';
+    if (kind === 'starting') {
+      veilKicker.textContent = 'Starting';
+      veilTitle.textContent = t; veilSub.textContent = se;
+      veilWait.hidden = false;
+      veilMsg.textContent = 'Getting the stream ready…';
+      if (root.getAttribute('data-slow') === 'true') {
+        veilSlow.parentElement.hidden = false;
+        veilSlow.textContent = 'This stream is taking a while. Still trying.';
+      }
+    } else if (kind === 'stalled') {
+      veilKicker.textContent = 'Still waiting';
+      veilTitle.textContent = t; veilSub.textContent = se;
+      veilWait.hidden = false;
+      veilMsg.textContent = 'This source has stopped answering.';
+      veilCause.hidden = false;
+      veilCause.textContent = 'The TV is holding this connection open, but the source is silent.';
+      veilActsOn = true;
+      veilGo.hidden = false; veilGo.querySelector('.act__name').textContent = 'Back to the sources';
+      veilGo.querySelector('.act__value').textContent = '';
+      veilAlt.hidden = false; veilAlt.querySelector('.act__name').textContent = 'Keep waiting';
+    } else if (kind === 'refused') {
+      veilKicker.textContent = 'This source can’t play';
+      veilTitle.textContent = t; veilSub.textContent = se;
+      var err = video.error;
+      var code = err && typeof err.code === 'number' ? err.code : 0;
+      var msg = 'The TV’s player refused this link.', cause = '';
+      if (code === 2) { msg = 'The video data never arrived.'; cause = 'The host may be down or the link has expired.'; }
+      else if (code === 3) {
+        msg = 'This TV can’t decode the video or sound in this file.';
+        cause = stream && stream.dts ? 'The file’s sound is DTS — Samsung TVs don’t decode DTS. Pick a source without that flag.' : '';
+      }
+      else if (code === 4) msg = 'This file’s format isn’t one the TV can read.';
+      veilMsg.textContent = msg;
+      if (cause) { veilCause.hidden = false; veilCause.textContent = cause; }
+      veilActsOn = true;
+      veilGo.hidden = false; veilGo.querySelector('.act__name').textContent = 'Back to the sources';
+      veilGo.querySelector('.act__value').textContent = '';
+      if (altStream) { veilAlt.hidden = false; veilAlt.querySelector('.act__name').textContent = 'Try the next source'; }
+    } else if (kind === 'ended') {
+      veilKicker.textContent = 'Finished';
+      veilTitle.textContent = t; veilSub.textContent = se;
+      veilMsg.textContent = nextEp ? 'The next episode is ' + epLabel(nextEp) + '.' : 'That’s the end.';
+      veilActsOn = true;
+      veilGo.hidden = false; veilGo.querySelector('.act__name').textContent = nextEp ? 'Play the next episode' : 'Back to the detail';
+      veilGo.querySelector('.act__value').textContent = '';
+      if (nextEp) { veilAlt.hidden = false; veilAlt.querySelector('.act__name').textContent = 'Back to the detail'; }
+    }
+  }
+  var veilActsOn = false;
+
+  veilGo.addEventListener('click', function () {
+    if (state === 'ended' && nextEp) { playNext(); return; }
+    if ((state === 'starting' || state === 'buffering') && video.paused && video.readyState > 0) { video.play().catch(function () {}); return; }
+    F.router.back(); // refused / stalled / ended-without-next all land on the detail
+  });
+  veilAlt.addEventListener('click', function () {
+    if (state === 'ended') { F.router.back(); return; }
+    if (state === 'refused' && altStream) { startStream(altStream); return; }
+    if (state === 'buffering') { // keep waiting
+      attr('slow', 'false');
+      stallTimer = setTimeout(function () { if (state === 'buffering' || state === 'starting') paintVeil('stalled'); }, themeMs('--fr-stall', 20000));
+      paintVeil('starting');
+      slowTimer = setTimeout(function () { attr('slow', 'true'); paintVeil('starting'); }, themeMs('--fr-slow-start', 8000));
+    }
+  });
+
+  /* ---------- state ---------- */
+
+  function setState(s) {
+    if (state === s) return;
+    state = s;
+    attr('state', s);
+    if (s === 'starting') { attr('slow', 'false'); paintVeil('starting'); showChrome(); }
+    if (s === 'refused') { attr('slow', 'false'); paintVeil('refused'); chromeShowForce(); focusFirstVeil(); }
+    if (s === 'buffering') {
+      clear(stallTimer);
+      stallTimer = setTimeout(function () { if (state === 'buffering') paintVeil('stalled'); }, themeMs('--fr-stall', 20000));
+    } else clear(stallTimer);
+    if (s === 'ended') { paintVeil('ended'); chromeShowForce(); focusFirstVeil(); }
+    if (s === 'paused' || s === 'playing') showChrome();
+    if (s === 'paused') clear(hideTimer);
+    paintLine();
+  }
+  function chromeShowForce() { chrome = 'hidden'; hideTimer = 0; showChrome(); }
+  function focusFirstVeil() {
+    if (!veilGo.hidden) F.nav.focus(veilGo);
+  }
+
+  video.addEventListener('play', function () { if (state !== 'refused') setState('playing'); });
+  video.addEventListener('playing', function () { if (state !== 'refused') setState('playing'); silentCheck(); });
+  video.addEventListener('pause', function () { if (state === 'playing' || state === 'buffering') setState('paused'); });
+  video.addEventListener('waiting', function () { if (state === 'playing' || state === 'paused') setState('buffering'); });
+  video.addEventListener('timeupdate', function () {
+    paintTimeline();
+    maybeUpnext();
+  });
+  video.addEventListener('ended', function () {
+    if (upnext === 'counting') { playNext(); return; } // auto mode: counting already ran or rolls on end
+    if (upnext === 'offered' && nextEp) { playNext(); return; } // ask mode's card survives to the end
+    setState('ended');
+  });
+  video.addEventListener('error', function () {
+    if (video.src) setState('refused');
+  });
+  document.addEventListener('visibilitychange', saveProgress);
+
+  /* ---------- play / pause / next ---------- */
 
   function toggle() {
-    if (!video.getAttribute('src')) return;
-    if (video.paused) {
-      var p = video.play();
-      if (p && p.catch) p.catch(function () { /* surfaced by the error event */ });
-    } else {
-      video.pause();
-      saveProgress(true);
-      setStatus(positionLine('Paused'));
-    }
+    if (video.paused) video.play().catch(function () {});
+    else video.pause();
   }
-
-  function seek(delta) {
-    if (!video.duration) return;
-    video.currentTime = Math.max(0, Math.min(video.duration - 1, video.currentTime + delta));
-    setStatus(positionLine(delta < 0 ? '−' + Math.abs(delta) + 's' : '+' + delta + 's'));
-  }
-
-  /* ---------- next episode ---------- */
-
-  function nextEpisode() {
-    var ctx = F.media.playingContext();
-    if (!ctx || !ctx.episodes || !ctx.episodeId) return null;
-    for (var i = 0; i < ctx.episodes.length - 1; i++) {
-      if (ctx.episodes[i].id === ctx.episodeId) return ctx.episodes[i + 1];
-    }
-    return null;
-  }
-
-  function episodeLabel(v) {
-    var se = (v.season != null && v.episode != null) ? 'S' + v.season + ' E' + v.episode : '';
-    return (se ? se + ' · ' : '') + (v.title || v.name || 'Episode');
-  }
-
-  function showNext() {
-    var next = nextEpisode();
-    if (!next || nextShown) return;
-    nextShown = true;
-    nextBtn.textContent = 'Next episode: ' + episodeLabel(next);
-    nextWrap.hidden = false;
-    F.nav.focus(nextBtn); // the popup takes the cursor: OK starts it, anything else keeps watching
-  }
+  toggleBtn.addEventListener('click', toggle);
 
   function playNext() {
-    var next = nextEpisode();
-    var ctx = F.media.playingContext();
-    if (!next || !ctx) return;
-    // choosing "next" means this one is done with, wherever the credits are
-    F.media.setWatched(ctx.cat, ctx.item, ctx.episodeId || null, true);
-    setStatus('Loading next episode…');
-    F.media.streams(ctx.item.type, next.id, function (ss) {
-      if (el.hidden) return;
-      var current = F.media.playing();
-      var binge = current && current.binge;
-      var pick = null;
-      ss.forEach(function (s) { if (!pick && s.playable && binge && s.binge === binge) pick = s; });
-      if (!pick) ss.forEach(function (s) { if (!pick && s.playable) pick = s; });
-      if (!pick) { setStatus('No playable stream for the next episode'); return; }
+    if (!nextEp) return;
+    var ep = nextEp;
+    stopUpnext();
+    var wantId = ep.id;
+    F.media.streams(ctx.item.type, wantId, function (ss) {
+      var playable = (ss || []).filter(function (s) { return s.playable; });
+      var ready = playable.filter(function (s) { return s.ready; })[0];
+      var pick = ready || playable[0];
+      if (!pick) {
+        attr('upnext', 'missing');
+        upnext = 'missing';
+        return;
+      }
       F.media.start(pick, {
-        cat: ctx.cat, item: ctx.item, episodes: ctx.episodes,
-        episodeId: next.id, episodeLabel: episodeLabel(next), streamName: pick.name
+        cat: ctx.cat, item: ctx.item, episodeId: wantId,
+        episodeLabel: (ep.season != null && ep.episode != null ? 'S' + ep.season + ' · E' + ep.episode + ' · ' : '') + (ep.title || ep.name || 'Episode'),
+        episodes: ctx.episodes, streamName: pick.name
       });
-      startPlayback();
+      startStream(pick);
     });
   }
+  nextBtn.addEventListener('click', playNext);
 
-  nextBtn.addEventListener('click', function (e) { e.stopPropagation(); playNext(); });
+  /* ---------- up next ---------- */
+
+  function maybeUpnext() {
+    if (!nextEp || upnext !== 'none') return;
+    var d = dur(); if (!d) return;
+    var left = d - (video.currentTime || 0);
+    if (left > 45 || state !== 'playing') return;
+    offerUpnext();
+  }
+  function offerUpnext() {
+    if (!nextEp) return;
+    upnextTitle.textContent = epLabel(nextEp);
+    if (prefs().autoplayNext) {
+      upnext = 'counting'; attr('upnext', 'counting');
+      upnextLeft = Math.max(1, Math.round(themeMs('--fr-upnext-count', 10000) / 1000));
+      upnextWords.textContent = 'Playing next in ' + upnextLeft + 's';
+      upnextFill.style.width = '100%';
+      clear(upnextTimer);
+      upnextTimer = setInterval(function () {
+        upnextLeft--;
+        upnextWords.textContent = 'Playing next in ' + upnextLeft + 's';
+        upnextFill.style.width = Math.max(0, upnextLeft * 10) + '%';
+        if (upnextLeft <= 0) { stopUpnext(); playNext(); }
+      }, 1000);
+    } else {
+      upnext = 'offered'; attr('upnext', 'offered');
+      upnextWords.textContent = 'Plays when this ends';
+    }
+    showChrome();
+    var cur = F.nav.current();
+    if (cur === timeline || document.activeElement === timeline) F.nav.focus(upnextGo);
+    paintLine();
+  }
+  function epLabel(v) {
+    var se = (v.season != null && v.episode != null) ? 'S' + v.season + ' · E' + v.episode + ' · ' : '';
+    return se + (v.title || v.name || 'Episode');
+  }
+  function stopUpnext() {
+    clearInterval(upnextTimer); upnextTimer = 0;
+    upnext = 'none'; attr('upnext', 'none');
+    paintLine();
+  }
+  upnextGo.addEventListener('click', playNext);
+  upnextStay.addEventListener('click', function () { stopUpnext(); F.nav.focus(timeline); });
 
   /* ---------- subtitles ---------- */
 
@@ -131,20 +390,25 @@ window.framed = window.framed || {};
       .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
     return 'WEBVTT\n\n' + body;
   }
-
   function disableAllSubs() {
     var tracks = video.textTracks;
     for (var i = 0; i < tracks.length; i++) tracks[i].mode = 'disabled';
   }
-
   function applySubSize() {
     video.style.setProperty('--cue-size', prefs().subSize + '%');
   }
-
+  function groupSubs() {
+    subFiles = {}; subLangs = [];
+    addonSubs.forEach(function (s) {
+      var lang = (s.lang || 'und');
+      if (!subFiles[lang]) { subFiles[lang] = []; subLangs.push(lang); }
+      subFiles[lang].push(s);
+    });
+  }
   function selectAddonSub(sub) {
     disableAllSubs();
-    F.media.setPrefs({ subLang: sub.lang || '' });
-    function show(track) { if (track) track.mode = 'showing'; setStatus(sub.lang ? 'Subtitles: ' + sub.lang : 'Subtitles on'); }
+    subUrl = sub.url;
+    function show(track) { if (track) { track.mode = 'showing'; liftCues(); } }
     var existing = subTrackEls[sub.url];
     if (existing) return show(existing.track);
     var trackEl = document.createElement('track');
@@ -155,243 +419,330 @@ window.framed = window.framed || {};
       trackEl.src = src;
       video.appendChild(trackEl);
       subTrackEls[sub.url] = trackEl;
-      // the track registers after load; flip it on then
       trackEl.addEventListener('load', function () { show(trackEl.track); });
       setTimeout(function () { show(trackEl.track); }, 350);
     }
     if (/\.srt($|\?)/i.test(sub.url)) {
-      // <video> only speaks WebVTT: fetch the SRT and hand over a converted blob
       var xhr = new XMLHttpRequest();
       xhr.open('GET', sub.url, true);
       xhr.onload = function () {
         if (xhr.status >= 200 && xhr.status < 300) attach(URL.createObjectURL(new Blob([srtToVtt(xhr.responseText)], { type: 'text/vtt' })));
-        else setStatus('Subtitle file unreachable');
+        else F.toast('That subtitle file didn’t load', 'warn');
       };
-      xhr.onerror = function () { setStatus('Subtitle file unreachable'); };
+      xhr.onerror = function () { F.toast('That subtitle file didn’t load', 'warn'); };
       xhr.send();
     } else attach(sub.url);
   }
-
-  function autoSelectSub() {
-    var lang = prefs().subLang;
-    if (!lang) return;
-    for (var i = 0; i < addonSubs.length; i++) {
-      if (addonSubs[i].lang && addonSubs[i].lang.toLowerCase().indexOf(lang.toLowerCase()) === 0) { selectAddonSub(addonSubs[i]); return; }
-    }
-    var tracks = video.textTracks;
-    for (var j = 0; j < tracks.length; j++) {
-      if (tracks[j].language && tracks[j].language.toLowerCase().indexOf(lang.toLowerCase()) === 0) { disableAllSubs(); tracks[j].mode = 'showing'; return; }
-    }
+  function pickLang(lang) {
+    subLang = lang;
+    F.media.setPrefs({ subLang: lang });
+    if (!lang) { disableAllSubs(); subsBtn.querySelector('.act__value').textContent = 'Off'; refreshDrawer(); return; }
+    var files = subFiles[lang] || [];
+    if (files.length) selectAddonSub(subUrl && subFiles[lang].some(function (s) { return s.url === subUrl; }) ? { url: subUrl, lang: lang } : files[0]);
+    subsBtn.querySelector('.act__value').textContent = lang;
+    refreshDrawer();
   }
-
   function loadSubtitles() {
-    addonSubs = [];
-    subTrackEls = {};
-    // drop <track> elements from the previous video, or its subtitles (and the
-    // auto-select language match) leak into whatever plays next
+    addonSubs = []; subFiles = {}; subLangs = []; subUrl = null; subLang = '';
     var old = video.querySelectorAll('track');
     for (var i = 0; i < old.length; i++) {
       if (old[i].src && old[i].src.indexOf('blob:') === 0) { try { URL.revokeObjectURL(old[i].src); } catch (e) { /* ignore */ } }
       if (old[i].parentElement) old[i].parentElement.removeChild(old[i]);
     }
-    var ctx = F.media.playingContext();
-    if (!ctx || !ctx.item) return;
+    if (!ctx || !ctx.item) { refreshDrawer(); return; }
+    if (ctl.subs) ctl.subs.setNote('lang', 'Asking your subtitle addons…');
     F.media.subtitles(ctx.item.type, ctx.episodeId || ctx.item.id, function (subs) {
+      if (el.hidden) return;
       addonSubs = subs || [];
-      autoSelectSub();
+      groupSubs();
+      refreshDrawer();
+      var want = prefs().subLang;
+      if (want && subFiles[want]) pickLang(want);
+      else if (want && subLangs.length) pickLang(subLangs[0]);
     });
   }
 
-  /* ---------- playback panel (speed / subs / audio / autoplay) ---------- */
-
-  function panelRow(label, onOk, state) {
-    var b = document.createElement('button');
-    b.className = 'media-stream';
-    b.setAttribute('data-focusable', '');
-    b.setAttribute('tabindex', '-1');
-    var n = document.createElement('span');
-    n.className = 'media-stream__name';
-    n.textContent = label;
-    var s = document.createElement('span');
-    s.className = 'media-stream__sub';
-    s.textContent = state || '';
-    b.appendChild(n);
-    b.appendChild(s);
-    b._label = label;
-    b.addEventListener('click', function (e) { e.stopPropagation(); onOk(); });
-    return b;
-  }
-
-  function panelHead(text) {
-    var d = document.createElement('div');
-    d.className = 'media-episodes__head';
-    d.textContent = text;
-    return d;
-  }
-
-  function buildPanel() {
-    // rows that change a setting rebuild the panel (speed/size/autoplay): keep
-    // the cursor on the same row instead of restarting at the top of the panel
-    var prevLabel = null;
-    if (document.activeElement && panelList.contains(document.activeElement)) prevLabel = document.activeElement._label;
-    panelList.innerHTML = '';
-    var p = prefs();
-    panelList.appendChild(panelHead('Speed'));
-    [0.5, 0.75, 1, 1.25, 1.5, 2].forEach(function (rate) {
-      panelList.appendChild(panelRow(rate + '×', function () {
-        video.playbackRate = rate;
-        F.media.setPrefs({ speed: rate });
-        setStatus('Speed ' + rate + '×');
-        buildPanel();
-      }, Math.abs(p.speed - rate) < 0.01 ? 'current' : ''));
-    });
-    panelList.appendChild(panelHead('Subtitles'));
-    panelList.appendChild(panelRow('Off', function () { disableAllSubs(); F.media.setPrefs({ subLang: '' }); setStatus('Subtitles off'); }));
+  /* ---------- cue lift ---------- */
+  // cues sit where the band is: while chrome shows, pin cue lines above the band
+  // (::cue can't be positioned; VTTCue.line is writable per cue)
+  function liftCues() { setCueLine(-6); }
+  function lowerCues() { setCueLine('auto'); }
+  function setCueLine(line) {
     var tracks = video.textTracks;
-    var i;
-    for (i = 0; i < tracks.length; i++) {
-      (function (track) {
-        if (track.kind !== 'subtitles' && track.kind !== 'captions') return;
-        panelList.appendChild(panelRow('Embedded · ' + (track.label || track.language || 'track'), function () {
-          disableAllSubs(); track.mode = 'showing'; F.media.setPrefs({ subLang: track.language || '' }); setStatus('Subtitles: ' + (track.label || track.language));
-        }, track.mode === 'showing' ? 'current' : ''));
-      })(tracks[i]);
-    }
-    addonSubs.forEach(function (sub) {
-      panelList.appendChild(panelRow('Addon · ' + (sub.lang || '?') + ' (' + sub.addon + ')', function () { selectAddonSub(sub); }, ''));
-    });
-    panelList.appendChild(panelRow('Subtitle size: ' + p.subSize + '%', function () {
-      var sizes = [75, 100, 125, 150, 200];
-      var next = sizes[(sizes.indexOf(p.subSize) + 1) % sizes.length];
-      F.media.setPrefs({ subSize: next });
-      applySubSize();
-      buildPanel();
-      setStatus('Subtitle size ' + next + '%');
-    }, 'OK cycles'));
-    if (video.audioTracks && video.audioTracks.length > 1) {
-      panelList.appendChild(panelHead('Audio'));
-      for (i = 0; i < video.audioTracks.length; i++) {
-        (function (track, idx) {
-          panelList.appendChild(panelRow((track.label || track.language || 'Track ' + (idx + 1)), function () {
-            for (var j = 0; j < video.audioTracks.length; j++) video.audioTracks[j].enabled = j === idx;
-            setStatus('Audio: ' + (track.label || track.language || idx + 1));
-          }, track.enabled ? 'current' : ''));
-        })(video.audioTracks[i], i);
-      }
-    }
-    panelList.appendChild(panelHead('Series'));
-    panelList.appendChild(panelRow('Autoplay next episode', function () {
-      F.media.setPrefs({ autoplayNext: !prefs().autoplayNext });
-      buildPanel();
-    }, p.autoplayNext ? 'on' : 'off'));
-    // 'Subtitle size' rows change label as they cycle; match on the stable prefix
-    if (prevLabel && (!document.activeElement || document.activeElement === document.body || !panelList.contains(document.activeElement))) {
-      var rows = panelList.querySelectorAll('.media-stream');
-      for (var i = 0; i < rows.length; i++) {
-        if (rows[i]._label === prevLabel || rows[i]._label.split(':')[0] === prevLabel.split(':')[0]) { F.nav.focus(rows[i]); break; }
+    for (var i = 0; i < tracks.length; i++) {
+      var tr = tracks[i];
+      if (tr.mode !== 'showing' || !tr.cues) continue;
+      for (var j = 0; j < tr.cues.length; j++) {
+        var cue = tr.cues[j];
+        try {
+          if (line === 'auto') { if (cue._frLine !== undefined) { cue.line = cue._frLine; delete cue._frLine; } }
+          else { if (cue._frLine === undefined) cue._frLine = cue.line; cue.line = line; }
+        } catch (e) { /* cue is gone */ }
       }
     }
   }
 
-  function openPanel() {
-    buildPanel();
-    panelOpen = true;
+  /* ---------- sound (DTS is the silent killer) ---------- */
+
+  function soundSpec() {
+    var tracks = video.audioTracks;
+    if (tracks === undefined) {
+      return { id: 'sound', name: 'Sound', type: 'action', gated: true,
+        note: 'This TV can’t switch sound tracks in this file.' + (stream && stream.dts ? ' Its sound is ' + (/\b(truehd|atmos)\b/i.test(stream.flag || '') ? 'TrueHD' : 'DTS') + ' — pick a source without that flag.' : '') };
+    }
+    if (tracks.length < 2) {
+      return { id: 'sound', name: 'Sound', type: 'action', gated: true,
+        note: 'This stream has one sound track.' + (stream && stream.dts ? ' It’s ' + 'DTS — Samsung TVs don’t decode DTS; the video will be silent. Pick a source without that flag.' : '') };
+    }
+    var opts = [];
+    for (var i = 0; i < tracks.length; i++) {
+      opts.push({ value: String(i), label: tracks[i].label || tracks[i].language || ('Track ' + (i + 1)) });
+    }
+    return { id: 'sound', name: 'Sound', type: 'choice', value: String(currentAudioTrack()), options: opts };
+  }
+  function currentAudioTrack() {
+    var tracks = video.audioTracks;
+    if (!tracks) return 0;
+    for (var i = 0; i < tracks.length; i++) if (tracks[i].enabled) return i;
+    return 0;
+  }
+  function silentCheck() {
+    // software demux plays silent when the TV can't decode the track; warn once
+    if (silentWarned) return;
+    silentWarned = true;
+    setTimeout(function () {
+      if (el.hidden || state === 'refused') return;
+      if (typeof video.webkitAudioDecodedByteCount === 'number' && video.webkitAudioDecodedByteCount === 0) {
+        F.toast('Playing without sound — this TV can’t decode this track (likely DTS). Pick a source without the sound flag.', 'warn');
+      }
+    }, 4000);
+  }
+
+  /* ---------- drawer (F.controls.render) ---------- */
+
+  var ctl = { subs: null, play: null, series: null };
+  function langOptions() {
+    var opts = [{ value: '', label: 'Off' }];
+    subLangs.forEach(function (l) { opts.push({ value: l, label: l }); });
+    return opts;
+  }
+  function versionOptions() {
+    var files = subFiles[subLang] || [];
+    return files.map(function (s, i) { return { value: s.url, label: 'File ' + (i + 1) }; });
+  }
+  function drawerSpecs() {
+    var subSpecs = [
+      { id: 'lang', name: 'Language', type: 'choice', value: subLang, options: langOptions(),
+        note: !subLangs.length ? 'No subtitles arrived for this video.' : null },
+      { id: 'version', name: 'Version', type: 'choice', value: subUrl, options: versionOptions(),
+        hidden: !(subLang && (subFiles[subLang] || []).length > 1) },
+      { id: 'size', name: 'Size', type: 'choice', value: String(prefs().subSize),
+        options: [{ value: '80', label: '80' }, { value: '100', label: '100' }, { value: '130', label: '130' }, { value: '160', label: '160' }] }
+    ];
+    var playSpecs = [
+      { id: 'speed', name: 'Speed', type: 'choice', value: String(video.playbackRate || 1),
+        options: [{ value: '0.75', label: '0.75×' }, { value: '1', label: '1×' }, { value: '1.25', label: '1.25×' }, { value: '1.5', label: '1.5×' }, { value: '2', label: '2×' }] },
+      soundSpec()
+    ];
+    var seriesSpecs = [
+      { id: 'autoplay', name: 'When this ends', type: 'choice',
+        value: prefs().autoplayNext ? 'auto' : 'ask',
+        options: [{ value: 'auto', label: 'Play automatically' }, { value: 'ask', label: 'Ask me' }] }
+    ];
+    return { subs: subSpecs, play: playSpecs, series: seriesSpecs };
+  }
+  function buildDrawer() {
+    var specs = drawerSpecs();
+    ctl.subs = F.controls.render(document.getElementById('mp-ctl-subs'), specs.subs, onSubChange);
+    ctl.play = F.controls.render(document.getElementById('mp-ctl-play'), specs.play, onPlayChange);
+    grpSeries.hidden = !(ctx && ctx.episodes && ctx.episodes.length);
+    ctl.series = F.controls.render(document.getElementById('mp-ctl-series'), grpSeries.hidden ? [] : specs.series, onSeriesChange);
+  }
+  function refreshDrawer() { if (panel === 'open' || true) buildDrawer(); paintLine(); }
+  function onSubChange(id, v, spec, meta) {
+    if (meta && meta.rejected) return;
+    if (id === 'lang') pickLang(v);
+    else if (id === 'version') {
+      var files = subFiles[subLang] || [];
+      for (var i = 0; i < files.length; i++) if (files[i].url === v) { selectAddonSub(files[i]); break; }
+    }
+    else if (id === 'size') { F.media.setPrefs({ subSize: parseInt(v, 10) }); applySubSize(); }
+    stripValues();
+  }
+  function onPlayChange(id, v, spec, meta) {
+    if (meta && meta.rejected) { F.toast('Nothing to switch here', 'info'); return; }
+    if (id === 'speed') {
+      var rate = parseFloat(v) || 1;
+      video.playbackRate = rate;
+      F.media.setPrefs({ speed: rate });
+      stripValues();
+    }
+    if (id === 'sound' && !spec.gated) {
+      var tracks = video.audioTracks;
+      var idx = parseInt(v, 10);
+      for (var i = 0; i < tracks.length; i++) tracks[i].enabled = i === idx;
+    }
+  }
+  function onSeriesChange(id, v) {
+    if (id === 'autoplay') F.media.setPrefs({ autoplayNext: v === 'auto' });
+  }
+  function stripValues() {
+    subsBtn.querySelector('.act__value').textContent = subLang || 'Off';
+    speedBtn.querySelector('.act__value').textContent = String(video.playbackRate || 1) + '×';
+    var sv = soundBtn.querySelector('.act__value');
+    var tracks = video.audioTracks;
+    sv.textContent = (tracks === undefined || tracks.length < 2) ? '—' : (tracks[currentAudioTrack()].label || 'On');
+  }
+
+  function openPanel(focusId) {
+    panel = 'open'; attr('panel', 'open');
     panelEl.hidden = false;
-    F.nav.setScope(panelEl, { remember: false });
+    buildDrawer();
+    var target = focusId ? panelEl.querySelector('[data-control-id="' + focusId + '"]') : null;
+    F.nav.focus(target || panelEl.querySelector('[data-focusable]'));
+    paintLine();
   }
-
   function closePanel() {
-    panelOpen = false;
+    if (panel === 'closed') return false;
+    panel = 'closed'; attr('panel', 'closed');
     panelEl.hidden = true;
-    F.nav.setScope(el, { remember: false });
+    F.nav.focus(timeline);
+    showChrome();
+    return true;
+  }
+  [subsBtn, speedBtn, soundBtn].forEach(function (b) {
+    b.addEventListener('click', function () { openPanel(b.getAttribute('data-row')); });
+  });
+
+  /* ---------- progress ---------- */
+
+  function saveProgress() {
+    if (!ctx || !ctx.item) return;
+    var d = dur(); if (!d) return;
+    F.media.recordProgress(video.currentTime || 0, d);
   }
 
-  surface.addEventListener('click', function () { if (!panelOpen) toggle(); });
+  /* ---------- stream lifecycle ---------- */
 
-  video.addEventListener('loadedmetadata', function () {
-    video.playbackRate = prefs().speed || 1;
+  function clearTimers() {
+    [hideTimer, settleTimer, slowTimer, stallTimer, saveTimer, clockTimer].forEach(clear);
+    clearInterval(upnextTimer); clearInterval(clockTimer);
+    hideTimer = settleTimer = slowTimer = stallTimer = saveTimer = clockTimer = upnextTimer = 0;
+  }
+
+  function startStream(s) {
+    stream = s;
+    clearTimers();
+    state = 'starting';
+    silentWarned = false;
+    attr('state', 'starting'); attr('slow', 'false'); attr('scrub', 'idle');
+    attr('upnext', 'none'); attr('panel', 'closed'); attr('chrome', 'shown');
+    chrome = 'shown'; scrub = 'idle'; panel = 'closed'; upnext = 'none';
+    panelEl.hidden = true;
+    var errBefore = video.error;
+    try { video.pause(); } catch (e) { /* ignore */ }
+    video.src = s.url;
+    try { video.load(); } catch (e) { /* ignore */ }
     applySubSize();
-    autoSelectSub();
-    if (seeked) return;
-    seeked = true;
-    var pos = resumePoint();
-    if (pos > 5 && video.duration && pos < video.duration - 10) {
-      try { video.currentTime = pos; } catch (e) { /* engine not ready */ }
-      setStatus('Resumed at ' + fmt(pos));
-    }
-  });
-  video.addEventListener('playing', function () { setStatus(''); });
-  video.addEventListener('waiting', function () { setStatus('Buffering…'); });
-  video.addEventListener('timeupdate', function () {
-    saveProgress(false);
-    if (!nextShown && video.duration && video.duration - video.currentTime < 60) showNext();
-  });
-  video.addEventListener('pause', function () { saveProgress(true); });
-  video.addEventListener('ended', function () {
-    saveProgress(true);
-    if (nextEpisode() && prefs().autoplayNext) playNext();
-    else if (nextEpisode()) showNext();
-    else setStatus('Ended');
-  });
-  video.addEventListener('error', function () {
-    setStatus("Can't play this format on this TV");
-  });
-
-  function startPlayback() {
-    var s = F.media.playing();
-    if (!s || !s.url) { F.router.go('media-item'); return; }
-    var ctx = F.media.playingContext();
-    if (ctx && ctx.item) F.media.ensureSaved(ctx.cat, ctx.item); // Stremio: playing adds to the library
-    seeked = false;
-    nextShown = false;
-    nextWrap.hidden = true;
-    lastSaved = 0;
-    setStatus('Loading ' + s.name + '…');
-    video.setAttribute('src', s.url);
-    video.load();
-    loadSubtitles();
+    video.playbackRate = prefs().speed || 1;
+    var resume = F.media.progressFor(ctx.item.type, ctx.episodeId || ctx.item.id);
+    video.addEventListener('loadedmetadata', function onMeta() {
+      video.removeEventListener('loadedmetadata', onMeta);
+      if (resume && resume.pos > 5 && resume.pos < dur() - 30) {
+        try { video.currentTime = resume.pos; } catch (e) { /* ignore */ }
+      }
+      stripValues();
+      paintTimeline();
+      // engines that block autoplay leave us parked on 'starting': offer a start act
+      if (video.paused && state === 'starting') {
+        veilGo.hidden = false;
+        veilGo.querySelector('.act__name').textContent = 'Start playing';
+        veilGo.querySelector('.act__value').textContent = '';
+        veilActsOn = true;
+      }
+    });
     var p = video.play();
-    if (p && p.catch) p.catch(function () { setStatus('Press OK to play'); });
-    F.nav.setScope(el, { remember: false });
+    if (p && p.catch) p.catch(function () {});
+    slowTimer = setTimeout(function () {
+      if (state === 'starting' || state === 'buffering') { attr('slow', 'true'); paintVeil('starting'); }
+    }, themeMs('--fr-slow-start', 8000));
+    stallTimer = setTimeout(function () {
+      if (state === 'starting' || state === 'buffering') { attr('slow', 'true'); paintVeil('stalled'); }
+    }, themeMs('--fr-stall', 20000));
+    loadSubtitles();
+    buildDrawer();
+    paintVeil('starting');
+    paintTimeline(); paintLine();
+    saveTimer = setInterval(saveProgress, 5000);
+    clockTimer = setInterval(paintTimeline, 1000);
   }
+
+  var el = document.getElementById('screen-media-play');
 
   F.router.register('media-play', {
     el: el,
-    enter: startPlayback,
-    leave: function () {
-      saveProgress(true);
-      panelOpen = false;
-      panelEl.hidden = true;
-      nextWrap.hidden = true;
-      try { video.pause(); } catch (e) { /* ignore */ }
-      video.removeAttribute('src');
-      try { video.load(); } catch (e) { /* ignore */ }
-      setStatus('');
+    enter: function () {
+      stream = F.media.playing();
+      ctx = F.media.playingContext();
+      if (!stream || !ctx || !ctx.item) { F.router.back(); return; }
+      nextEp = null; altStream = null;
+      if (ctx.episodes && ctx.episodeId) {
+        for (var i = 0; i < ctx.episodes.length; i++) {
+          if (ctx.episodes[i].id === ctx.episodeId && i + 1 < ctx.episodes.length) nextEp = ctx.episodes[i + 1];
+        }
+      } else if (ctx.episodes && ctx.episodes.length > 1 && !ctx.episodeId) nextEp = ctx.episodes[1];
+      while (titleEl.firstChild && titleEl.firstChild !== epEl) titleEl.removeChild(titleEl.firstChild);
+      titleEl.insertBefore(document.createTextNode(ctx.item.name), epEl);
+      epEl.textContent = ctx.episodeLabel ? ' · ' + ctx.episodeLabel : '';
+      nextBtn.hidden = !nextEp;
+      F.nav.setScope(root, { remember: true });
+      F.nav.focus(timeline);
+      // another playable source exists? the refused veil offers it
+      if (ctx.streams && ctx.streams.length) {
+        for (var j = 0; j < ctx.streams.length; j++) {
+          if (ctx.streams[j] !== stream && ctx.streams[j].playable) { altStream = ctx.streams[j]; break; }
+        }
+      }
+      startStream(stream);
     },
     back: function () {
-      if (panelOpen) { closePanel(); return true; }
-      saveProgress(true);
-      F.router.go('media-item');
+      if (closePanel()) return true;
+      if (cancelScrub()) return true;
+      if (upnext !== 'none') { stopUpnext(); return true; }
+      saveProgress();
+      clearTimers();
+      try { video.pause(); video.removeAttribute('src'); video.load(); } catch (e) { /* ignore */ }
+      F.router.go('media-item'); // Back lands on the detail, not the launcher
       return true;
     },
     onKey: function (e) {
       var name = e.key || '';
-      if (panelOpen) {
-        if (e.keyCode === 404 || name.toLowerCase() === 'c' || F.nav.isBackKey(e)) { closePanel(); return true; }
-        return false; // arrows/OK drive the panel
+      if (e.keyCode === 404 || name.toLowerCase() === 'c') {
+        if (panel === 'open') closePanel(); else openPanel(null);
+        return true;
       }
-      if (e.keyCode === 404 || name.toLowerCase() === 'c') { openPanel(); return true; }
-      if (name === 'MediaPlayPause' || e.keyCode === 10252) { toggle(); return true; }
-      if (name === 'MediaPlay' || e.keyCode === 415) { if (video.paused) toggle(); return true; }
-      if (name === 'MediaPause' || e.keyCode === 19) { if (!video.paused) toggle(); return true; }
+      if (name === 'MediaPlayPause' || e.keyCode === 10252) { showChrome(); toggle(); return true; }
+      if (name === 'MediaPlay' || e.keyCode === 415) { showChrome(); if (video.paused) toggle(); return true; }
+      if (name === 'MediaPause' || e.keyCode === 19) { showChrome(); if (!video.paused) toggle(); return true; }
       if (name === 'MediaStop' || e.keyCode === 413) { F.router.back(); return true; }
-      if (nextShown && (name.toLowerCase() === 'n' || e.keyCode === 417)) { playNext(); return true; }
-      if (name === 'MediaRewind' || e.keyCode === 412) { seek(-30); return true; }
-      if (name === 'MediaFastForward' || e.keyCode === 417) { seek(30); return true; }
-      if (e.keyCode === 37) { seek(-10); return true; }   // ◂
-      if (e.keyCode === 39) { seek(30); return true; }    // ▸
-      if (e.keyCode === 38) { seek(60); return true; }    // ▴
-      if (e.keyCode === 40) { seek(-60); return true; }   // ▾
+      if (name === 'MediaRewind' || e.keyCode === 412) { scrubStep(-1, false); return true; }
+      if (name === 'MediaFastForward' || e.keyCode === 417) { scrubStep(1, false); return true; }
+      if (panel === 'open') return false;
+      if (F.nav.isBackKey(e)) return false; // router.back() handles the matrix
+      if (e.keyCode === 13) { // OK — before nav turns it into a click
+        if (scrub === 'active') { commitScrub(); return true; }
+        if (!chromeOn()) { showChrome(); if (state === 'playing') { video.pause(); } return true; }
+        return false; // chrome: nav clicks the focused act
+      }
+      if (e.keyCode === 37 || e.keyCode === 39) { // ◂ ▸
+        var dir = e.keyCode === 37 ? -1 : 1;
+        if (!chromeOn() || document.activeElement === timeline) { scrubStep(dir, e.repeat); return true; }
+        return false; // strip moves between acts
+      }
+      if (e.keyCode === 38 || e.keyCode === 40) { // ▴ ▾: reveal chrome, stay in nav flow
+        if (!chromeOn()) { showChrome(); return true; }
+        return false;
+      }
       return false;
     }
   });
