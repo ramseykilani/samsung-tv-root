@@ -39,4 +39,5 @@
 
   <!-- Only js/library.js may reach the network: the optional LAN art folder (REMOTE_ART_BASE). Everything else is offline. -->
   <access origin="*" subdomains="true"/>
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
 </widget>

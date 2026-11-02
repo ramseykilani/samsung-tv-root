@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any
 
 from .apps import AppControlError, TizenAppControl
+from .ambient import AmbientSensorError, read_ambient
 from .config import GENERIC_MODEL_NAMES, TelevisionConfiguration
 from .capture import CaptureError, Qn90fCaptureControl
 from .display import (
@@ -215,7 +216,7 @@ class TelevisionCapabilities:
                 "volume.status",
                 "volume.set",
             )
-        return shared_actions + MODEL_ACTION_CAPABILITIES[self.configuration.model]
+        return shared_actions + MODEL_ACTION_CAPABILITIES[self.configuration.model] + (("sensor.ambient",) if self.configuration.model == "ls03d" else ())
 
     def inventory(self) -> list[dict[str, str]]:
         if self.configuration.model in GENERIC_MODEL_NAMES:
@@ -229,6 +230,8 @@ class TelevisionCapabilities:
             {"name": name, "state": CapabilityState.IMPLEMENTED.value}
             for name in implemented_names
         ]
+        if self.configuration.model == "ls03d":
+            implemented.append({"name": "sensor.ambient", "state": CapabilityState.IMPLEMENTED.value})
         gaps = {
             **SHARED_CAPABILITY_GAPS,
             **_model_gaps(self.configuration.model),
@@ -252,6 +255,7 @@ class TelevisionCapabilities:
             return await self._handle(connection, action, request)
         except (
             AppControlError,
+            AmbientSensorError,
             CaptureError,
             DisplayControlError,
             LocalDimmingControlError,
@@ -269,6 +273,10 @@ class TelevisionCapabilities:
     ) -> dict[str, Any]:
         if action == "capabilities":
             return {"capabilities": self.inventory()}
+        if action == "sensor.ambient":
+            if self.configuration.model != "ls03d":
+                raise CapabilityError("Ambient sensor is validated only on LS03D")
+            return {"sensor": await read_ambient(connection)}
         if action == "app.list":
             apps = await self.apps.list_apps(connection)
             return {"apps": [app.to_dict() for app in apps]}
