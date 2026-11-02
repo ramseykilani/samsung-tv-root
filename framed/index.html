@@ -42,7 +42,7 @@
           </div>
         </div>
 
-        <!-- live miniature of the Art screen: the current picture, matte and frame -->
+        <!-- live miniature of the Art screen: the current picture and its frame -->
         <div class="home__art" id="home-art" aria-hidden="true">
           <div class="art-stage home__stage" id="home-stage">
             <div class="art-frame" id="home-frame">
@@ -79,10 +79,6 @@
             <div class="art-layer" id="art-layer-b" data-active="false"></div>
           </div>
         </div>
-        <div class="art-label" id="art-label" hidden>
-          <div class="art-label__title" id="art-label-title"></div>
-          <div class="art-label__meta" id="art-label-meta"></div>
-        </div>
       </div>
       <!-- corner affordance: the only focusable on the stage while the panel is closed -->
       <button class="art-corner" id="art-corner" data-focusable tabindex="-1" aria-label="Art settings (S)">
@@ -90,9 +86,11 @@
       </button>
 
       <aside class="panel" id="art-panel" aria-label="Art settings" hidden>
-        <div class="panel__status" id="art-panel-status" aria-live="polite"></div>
         <div class="panel__sensor" id="art-ambient-status" role="status">Manual</div>
-        <div class="panel__body" id="art-controls"></div>
+        <div class="panel__body">
+          <div class="pictures" id="art-pictures" aria-label="Pictures"></div>
+          <div id="art-controls"></div>
+        </div>
       </aside>
     </section>
 

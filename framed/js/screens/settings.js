@@ -20,7 +20,9 @@ window.framed = window.framed || {};
   function paintAbout() {
     var st = window.__tvBridge.getState();
     aboutBridge.textContent = st.platform;
-    aboutLibrary.textContent = F.library.list().length + ' pictures, ' + F.library.source();
+    var left = F.library.rejected();
+    aboutLibrary.textContent = F.library.list().length + ' pictures, ' + F.library.source() +
+      (left ? ' · ' + left + ' left out (not 16:9)' : '');
   }
 
   function build() {

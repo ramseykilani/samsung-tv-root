@@ -86,6 +86,9 @@ html[data-theme="mhach"] {
   --fr-gutter: 14.4rem;                /* screen side margin */
   --fr-panel-width: 72rem;
   --fr-home-art-width: 108rem;         /* launcher miniature of the Art screen (16:9) */
+  /* The black that disappears into the TV's own bezel (sRGB level 5, found with the bezel test card;
+   * tools/slim_frames.py BEZEL_BLACK renders the frames' flat face at the same level) */
+  --fr-bezel-black: rgb(5, 5, 5);
   /* The Frame 2024 (55" LS03D) body and bezel in mm, for the home miniature's TV frame */
   --fr-tv-body-w: 1236.98;
   --fr-tv-body-h: 708.66;

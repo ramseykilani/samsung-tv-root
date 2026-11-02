@@ -47,8 +47,8 @@ framed/
 | Routing | Hash routes, default = launcher, Back semantics (home = no-op; panel closes first) | — |
 | D-pad | Geometric focus engine, focus never lost, `Left/Right` adjust rows, pointer-remote hover, Tizen RETURN (10009) | Focus **look** (ring colour/width/scale are tokens) |
 | Launcher | app list (Watch, YouTube, PC, Art, Settings; Mhach vertical list + art miniature), external → `__tvBridge.launch` via `EXTERNAL_APP_IDS`, clock+date | shipped: Mhach design |
-| Art | Matte width/bottom-weight/colour (8 presets + custom HSL), 5 frame styles, frame weight/tone, contain/cover with frame hugging the image, caption slot, persistence, panel focus-trap, `s` key, corner affordance reveal | Preset palette values, frame-style rendering refinement, caption typography, panel chrome, any motion |
-| Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / every N hours / every N days, sequential / seeded shuffle, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, "n of N" indicator in panel + Settings only, persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
+| Art | 16:9 pictures only, whole, inside a thin frame that hugs them (no mat, no crop, no caption); 4 frames (none, black, black and gold, floating), light side, picture grid in the panel, per-picture look memory, persistence, panel focus-trap, `s` key, corner affordance reveal | Panel chrome, any motion |
+| Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / every N hours / every N days, sequential / seeded shuffle, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, picture grid in the panel (the one on the wall is marked), persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
 | Settings | Framed-level only: home-art bezel style, theme chooser with disabled "coming soon" slots, About. All art-level settings live in the Art panel | Real theme list and token blocks, all visuals |
 | Theme | `html[data-theme]` hook, single token file, `--fr-motion` switch (0ms now) | **Everything in `theme-placeholder.css`** |
 | Assets | Placeholder test cards + icon | Real imagery and icon |
@@ -58,25 +58,30 @@ framed/
 | Route | What | Keys |
 |---|---|---|
 | `#/launcher` (default, home) | App list: Watch · YouTube · PC · Art · Settings (+ art miniature) | ▴ ▾ move · OK open · Back does nothing |
-| `#/art` | Fullscreen picture on a matte with a frame; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
+| `#/art` | Fullscreen picture in a frame, filling the screen; no chrome | ◂ ▸ previous/next picture · `p` / MediaPlayPause slideshow on/off · ▴ ▾ reveal the corner affordance; OK on it (or `s`) opens the settings panel · Back closes the panel, Back again → home |
 | `#/settings` | Home art · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
 | `#/media` | Watch home, modelled on Stremio: **Board** (Continue + My List rows, then a row per catalog), Browse (one catalog, paged, with its genre filter), My List (sortable, type-filtered), Continue, Addons; Search over all of it | ▴ ▾ browse · ◂ ▸ switch catalog/shelf/filter · OK open · red (`s`) save · green (`w`) mark watched · Back clears search, then → home |
 | `#/media-item` | Detail: backdrop, poster, title, year/genres/rating/cert/country, cast & director, description, Save/Resume/Mark watched/Dismiss actions, episodes (series), stream list with quality tags | ▴ ▾ move · OK act / play (or quiet refusal for unplayable sources) · Back → browse |
 | `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back → detail (position kept) |
 
 Art options (persisted **per picture** in `localStorage["framed.artPer"]`; the most recent look lives
-in `localStorage["framed.art"]` as the default for pictures without their own memory): image fit
-(contain hugs the image with the frame; cover fills the matte opening), matte width 0–30 % (of the
-shorter screen edge, each side), bottom weight 0–10 %, matte colour (8 presets + custom H/S/L),
-liner/mount (none · gold fillet · linen · black slip · bevel · double mat · shadowbox · float),
-moulding (none · black · ebony · walnut · oak · gilt · silver · white), profile (flat · scoop ·
-cushion · ornate), frame width 1–10, caption, and **Pixel shift** — an anti-burn-in drift that
-overscans the stage by 10 px and nudges it to a new offset once per hour (on by default).
+in `localStorage["framed.art"]` as the default for pictures without their own memory): frame
+(none · black · black and gold · floating), light from (left · right), and **Pixel shift** — an
+anti-burn-in drift that overscans the stage and nudges it to a new offset once per hour (on by
+default). Pictures must be 16:9 (within 1 %): `js/library.js` measures each one (manifest
+`width`/`height` when present, else the loaded image) and leaves the rest out — Settings → About
+counts them. Each frame is the same width all round and hugs the whole 16:9 picture; the few mm
+left at the sides are the bezel's black (`--fr-bezel-black`, sRGB 5, the level found with the bezel
+test card). The frames are the slim family of `tools/slim_frames.py`, rendered by
+`tools/gen_frames.py`. There is deliberately no mat, no fit choice and no caption. Settings saved by
+earlier versions are migrated on load (an old moulding and liner become the nearest of the four
+frames: walnut + fillet → black and gold, otherwise → black).
 
 Slideshow (persisted in `localStorage["framed.slideshow"]`, editable from the art panel): **Rotate** off · hours · days, with an **Every** interval row (1–48 hours or
 1–30 days); **Order** sequential · shuffle (shuffle order is a seeded permutation, so it survives
-reload and the position stays meaningful); **Picture** `n of N` range in the panel. The position
-indicator appears only in panel chrome (panel header "n of N · title") — never on the stage.
+reload and the position stays meaningful); **Pictures**: the panel opens on a grid of the library's
+pictures, cropped as the screen shows them, with the cursor on the one on the wall (marked by the
+seal bar). Arrows move, OK hangs the picture. Nothing about position is ever drawn on the stage.
 
 - **Timed rotation:** a timer runs only while the Art screen is shown. On entry the sequencer
   advances by however many whole periods elapsed since `lastAdvance` (so an every-2-hours show
@@ -425,11 +430,9 @@ window; tiles are 36 rem (360 px logical), all text ≥ 2.8 rem (28 px logical).
    `data-theme` from the Theme control — edit its option list there.
 2. `--fr-motion` is `0ms` in the scaffold; `app.css` already applies it to focus, selection and
    panel changes, so motion is switched on from the token file.
-3. Matte presets live in `js/screens/art.js` (`MATTES`): `{ value, label, color }`.
-4. The frame styles are the `data-frame` values `none | thin | gallery | shadowbox | corners`;
-   their rendering is in `app.css` under "frame styles" and can be restyled freely as long as the
-   values stay.
-5. Fonts must be bundled under `assets/` and referenced with `@font-face` — no remote fetches.
+3. The frames are the four `FRAMES` in `js/screens/art.js` (each a moulding × liner pair); their
+   strips are rendered by `tools/gen_frames.py` into `assets/frames/` and placed by `css/frames.css`.
+4. Fonts must be bundled under `assets/` and referenced with `@font-face` — no remote fetches.
 
 ## Packaging as .wgt
 
