@@ -179,19 +179,20 @@ class RemoteInputServer:
     async def close(self) -> None:
         server = self.server
         self.server = None
-        if server is not None:
-            server.close()
-            await server.wait_closed()
         accepted = self.accepted
         self.accepted = None
-        if accepted is None:
-            return
-        if not accepted.done():
-            accepted.cancel()
-            return
-        if not accepted.cancelled():
-            with contextlib.suppress(Exception):
-                await accepted.result().close()
+        if server is not None:
+            server.close()
+        # Python 3.12 waits for client transports too. Close the agent before
+        # waiting for the listener, or lease replacement can block forever.
+        if accepted is not None:
+            if not accepted.done():
+                accepted.cancel()
+            elif not accepted.cancelled():
+                with contextlib.suppress(Exception):
+                    await accepted.result().close()
+        if server is not None:
+            await server.wait_closed()
 
     async def _accept(
         self,
@@ -223,8 +224,12 @@ class RemoteInputServer:
                 identity,
             )
         except Exception as error:
-            accepted.set_exception(error)
+            if not accepted.done():
+                accepted.set_exception(error)
             await _close_writer(writer)
+            return
+        if accepted.done():
+            await connection.close()
             return
         accepted.set_result(connection)
         if self.server is not None:
@@ -731,7 +736,9 @@ def _parse_identity(payload: str) -> RemoteInputIdentity:
 
 async def _read_frame(reader: asyncio.StreamReader) -> bytes:
     line = await reader.readline()
-    if not line or len(line) > MAXIMUM_FRAME_BYTES:
+    if not line:
+        raise ConnectionError("remote-input agent disconnected")
+    if len(line) > MAXIMUM_FRAME_BYTES:
         raise RootAgentProtocolError("invalid remote-input frame size")
     return line
 
