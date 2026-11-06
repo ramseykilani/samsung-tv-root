@@ -1,5 +1,9 @@
 # Host controller guide
 
+Configure the controller only for TVs you own or have explicit permission to
+administer. It can automatically reacquire root using the documented exploits
+and execute the actions you configure on those TVs.
+
 The controller keeps volatile root available without modifying the TV's boot
 configuration. It runs on a computer that has Tizen Studio `sdb` access to the
 TV.

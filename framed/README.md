@@ -1,5 +1,10 @@
 # framed — design-agnostic skeleton
 
+This app supports launcher and Art customization on your own Samsung Frame TV
+or one you have explicit permission to configure. TV integration may use the
+repository’s root controller; see the [project documentation](../README.md) for
+its exploit-based root acquisition and security limitations.
+
 > **Design: Mhach** — see HANDBACK.md beside this folder. Visual decisions live in `css/theme.css`
 > (tokens + fonts) and `css/frames.css` (art frames); `css/app.css` is layout. The notes below about
 > `theme-placeholder.css` describe the pre-design scaffold.

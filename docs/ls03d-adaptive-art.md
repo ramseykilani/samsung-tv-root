@@ -1,5 +1,8 @@
 # LS03D sensor-driven Art
 
+This feature supports sensor-driven Art customization on your own Frame TV
+or one you have explicit permission to configure.
+
 Validated on QN55LS03DAFXZC in November 2026. Implemented on top of PR 7.
 The user confirmed that covering the sensor visibly dims the installed Art app.
 

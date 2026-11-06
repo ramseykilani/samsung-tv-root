@@ -6,8 +6,10 @@ Two jobs on the always-on host machine:
   manifest, so a TV web app (``framed``) can pull the owner's image library
   over plain HTTP. SMB shares are not readable from the Tizen web runtime.
 - ``/intent`` is a bearer-authenticated passthrough to the daemon's control
-  API, restricted to a small allowlist of actions. An Alexa skill (or any
-  voice agent) reaches it through a tunnel such as ``cloudflared``.
+  API. Its action allowlist includes ``execute``, which permits shell commands
+  through the TV root session. Use on a trusted LAN: bearer authentication
+  does not encrypt the plain HTTP connection. Cloud voice integration requires
+  separate implementation and is not provided here.
 
 Only stdlib is used so the bridge runs wherever the package is installed.
 """

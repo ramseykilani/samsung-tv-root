@@ -1,5 +1,9 @@
 # Samsung SWU passphrase dump
 
+These procedures support firmware research on TVs you own or have explicit
+permission to test. They recover firmware passphrases from the device; recovered
+keys and firmware are not included in this repository.
+
 > **Research note:** This file preserves implementation and reverse-engineering
 > details. It is not an end-user setup guide and may contain dated,
 > source-checkout-specific procedures. Start with the

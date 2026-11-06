@@ -1,5 +1,9 @@
 # Remote input guide
 
+This guide is for observing and customizing remote input on a TV you own or
+have explicit permission to administer. Observation can expose other users’
+remote activity, and filtering changes how their button presses are handled.
+
 Remote handling is disabled by default and has no implicit mappings. The host
 controller only touches an input device whose exact kernel name appears in the
 configuration.

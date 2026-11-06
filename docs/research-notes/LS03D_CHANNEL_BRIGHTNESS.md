@@ -1,5 +1,8 @@
 # Channel Up/Down as a global brightness key — feasibility (LS03D)
 
+Scope: customization of an owner-controlled Frame TV, or one whose owner has
+explicitly authorized input remapping and brightness changes.
+
 Owner request: Channel Up/Down should adjust real panel brightness TV-wide —
 inside framed's launcher/media screens and inside other apps (Moonlight,
 Stremio, native TV). Art mode stays sensor-adaptive.

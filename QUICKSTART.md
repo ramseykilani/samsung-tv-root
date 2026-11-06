@@ -1,5 +1,9 @@
 # Quick start
 
+Use this guide with a Samsung TV you own or have explicit permission to test
+and configure. The steps include exploit-based root acquisition; enabling
+Developer Mode alone does not grant permission to operate someone else’s TV.
+
 ## 1. Install Tizen Studio
 
 Install Tizen Studio from Samsung/Tizen. This project does not redistribute

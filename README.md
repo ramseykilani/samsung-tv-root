@@ -1,8 +1,13 @@
 # Samsung TV root
 
-I built working root exploits for the two Samsung TVs I own: a QN90B purchased
-in 2022 and a QN90F purchased in July 2026. I use them to make the TVs less
-annoying: remap the remote to whichever Arch Linux computer is connected,
+This project documents customization and root-access research on Samsung TVs
+owned by the operator or tested with the owner’s explicit permission. It includes
+working exploits that obtain root and commands that change device security
+settings; the documentation describes those effects and their limits.
+
+I developed the root exploits on the two Samsung TVs I own: a QN90B purchased
+in 2022 and a QN90F purchased in July 2026. I use them to customize how the TVs
+work: remap the remote to whichever Arch Linux computer is connected,
 control my window manager and MPV, control active YouTube, Plex, and X.com
 playback through CDP, and collect diagnostics from the TV.
 

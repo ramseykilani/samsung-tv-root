@@ -1,5 +1,10 @@
 # Documentation
 
+These guides cover customization, diagnostics, and root-access research on
+Samsung TVs you own or have explicit permission to test. Root acquisition uses
+exploits, and some commands change security settings; each guide describes the
+relevant behavior and limitations.
+
 Start with the [quick start](../QUICKSTART.md) to install the host tool, create a
 TV profile, run preflight, and open a root shell.
 

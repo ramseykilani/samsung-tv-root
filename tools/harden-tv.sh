@@ -8,8 +8,9 @@
 #   samsung-tv-root execute my-tv "sh /home/owner/share/tmp/harden-tv.sh"
 #
 # Every step is idempotent and best-effort: the script reports what it changed
-# and what it could not find. Volatile root means changes revert on power loss;
-# rerun after the daemon reacquires root.
+# and what it could not find. Volatile root does not guarantee that hosts,
+# package, or configuration changes revert on power loss. Review the changes
+# before running; this script does not provide a complete backup or rollback.
 
 set -u
 

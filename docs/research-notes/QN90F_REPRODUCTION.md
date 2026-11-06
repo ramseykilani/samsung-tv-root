@@ -1,5 +1,9 @@
 # QN90F root reproduction
 
+This reproduction procedure is for a QN90F you own or have explicit permission
+to test. It describes exploit-based root acquisition and optional changes to
+the TV’s execution restrictions; compatibility observations are device-specific.
+
 > **Research note:** This file preserves implementation and reverse-engineering
 > details. It is not an end-user setup guide and may contain dated,
 > source-checkout-specific procedures. Start with the
