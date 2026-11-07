@@ -655,7 +655,11 @@ window.framed = window.framed || {};
 
   /* ---------- stream lifecycle ---------- */
 
+  var metadataHandler = null;
+
   function clearTimers() {
+    if (metadataHandler) video.removeEventListener('loadedmetadata', metadataHandler);
+    metadataHandler = null;
     [hideTimer, settleTimer, slowTimer, stallTimer, saveTimer, clockTimer].forEach(clear);
     clearInterval(upnextTimer); clearInterval(clockTimer);
     hideTimer = settleTimer = slowTimer = stallTimer = saveTimer = clockTimer = upnextTimer = 0;
@@ -670,14 +674,12 @@ window.framed = window.framed || {};
     attr('upnext', 'none'); attr('panel', 'closed'); attr('chrome', 'shown');
     chrome = 'shown'; scrub = 'idle'; panel = 'closed'; upnext = 'none';
     panelEl.hidden = true;
-    var errBefore = eng.lastError();
     try { eng.pause(); } catch (e) { /* ignore */ }
-    eng.open(s.url);
     applySubSize();
-    eng.setRate(prefs().speed || 1);
     var resume = F.media.progressFor(ctx.item.type, ctx.episodeId || ctx.item.id);
-    video.addEventListener('loadedmetadata', function onMeta() {
-      video.removeEventListener('loadedmetadata', onMeta);
+    metadataHandler = function () {
+      video.removeEventListener('loadedmetadata', metadataHandler);
+      metadataHandler = null;
       if (resume && resume.pos > 5 && resume.pos < dur() - 30) {
         eng.seek(resume.pos);
       }
@@ -690,7 +692,10 @@ window.framed = window.framed || {};
         veilGo.querySelector('.act__value').textContent = '';
         veilActsOn = true;
       }
-    });
+    };
+    video.addEventListener('loadedmetadata', metadataHandler);
+    eng.open(s.url);
+    eng.setRate(prefs().speed || 1);
     eng.play();
     slowTimer = setTimeout(function () {
       if (state === 'starting' || state === 'buffering') { attr('slow', 'true'); paintVeil('starting'); }
@@ -734,13 +739,15 @@ window.framed = window.framed || {};
       }
       startStream(stream);
     },
+    leave: function () {
+      saveProgress();
+      clearTimers();
+      eng.close();
+    },
     back: function () {
       if (closePanel()) return true;
       if (cancelScrub()) return true;
       if (upnext !== 'none') { stopUpnext(); return true; }
-      saveProgress();
-      clearTimers();
-      eng.close();
       F.router.go('media-item'); // Back lands on the detail, not the launcher
       return true;
     },
