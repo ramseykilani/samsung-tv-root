@@ -579,6 +579,10 @@ html[data-motion="reduced"] .wait__tick { -webkit-animation: none; animation: no
 }
 /* AVPlay draws video on a plane behind the webview, so cues render in DOM.
    The opaque player surface must also get out of the way for the plane to show. */
+html[data-playback-engine="avplay"], html[data-playback-engine="avplay"] body { background: transparent; }
+.player__avplayer { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.player[data-engine="avplay"] .player__avplayer { display: block; }
+.player[data-engine="avplay"] .player__video { visibility: hidden; }
 .player[data-engine="avplay"], .player[data-engine="avplay"] .player__video { background: transparent; }
 .player__subs {
   position: absolute; left: 0; right: 0; bottom: 6%; z-index: 1; pointer-events: none;

@@ -62,6 +62,7 @@ window.framed = window.framed || {};
     var timeMs = 0, durMs = 0;
     var tracks = null;         // [{index,label,lang,codec,enabled}]
     var dtsSwitched = false;
+    var generation = 0, active = false, wantPlay = false;
 
     function refreshDuration() {
       try { var d = av.getDuration(); if (d > 0) durMs = d; } catch (e) { /* not ready */ }
@@ -99,7 +100,7 @@ window.framed = window.framed || {};
         if (!DTS_RE.test(tracks[i].codec || '')) {
           try {
             av.setSelectTrack('AUDIO', tracks[i].index);
-            tracks[i].enabled = true;
+            for (var j = 0; j < tracks.length; j++) tracks[j].enabled = j === i;
             F.toast('Sound switched to a track this TV can decode — the file’s main track is DTS', 'ok');
           } catch (e) { /* keep the default */ }
           return;
@@ -109,69 +110,85 @@ window.framed = window.framed || {};
       F.toast('Every sound track in this file is DTS — this TV can’t decode DTS. Pick another source.', 'warn');
     }
 
-    var listener = {
-      onbufferingstart: function () { emit(video, 'waiting'); },
-      onbufferingprogress: function () {},
-      onbufferingcomplete: function () {
-        refreshDuration(); refreshTracks();
-        if (!meta) {
-          meta = true;
-          emit(video, 'loadedmetadata');
-        }
-        emit(video, 'playing');
-      },
-      onstreamcompleted: function () { emit(video, 'ended'); },
-      oncurrentplaytime: function (ms) { timeMs = ms; emit(video, 'timeupdate'); },
-      onerror: function (eventType) {
-        err = { code: avpErrCode(String(eventType)), _avplay: String(eventType) };
-        emit(video, 'error');
-      },
-      onevent: function (eventType, data) {
-        if (String(eventType).indexOf('BUFFERING') === 0) return; // covered above
-        if (String(eventType) === 'PLAYER_SPARSE_TRACK_DETECTED') return;
-      },
-      onsubtitlechange: function () {},
-      ondrmevent: function () {}
-    };
+    function fail(e, stage) {
+      wantPlay = false; pausedFlag = true;
+      err = { code: avpErrCode(String(e)), _avplay: stage + ': ' + String(e && e.name || e) };
+      emit(video, 'error');
+    }
+    function startPlayback() {
+      if (!active || !meta || !wantPlay || !pausedFlag || err) return;
+      try {
+        av.play();
+        pausedFlag = false;
+        // Audio selection and speed changes require PLAYING on Samsung TVs.
+        refreshTracks(); preferPlayableTrack();
+        if (pendingRate !== 1) try { av.setSpeed(pendingRate); } catch (e) { /* unsupported speed */ }
+        emit(video, 'play'); emit(video, 'playing');
+      } catch (e) { fail(e, 'play'); }
+    }
+    function close() {
+      generation++; active = false; wantPlay = false;
+      try { av.stop(); } catch (e) { /* idle */ }
+      try { av.close(); } catch (e) { /* none */ }
+      document.documentElement.removeAttribute('data-playback-engine');
+      timeMs = 0; durMs = 0; meta = false; pausedFlag = true;
+    }
+    function makeListener(token) {
+      function guard(fn) {
+        return function (value) { if (active && token === generation && !err) fn(value); };
+      }
+      return {
+        onbufferingstart: guard(function () { emit(video, 'waiting'); }),
+        onbufferingprogress: function () {},
+        onbufferingcomplete: guard(function () {
+          refreshDuration();
+          // Initial buffering may complete before prepareAsync succeeds.
+          if (meta && !pausedFlag) emit(video, 'playing');
+        }),
+        onstreamcompleted: guard(function () { pausedFlag = true; wantPlay = false; emit(video, 'ended'); }),
+        oncurrentplaytime: guard(function (ms) { timeMs = ms; emit(video, 'timeupdate'); }),
+        onerror: guard(function (type) { fail(type, 'event'); }),
+        onevent: function () {}, onsubtitlechange: function () {}, ondrmevent: function () {}
+      };
+    }
 
     return {
       kind: 'avplay',
       open: function (url) {
-        meta = false; pausedFlag = true; err = null; timeMs = 0; durMs = 0; tracks = null; dtsSwitched = false;
-        try { av.stop(); } catch (e) { /* was idle */ }
-        av.setListener(listener);
-        av.open(url);
-        try { av.setDisplayRect(0, 0, 1920, 1080); } catch (e) { /* keep app rect */ }
-        try { av.setDisplayMethod('PLAYER_DISP_MODE_FULL_SCREEN'); } catch (e) { /* optional */ }
-        try { av.setSilentSubtitle(true); } catch (e) { /* we render our own cues */ }
-        try { av.prepareAsync(function () {
+        close();
+        active = true;
+        err = null; tracks = null; dtsSwitched = false; pendingRate = 1;
+        var token = generation;
+        document.documentElement.setAttribute('data-playback-engine', 'avplay');
+        function prepared() {
+          if (!active || token !== generation || err) return;
           refreshDuration(); refreshTracks();
-          if (!meta) { meta = true; emit(video, 'loadedmetadata'); }
-          preferPlayableTrack();
-          av.play();
-        }, function (e) {
-          err = { code: 4, _avplay: 'prepare: ' + String(e && e.name || e) };
-          emit(video, 'error');
-        }); } catch (e) {
-          // synchronous prepare for firmwares without prepareAsync
-          av.prepare();
-          refreshDuration(); refreshTracks();
-          if (!meta) { meta = true; emit(video, 'loadedmetadata'); }
-          preferPlayableTrack();
+          meta = true;
+          emit(video, 'loadedmetadata');
+          startPlayback();
         }
-      },
-      close: function () {
-        try { av.stop(); } catch (e) { /* idle */ }
-        try { av.close(); } catch (e) { /* none */ }
-        timeMs = 0; durMs = 0; meta = false; pausedFlag = true;
-      },
-      play: function () {
         try {
-          if (pendingRate !== 1) try { av.setSpeed(pendingRate); } catch (e) { /* PLAYING only */ }
-          av.play(); pausedFlag = false; emit(video, 'play');
-        } catch (e) { /* invalid state */ }
+          av.open(url);
+          av.setListener(makeListener(token));
+          av.setDisplayRect(0, 0, 1920, 1080);
+          try { av.setDisplayMethod('PLAYER_DISP_MODE_LETTER_BOX'); } catch (e) { /* optional */ }
+          try { av.setSilentSubtitle(true); } catch (e) { /* own cues */ }
+          if (typeof av.prepareAsync === 'function') {
+            av.prepareAsync(prepared, function (e) {
+              if (active && token === generation) fail(e, 'prepare');
+            });
+          } else {
+            av.prepare(); prepared();
+          }
+        } catch (e) { fail(e, 'open/prepare'); }
       },
-      pause: function () { try { av.pause(); pausedFlag = true; emit(video, 'pause'); } catch (e) { /* ignore */ } },
+      close: close,
+      play: function () { wantPlay = true; startPlayback(); },
+      pause: function () {
+        wantPlay = false;
+        if (!meta || pausedFlag) return;
+        try { av.pause(); pausedFlag = true; emit(video, 'pause'); } catch (e) { fail(e, 'pause'); }
+      },
       paused: function () { return pausedFlag; },
       hasMeta: function () { return meta; },
       seek: function (sec) { try { av.seekTo(Math.round(sec * 1000)); } catch (e) { /* out of range */ } },
