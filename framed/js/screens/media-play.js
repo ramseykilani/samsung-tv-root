@@ -34,10 +34,12 @@ window.framed = window.framed || {};
   var tipEl = document.getElementById('mp-tip');
   var tipDeltaEl = document.getElementById('mp-tip-delta');
   var headEl = document.getElementById('mp-head');
-  var toggleBtn = document.getElementById('mp-toggle');
+  var exitBtn = document.getElementById('mp-exit');
   var subsBtn = document.getElementById('mp-subs');
   var speedBtn = document.getElementById('mp-speed');
   var soundBtn = document.getElementById('mp-sound');
+  var optionsBtn = document.getElementById('mp-options');
+  var panelMenu = 'options';
   var nextBtn = document.getElementById('mp-next');
   var legendEl = document.getElementById('mp-legend');
   var veilEl = document.getElementById('mp-veil');
@@ -65,6 +67,7 @@ window.framed = window.framed || {};
   var subFiles = {};              // lang -> [sub,...]
   var subLangs = [];              // deduped language list
   var subLang = '';               // '' = off
+  var subDelay = 0;              // seconds; positive delays captions, reset per video
   var subUrl = null;              // chosen file within lang
   var subTrackEls = {};           // url -> <track> element
   var nextEp = null;              // following meta.video
@@ -78,6 +81,7 @@ window.framed = window.framed || {};
   var scrubStepIdx = 0;
   var SCRUB_STEPS = [10, 30, 60, 120];
   var panel = 'closed';
+  var panelReturnFocus = null;
   var upnext = 'none';
   var upnextLeft = 0;
 
@@ -121,16 +125,16 @@ window.framed = window.framed || {};
 
   /* ---------- line / legend ---------- */
 
-  var STATE_WORDS = { starting: 'Opening', playing: 'Playing', paused: 'Paused', buffering: 'Buffering', ended: '', refused: '' };
+  var STATE_WORDS = { starting: 'Opening', playing: '', paused: '', buffering: 'Buffering', ended: '', refused: '' };
   function paintLine() {
     stateEl.textContent = chromeOn() ? (STATE_WORDS[state] || '') : '';
-    toggleBtn.querySelector('.act__name').textContent = eng.paused() ? 'Play' : 'Pause';
     nextBtn.hidden = !nextEp;
     var legend;
     if (scrub === 'active') legend = '<span class="legend__item"><span class="key">OK</span> Jump</span><span class="legend__item"><span class="key">Back</span> Cancel</span>';
     else if (!chromeOn()) legend = '<span class="legend__item"><span class="key">OK</span> Pause</span><span class="legend__item"><span class="key">◂ ▸</span> Skip</span>';
     else if (document.activeElement === timeline) legend = '<span class="legend__item"><span class="key">OK</span> ' + (eng.paused() ? 'Play' : 'Pause') + '</span><span class="legend__item"><span class="key">◂ ▸</span> ±10 s · hold skips farther</span><span class="legend__item"><span class="key">▾</span> Options</span>';
     else legend = '<span class="legend__item"><span class="key">OK</span> Choose</span><span class="legend__item"><span class="key">▴</span> Timeline</span>';
+    if (scrub !== 'active') legend += '<span class="legend__item"><span class="key">Back</span> Exit player</span>';
     legendEl.innerHTML = legend;
   }
 
@@ -296,13 +300,17 @@ window.framed = window.framed || {};
   video.addEventListener('pause', function () { if (state === 'playing' || state === 'buffering') setState('paused'); });
   video.addEventListener('waiting', function () { if (state === 'playing' || state === 'paused') setState('buffering'); });
   video.addEventListener('timeupdate', function () {
-    if (cueOverlay) cueOverlay.tick(eng.time());
+    if (cueOverlay) cueOverlay.tick(eng.time() - subDelay);
     paintTimeline();
     maybeUpnext();
   });
   video.addEventListener('ended', function () {
-    if (upnext === 'counting') { playNext(); return; } // auto mode: counting already ran or rolls on end
-    if (upnext === 'offered' && nextEp) { playNext(); return; } // ask mode's card survives to the end
+    var behavior = prefs().endBehavior;
+    saveProgress();
+    closePanel();
+    stopUpnext();
+    if (behavior === 'art' || behavior === 'detail') { exitPlayer(behavior === 'art' ? 'art' : 'media-item'); return; }
+    if (behavior === 'auto' && nextEp) { playNext(); return; }
     setState('ended');
   });
   video.addEventListener('error', function () {
@@ -316,7 +324,7 @@ window.framed = window.framed || {};
     if (eng.paused()) eng.play();
     else eng.pause();
   }
-  toggleBtn.addEventListener('click', toggle);
+  exitBtn.addEventListener('click', function () { exitPlayer(); });
 
   function playNext() {
     if (!nextEp) return;
@@ -337,6 +345,11 @@ window.framed = window.framed || {};
         episodeLabel: (ep.season != null && ep.episode != null ? 'S' + ep.season + ' · E' + ep.episode + ' · ' : '') + (ep.title || ep.name || 'Episode'),
         episodes: ctx.episodes, streamName: pick.name
       });
+      ctx = F.media.playingContext();
+      nextEp = null;
+      for (var i = 0; ctx.episodes && i < ctx.episodes.length - 1; i++) {
+        if (ctx.episodes[i].id === wantId) { nextEp = ctx.episodes[i + 1]; break; }
+      }
       startStream(pick);
     });
   }
@@ -345,7 +358,7 @@ window.framed = window.framed || {};
   /* ---------- up next ---------- */
 
   function maybeUpnext() {
-    if (!nextEp || upnext !== 'none') return;
+    if (!nextEp || upnext !== 'none' || panel === 'open' || (prefs().endBehavior !== 'auto' && prefs().endBehavior !== 'ask')) return;
     var d = dur(); if (!d) return;
     var left = d - eng.time();
     if (left > 45 || state !== 'playing') return;
@@ -354,22 +367,8 @@ window.framed = window.framed || {};
   function offerUpnext() {
     if (!nextEp) return;
     upnextTitle.textContent = epLabel(nextEp);
-    if (prefs().autoplayNext) {
-      upnext = 'counting'; attr('upnext', 'counting');
-      upnextLeft = Math.max(1, Math.round(themeMs('--fr-upnext-count', 10000) / 1000));
-      upnextWords.textContent = 'Playing next in ' + upnextLeft + 's';
-      upnextFill.style.width = '100%';
-      clear(upnextTimer);
-      upnextTimer = setInterval(function () {
-        upnextLeft--;
-        upnextWords.textContent = 'Playing next in ' + upnextLeft + 's';
-        upnextFill.style.width = Math.max(0, upnextLeft * 10) + '%';
-        if (upnextLeft <= 0) { stopUpnext(); playNext(); }
-      }, 1000);
-    } else {
-      upnext = 'offered'; attr('upnext', 'offered');
-      upnextWords.textContent = 'Plays when this ends';
-    }
+    upnext = 'offered'; attr('upnext', 'offered');
+    upnextWords.textContent = prefs().endBehavior === 'auto' ? 'Plays when this ends' : 'Choose Play now, or decide when this ends';
     showChrome();
     var cur = F.nav.current();
     if (cur === timeline || document.activeElement === timeline) F.nav.focus(upnextGo);
@@ -399,6 +398,20 @@ window.framed = window.framed || {};
     var tracks = video.textTracks;
     for (var i = 0; i < tracks.length; i++) tracks[i].mode = 'disabled';
   }
+  function applySubTiming() {
+    var tracks = video.textTracks;
+    for (var i = 0; i < tracks.length; i++) {
+      var cues = tracks[i].cues;
+      if (!cues) continue;
+      for (var j = 0; j < cues.length; j++) {
+        var cue = cues[j];
+        if (cue._frStart === undefined) { cue._frStart = cue.startTime; cue._frEnd = cue.endTime; }
+        cue.startTime = cue._frStart + subDelay;
+        cue.endTime = cue._frEnd + subDelay;
+      }
+    }
+    if (cueOverlay) cueOverlay.tick(eng.time() - subDelay);
+  }
   function applySubSize() {
     video.style.setProperty('--cue-size', prefs().subSize + '%');
     if (subsOverlayEl) subsOverlayEl.style.fontSize = (28 * prefs().subSize / 100) + 'px';
@@ -422,7 +435,7 @@ window.framed = window.framed || {};
       subXhr.onload = function () {
         if (subXhr.status >= 200 && subXhr.status < 300 && cueOverlay) {
           cueOverlay.setCues(F.engine.parseCues(subXhr.responseText));
-          cueOverlay.tick(eng.time());
+          cueOverlay.tick(eng.time() - subDelay);
           liftCues();
         } else F.toast('That subtitle file didn’t load', 'warn');
       };
@@ -430,7 +443,7 @@ window.framed = window.framed || {};
       subXhr.send();
       return;
     }
-    function show(track) { if (track) { track.mode = 'showing'; liftCues(); } }
+    function show(track) { if (track) { track.mode = 'showing'; applySubTiming(); liftCues(); } }
     var existing = subTrackEls[sub.url];
     if (existing) return show(existing.track);
     var trackEl = document.createElement('track');
@@ -465,6 +478,7 @@ window.framed = window.framed || {};
     refreshDrawer();
   }
   function loadSubtitles() {
+    subDelay = 0; subTrackEls = {};
     addonSubs = []; subFiles = {}; subLangs = []; subUrl = null; subLang = '';
     if (cueOverlay) cueOverlay.clear();
     var old = video.querySelectorAll('track');
@@ -569,7 +583,11 @@ window.framed = window.framed || {};
       { id: 'version', name: 'Version', type: 'choice', value: subUrl, options: versionOptions(),
         hidden: !(subLang && (subFiles[subLang] || []).length > 1) },
       { id: 'size', name: 'Size', type: 'choice', value: String(prefs().subSize),
-        options: [{ value: '80', label: '80' }, { value: '100', label: '100' }, { value: '130', label: '130' }, { value: '160', label: '160' }] }
+        options: [{ value: '80', label: '80' }, { value: '100', label: '100' }, { value: '130', label: '130' }, { value: '160', label: '160' }] },
+      { id: 'timing', name: 'Timing', type: 'range', value: subDelay, min: -10, max: 10, step: 0.5,
+        format: function (v) { return v === 0 ? 'In sync' : Math.abs(v).toFixed(1) + ' s ' + (v < 0 ? 'earlier' : 'later'); },
+        help: 'Adjust by half a second. Resets for each video.' },
+      { id: 'timing-reset', name: 'Reset timing', type: 'action' }
     ];
     var playSpecs = [
       { id: 'speed', name: 'Speed', type: 'choice', value: String(eng.rate() || 1),
@@ -578,22 +596,32 @@ window.framed = window.framed || {};
     ];
     var seriesSpecs = [
       { id: 'autoplay', name: 'When this ends', type: 'choice',
-        value: prefs().autoplayNext ? 'auto' : 'ask',
-        options: [{ value: 'auto', label: 'Play automatically' }, { value: 'ask', label: 'Ask me' }] }
+        value: prefs().endBehavior,
+        options: [{ value: 'auto', label: 'Play next episode' }, { value: 'ask', label: 'Ask me' },
+          { value: 'art', label: 'Return to Art' }, { value: 'detail', label: 'Back to details' }],
+        note: 'Applies to future videos too. Play next episode waits for the end; if there is no next episode, shows the finished screen.' }
     ];
     return { subs: subSpecs, play: playSpecs, series: seriesSpecs };
   }
   function buildDrawer() {
     var specs = drawerSpecs();
-    ctl.subs = F.controls.render(document.getElementById('mp-ctl-subs'), specs.subs, onSubChange);
-    ctl.play = F.controls.render(document.getElementById('mp-ctl-play'), specs.play, onPlayChange);
-    grpSeries.hidden = !(ctx && ctx.episodes && ctx.episodes.length);
+    var titles = { lang: 'Subtitles', speed: 'Speed', sound: 'Sound', options: 'Options' };
+    document.getElementById('mp-panel-title').textContent = titles[panelMenu];
+    ctl.subs = F.controls.render(document.getElementById('mp-ctl-subs'), panelMenu === 'lang' ? specs.subs : [], onSubChange);
+    ctl.play = F.controls.render(document.getElementById('mp-ctl-play'), specs.play.filter(function (spec) { return spec.id === panelMenu; }), onPlayChange);
+    grpSeries.hidden = panelMenu !== 'options';
+    document.getElementById('mp-options-empty').hidden = panelMenu !== 'options' || !grpSeries.hidden;
     ctl.series = F.controls.render(document.getElementById('mp-ctl-series'), grpSeries.hidden ? [] : specs.series, onSeriesChange);
   }
-  function refreshDrawer() { if (panel === 'open' || true) buildDrawer(); paintLine(); }
+  function refreshDrawer() { buildDrawer(); paintLine(); }
   function onSubChange(id, v, spec, meta) {
     if (meta && meta.rejected) return;
-    if (id === 'lang') pickLang(v);
+    if (id === 'timing' || id === 'timing-reset') {
+      subDelay = id === 'timing-reset' ? 0 : v;
+      applySubTiming();
+      if (ctl.subs) ctl.subs.set('timing', subDelay);
+    }
+    else if (id === 'lang') pickLang(v);
     else if (id === 'version') {
       var files = subFiles[subLang] || [];
       for (var i = 0; i < files.length; i++) if (files[i].url === v) { selectAddonSub(files[i]); break; }
@@ -615,7 +643,10 @@ window.framed = window.framed || {};
     }
   }
   function onSeriesChange(id, v) {
-    if (id === 'autoplay') F.media.setPrefs({ autoplayNext: v === 'auto' });
+    if (id === 'autoplay') {
+      F.media.setPrefs({ endBehavior: v, autoplayNext: v === 'auto' });
+      stopUpnext();
+    }
   }
   function stripValues() {
     subsBtn.querySelector('.act__value').textContent = subLang || 'Off';
@@ -626,24 +657,35 @@ window.framed = window.framed || {};
   }
 
   function openPanel(focusId) {
+    if (panel === 'closed') panelReturnFocus = document.activeElement;
+    clear(hideTimer); hideTimer = 0;
+    panelMenu = focusId || 'options';
     panel = 'open'; attr('panel', 'open');
     panelEl.hidden = false;
+    panelEl.setAttribute('tabindex', '-1');
     buildDrawer();
     var target = focusId ? panelEl.querySelector('[data-control-id="' + focusId + '"]') : null;
-    F.nav.focus(target || panelEl.querySelector('[data-focusable]'));
+    F.nav.setScope(panelEl, { remember: false, initial: target });
+    if (!panelEl.querySelector('[data-focusable]')) F.nav.focus(panelEl);
     paintLine();
   }
   function closePanel() {
     if (panel === 'closed') return false;
     panel = 'closed'; attr('panel', 'closed');
     panelEl.hidden = true;
-    F.nav.focus(timeline);
+    F.nav.setScope(root, { remember: false, initial: panelReturnFocus || timeline });
+    panelReturnFocus = null;
     showChrome();
     return true;
   }
-  [subsBtn, speedBtn, soundBtn].forEach(function (b) {
+  [subsBtn, speedBtn, soundBtn, optionsBtn].forEach(function (b) {
     b.addEventListener('click', function () { openPanel(b.getAttribute('data-row')); });
   });
+
+  function exitPlayer(destination) {
+    // The router's leave hook saves progress and closes either playback engine.
+    F.router.go(destination || 'media-item');
+  }
 
   /* ---------- progress ---------- */
 
@@ -666,6 +708,9 @@ window.framed = window.framed || {};
   }
 
   function startStream(s) {
+    while (titleEl.firstChild && titleEl.firstChild !== epEl) titleEl.removeChild(titleEl.firstChild);
+    titleEl.insertBefore(document.createTextNode(ctx.item.name), epEl);
+    epEl.textContent = ctx.episodeLabel ? ' · ' + ctx.episodeLabel : '';
     stream = s;
     clearTimers();
     state = 'starting';
@@ -725,9 +770,6 @@ window.framed = window.framed || {};
           if (ctx.episodes[i].id === ctx.episodeId && i + 1 < ctx.episodes.length) nextEp = ctx.episodes[i + 1];
         }
       } else if (ctx.episodes && ctx.episodes.length > 1 && !ctx.episodeId) nextEp = ctx.episodes[1];
-      while (titleEl.firstChild && titleEl.firstChild !== epEl) titleEl.removeChild(titleEl.firstChild);
-      titleEl.insertBefore(document.createTextNode(ctx.item.name), epEl);
-      epEl.textContent = ctx.episodeLabel ? ' · ' + ctx.episodeLabel : '';
       nextBtn.hidden = !nextEp;
       F.nav.setScope(root, { remember: true });
       F.nav.focus(timeline);
@@ -748,7 +790,7 @@ window.framed = window.framed || {};
       if (closePanel()) return true;
       if (cancelScrub()) return true;
       if (upnext !== 'none') { stopUpnext(); return true; }
-      F.router.go('media-item'); // Back lands on the detail, not the launcher
+      exitPlayer(); // Back lands on the detail, not the launcher
       return true;
     },
     onKey: function (e) {
@@ -763,7 +805,17 @@ window.framed = window.framed || {};
       if (name === 'MediaStop' || e.keyCode === 413) { F.router.back(); return true; }
       if (name === 'MediaRewind' || e.keyCode === 412) { scrubStep(-1, false); return true; }
       if (name === 'MediaFastForward' || e.keyCode === 417) { scrubStep(1, false); return true; }
-      if (panel === 'open') return false;
+      if (panel === 'open') {
+        // Horizontal keys only change this row, even at its first/last value.
+        if (e.keyCode === 37 || e.keyCode === 39) {
+          var row = document.activeElement;
+          if (panelEl.contains(row) && row.hasAttribute('data-adjust')) {
+            row.dispatchEvent(new CustomEvent('framed:adjust', { detail: { delta: e.keyCode === 37 ? -1 : 1, fast: e.repeat, handled: true }, bubbles: true }));
+          }
+          return true;
+        }
+        return false;
+      }
       if (F.nav.isBackKey(e)) return false; // router.back() handles the matrix
       if (e.keyCode === 13) { // OK — before nav turns it into a click
         if (scrub === 'active') { commitScrub(); return true; }
