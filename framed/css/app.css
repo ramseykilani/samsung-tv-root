@@ -657,10 +657,9 @@ html[data-playback-engine="avplay"], html[data-playback-engine="avplay"] body { 
 .timeline__delta { margin-left: var(--fr-space-2); font-weight: var(--fr-font-weight-label); color: var(--fr-color-text-muted); }
 .player[data-scrub="active"] .timeline__tip { display: block; }
 
-/* strip: play/pause, then the options as name + current value, then the legend */
+/* strip: options, exit, then the remote legend */
 .player__strip { display: flex; align-items: center; gap: var(--fr-space-3); margin: var(--fr-space-2) 0 0 calc(var(--fr-space-5) * -1); }
-.player__strip .legend { margin-left: auto; }
-.player__toggle { min-width: 16rem; text-align: left; }
+.player__strip .legend { flex-basis: 100%; margin-left: var(--fr-space-5); }
 
 /* buffering while the chrome is away: one quiet corner, not the whole band */
 .player__badge {
@@ -713,7 +712,14 @@ html[data-playback-engine="avplay"], html[data-playback-engine="avplay"] body { 
 .upnext .acts { margin-top: var(--fr-space-4); }
 
 /* options drawer: the Art panel's drawer and controls, laid over the right of the picture */
-.player .panel { z-index: 4; width: var(--fr-panel-width-player); }
+.player[data-panel="open"] .player__top,
+.player[data-panel="open"] .player__band { visibility: hidden; pointer-events: none; }
+.player .panel {
+  z-index: 4; width: var(--fr-panel-width-player);
+  top: auto; right: var(--fr-player-gutter); bottom: var(--fr-space-7);
+  max-height: calc(100% - 2 * var(--fr-space-7));
+}
+.player__strip { flex-wrap: wrap; }
 .player .panel .choice { gap: var(--fr-space-2) var(--fr-space-5); }
 .panel__title {
   margin-bottom: var(--fr-space-5);

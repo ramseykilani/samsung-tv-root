@@ -186,13 +186,16 @@ var MEDIA_ADDONS = [
   remove customs, disable/restore built-ins. The installed set persists in
   `framed.media { customAddons, disabledAddons }`; `addons.local.json` still works for
   secret-bearing URLs and is applied on top.
-- **Player panel (green / `c`):** playback speed (persisted), subtitles — embedded tracks
-  plus the addon `subtitles` resource, with SRT files converted to WebVTT in-app because
-  `<video>` only speaks VTT — subtitle size, audio-track choice where the engine exposes
-  `audioTracks`, and the autoplay-next-episode toggle. Preferred subtitle language, size
-  and speed persist in `framed.watch.prefs` and are re-applied per title. Series get a
-  next-episode popup in the final minute; at the end it autoplays (toggleable), preferring
-  a stream from the same `bingeGroup`, and choosing Next marks the current episode watched.
+- **Player menus:** Subtitles, Speed, and Sound each open a dedicated popup. Left/Right
+  adjust the focused setting; Back closes the popup and restores its button. Options
+  (also green / `c`) selects what happens at the end: play the next episode, ask, return
+  to Art, or return to details. The choice persists in `framed.watch.prefs.endBehavior`;
+  existing autoplay preferences migrate automatically. Autoplay waits for the video
+  to finish; without a next episode, the finished screen remains.
+- **Subtitle timing:** the Subtitles menu shifts captions up to 10 seconds earlier or
+  later in 0.5-second steps, with Reset timing. Corrections apply to HTML5 text cues and
+  the AVPlay subtitle overlay, reset for each video, and remain when switching subtitle
+  files within that video. Subtitle language, size, and playback speed still persist.
 - **Search history:** the last eight searches sit under the keyboard as one-click chips.
 - **Continue Watching:** the player writes its position (throttled, and on pause/Back) and
   seeks back to it on entry; the shelf lists in-progress titles newest first, cards and

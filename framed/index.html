@@ -210,11 +210,12 @@
           </div>
 
           <div class="player__strip">
-            <button class="act player__toggle" id="mp-toggle" data-focusable tabindex="-1"><span class="act__name">Pause</span></button>
             <button class="act" id="mp-subs" data-focusable tabindex="-1" data-row="lang"><span class="act__name">Subtitles</span><span class="act__value">Off</span></button>
             <button class="act" id="mp-speed" data-focusable tabindex="-1" data-row="speed"><span class="act__name">Speed</span><span class="act__value">1×</span></button>
             <button class="act" id="mp-sound" data-focusable tabindex="-1" data-row="sound"><span class="act__name">Sound</span><span class="act__value"></span></button>
+            <button class="act" id="mp-options" data-focusable tabindex="-1"><span class="act__name">Options</span></button>
             <button class="act" id="mp-next" data-focusable tabindex="-1" hidden><span class="act__name">Next episode</span></button>
+            <button class="act" id="mp-exit" data-focusable tabindex="-1"><span class="act__name">Exit player</span></button>
             <span class="legend" id="mp-legend"></span>
           </div>
         </div>
@@ -238,15 +239,14 @@
           </div>
         </div>
 
-        <aside class="panel" id="mp-panel" aria-label="Options" hidden>
+        <aside class="panel" id="mp-panel" role="dialog" aria-modal="true" aria-labelledby="mp-panel-title" hidden>
           <div class="panel__body">
-            <div class="panel__title">Options</div>
-            <div class="panel__group">Subtitles</div>
+            <div class="panel__title" id="mp-panel-title">Options</div>
             <div id="mp-ctl-subs"></div>
-            <div class="panel__group">Playback</div>
             <div id="mp-ctl-play"></div>
-            <div class="panel__group" id="mp-grp-series" hidden>Series</div>
+            <div class="panel__group" id="mp-grp-series" hidden>Playback</div>
             <div id="mp-ctl-series"></div>
+            <p id="mp-options-empty" hidden>No additional options for this video.</p>
           </div>
           <div class="panel__foot">
             <span class="legend"><span class="legend__item"><span class="key">◂ ▸</span> Change</span><span class="legend__item"><span class="key">Back</span> Close</span></span>
