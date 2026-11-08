@@ -52,7 +52,7 @@ framed/
 | Routing | Hash routes, default = launcher, Back semantics (home = no-op; panel closes first) | — |
 | D-pad | Geometric focus engine, focus never lost, `Left/Right` adjust rows, pointer-remote hover, Tizen RETURN (10009) | Focus **look** (ring colour/width/scale are tokens) |
 | Launcher | app list (Watch, YouTube, PC, Art, Settings; Mhach vertical list + art miniature), external → `__tvBridge.launch` via `EXTERNAL_APP_IDS`, clock+date | shipped: Mhach design |
-| Art | 16:9 pictures only, whole, inside a thin frame that hugs them (no mat, no crop, no caption); 4 frames (none, black, black and gold, floating), light side, picture grid in the panel, per-picture look memory, persistence, panel focus-trap, `s` key, corner affordance reveal | Panel chrome, any motion |
+| Art | 16:9 pictures only, whole, inside a thin frame that hugs them (no mat, no crop, no caption); 9 flat frame styles with colour choices, picture grid in the panel, per-picture look memory, persistence, panel focus-trap, `s` key, corner affordance reveal | Panel chrome, any motion |
 | Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / every N hours / every N days, sequential / seeded shuffle, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, picture grid in the panel (the one on the wall is marked), persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
 | Settings | Framed-level only: home-art bezel style, theme chooser with disabled "coming soon" slots, About. All art-level settings live in the Art panel | Real theme list and token blocks, all visuals |
 | Theme | `html[data-theme]` hook, single token file, `--fr-motion` switch (0ms now) | **Everything in `theme-placeholder.css`** |
@@ -69,18 +69,34 @@ framed/
 | `#/media-item` | Detail: backdrop, poster, title, year/genres/rating/cert/country, cast & director, description, Save/Resume/Mark watched/Dismiss actions, episodes (series), stream list with quality tags | ▴ ▾ move · OK act / play (or quiet refusal for unplayable sources) · Back → browse |
 | `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back → detail (position kept) |
 
-Art options (persisted **per picture** in `localStorage["framed.artPer"]`; the most recent look lives
-in `localStorage["framed.art"]` as the default for pictures without their own memory): frame
-(none · black · black and gold · floating), light from (left · right), and **Pixel shift** — an
-anti-burn-in drift that overscans the stage and nudges it to a new offset once per hour (on by
-default). Pictures must be 16:9 (within 1 %): `js/library.js` measures each one (manifest
-`width`/`height` when present, else the loaded image) and leaves the rest out — Settings → About
-counts them. Each frame is the same width all round and hugs the whole 16:9 picture; the few mm
-left at the sides are the bezel's black (`--fr-bezel-black`, sRGB 5, the level found with the bezel
-test card). The frames are the slim family of `tools/slim_frames.py`, rendered by
-`tools/gen_frames.py`. There is deliberately no mat, no fit choice and no caption. Settings saved by
-earlier versions are migrated on load (an old moulding and liner become the nearest of the four
-frames: walnut + fillet → black and gold, otherwise → black).
+Art options are persisted **per picture** in `localStorage["framed.artPer"]`; the most
+recent look in `localStorage["framed.art"]` is the default for pictures without their own
+memory. **Style** offers None, Set in, Shadow gap, Thin frame, Gallery metal, Shadowbox,
+Paper edge, Linen and Wood. **Colour** appears only when that style has multiple colours.
+The default is Thin frame / Black. There is no directional “Light from” setting; texture
+and even contact shadows provide depth without directional lighting. The last colour
+chosen for each style is remembered in `localStorage["framed.artTones"]`.
+
+**Pixel shift** retains saved per-picture choices (on by default). Once per hour it moves
+up to six actual 4K pixels from centre on each axis. A matching six-pixel inset keeps the
+whole picture and frame on-screen, including at the extreme offsets; the small exposed
+margin is bezel black. At Tizen's 1920×1080 CSS resolution, six 4K pixels become three CSS
+pixels. Off removes the margin and movement. Both modes use contain sizing to preserve
+pictures within the library's 1% tolerance of 16:9. None draws no frame, line or shadow; an exact 16:9
+picture fills an exact 16:9 screen with Pixel shift off. The sides around other styles use
+`--fr-bezel-black` (sRGB level 5). Changing colour never changes frame geometry.
+
+Old global and per-picture settings migrate on read: Black → Thin frame / Black,
+Black and gold → Thin frame / Gold line, Floating → Shadow gap / Black, and None → None.
+Reset retains its existing scope: it resets the current picture and default look plus the
+slideshow choices, preserving other pictures' settings. No uninstall or data reset is required.
+
+The flat frame CSS and strip textures come from the 2026-11-07 design handoff. Its
+`flat_frames.py` generator was not supplied; the checked-in assets are the source for this
+integration. `tools/gen_frames.py` is the older directional-light renderer, not the generator
+for these styles. The handoff was integrated into the current app, preserving playback,
+adaptive brightness/tone, remote library refresh, and slideshow intervals. About identifies
+this design as `framed 0.2.0 · Build 2026-11-07-a`.
 
 Slideshow (persisted in `localStorage["framed.slideshow"]`, editable from the art panel): **Rotate** off · hours · days, with an **Every** interval row (1–48 hours or
 1–30 days); **Order** sequential · shuffle (shuffle order is a seeded permutation, so it survives

@@ -1,17 +1,8 @@
 /*
- * framed — Art screen. The picture fills the screen, in a thin drawn frame (lit from the chosen side) that
- * continues the TV's own black bezel, so the whole TV reads as one picture frame. Pictures are 16:9
- * (js/library.js refuses any other shape), and the frame hugs the whole picture: it is the same width all
- * round and its opening is 16:9 too, so nothing of the picture is ever hidden. The few mm left over at the
- * sides are the bezel's black, which the frame's flat black face continues. No mat, no caption.
- * The slideshow sequencer (js/slideshow.js) decides which library picture is current.
- * No chrome while art is shown; the corner affordance (or the `s` key) opens the settings panel, which
- * opens on a grid of the library's pictures. While the panel is closed: Left/Right = previous/next
- * picture, `p` / MediaPlayPause = slideshow on/off. Frame settings persist under "framed.art" (the default
- * look) and per picture under "framed.artPer": editing dials in the current picture's own look, which
- * wins on every revisit; pictures without their own memory inherit the most recent look.
- * Slideshow prefs: "framed.slideshow". Rendering of mouldings and liners lives in css/frames.css; this
- * file sets their geometry.
+ * Art screen: flat frame styles, with Style and Colour remembered per picture.
+ * The most recent look is the default for unset pictures. Existing frame records
+ * migrate on read; slideshow, sensor dimming and remote library behavior stay here.
+ * Frame geometry uses the supplied band widths in css/frames.css.
  */
 window.framed = window.framed || {};
 (function (F) {
@@ -25,42 +16,62 @@ window.framed = window.framed || {};
   var picturesEl = document.getElementById('art-pictures');
   var controlsEl = document.getElementById('art-controls');
 
-  // Frame geometry is real-world: the 55" Frame's screen is 679.9 mm tall, so one hundredth of the
-  // stage's shorter edge (u) is 6.799 mm. Each moulding and liner has a nominal width in mm, written
-  // by tools/gen_frames.py into css/frames.css as --m-mm / --l-mm and read back here.
-  var MM_PER_U = 6.799;
+  // Frame geometry is real-world: the 55" Frame's screen is 679.9 mm tall. Each style's band width in
+  // mm is written by the supplied frame design assets into css/frames.css as --band-mm and read back here.
+  var SCREEN_MM_SHORT = 679.9;
   var SCREEN = 16 / 9;
-  // The four frames: the slim family of tools/slim_frames.py, as in the Art Mode pictures. Each is a
-  // moulding × liner pair rendered by css/frames.css.
-  var FRAMES = [
-    { value: 'none', label: 'None', moulding: 'none', mount: 'flat' },
-    { value: 'black', label: 'Black', moulding: 'bezel', mount: 'flat' },
-    { value: 'gold', label: 'Black and gold', moulding: 'bezel', mount: 'goldline' },
-    { value: 'float', label: 'Floating', moulding: 'bezelfloat', mount: 'float' }];
-  // settings from earlier versions that no longer exist (the mat, contain fit, caption, wide mouldings)
-  var DROPPED = ['profile', 'fit', 'matte', 'matteBottom', 'matteColor', 'customHue', 'customSat', 'customLight',
-    'label', 'moulding', 'mount', 'frameWeight'];
 
-  var DEFAULTS = {
-    frame: 'black',
-    light: 'left',
-    drift: 'on'
-  };
+  // The styles and their colours. Values must match the supplied frame design assets (it names the strips).
+  function col(value, label) { return { value: value, label: label }; }
+  var STYLES = [
+    { value: 'none', label: 'None', colors: [] },
+    { value: 'setin', label: 'Set in', colors: [col('black', 'Black')] },
+    { value: 'gap', label: 'Shadow gap', colors: [col('black', 'Black'), col('charcoal', 'Charcoal')] },
+    { value: 'thin', label: 'Thin frame', colors: [col('black', 'Black'), col('gold', 'Gold line'), col('silver', 'Silver line')] },
+    { value: 'metal', label: 'Gallery metal', colors: [col('black', 'Black'), col('graphite', 'Graphite'), col('bronze', 'Bronze')] },
+    { value: 'box', label: 'Shadowbox', colors: [col('grey', 'Light grey'), col('white', 'Warm white'), col('charcoal', 'Charcoal')] },
+    { value: 'paper', label: 'Paper edge', colors: [col('white', 'Warm white'), col('cream', 'Cream'), col('grey', 'Grey'), col('black', 'Black')] },
+    { value: 'linen', label: 'Linen', colors: [col('natural', 'Natural'), col('grey', 'Grey'), col('black', 'Black')] },
+    { value: 'wood', label: 'Wood', colors: [col('walnut', 'Walnut'), col('oak', 'Oak'), col('ebony', 'Ebony')] }
+  ];
+  var DEFAULT = { style: 'thin', color: 'black' };
 
-  function frameOf(v) { for (var i = 0; i < FRAMES.length; i++) if (FRAMES[i].value === v) return FRAMES[i]; return null; }
-  // stored settings from any version: an old moulding × liner becomes the nearest of the four frames
-  // (checked first: the merge with DEFAULTS has already given an old record a frame)
-  function sanitize(o) {
-    if (o.moulding !== undefined || !frameOf(o.frame)) {
-      o.frame = o.moulding === 'none' ? 'none'
-        : o.mount === 'fillet' || o.mount === 'bevel' ? 'gold'
-        : o.mount === 'float' ? 'float'
-        : DEFAULTS.frame;
+  function styleOf(v) { for (var i = 0; i < STYLES.length; i++) if (STYLES[i].value === v) return STYLES[i]; return null; }
+  function hasColor(st, v) { for (var i = 0; i < st.colors.length; i++) if (st.colors[i].value === v) return true; return false; }
+  // a valid colour for the style: the one asked for, else the one last chosen for it, else its first
+  function colorFor(style, want, tones) {
+    var st = styleOf(style);
+    if (!st || !st.colors.length) return '';
+    if (hasColor(st, want)) return want;
+    if (tones && hasColor(st, tones[style])) return tones[style];
+    return st.colors[0].value;
+  }
+  function look(style, color, tones) {
+    if (!styleOf(style)) { style = DEFAULT.style; color = DEFAULT.color; }
+    return { style: style, color: colorFor(style, color, tones) };
+  }
+
+  // Settings saved by earlier versions become a style: v0.1's four frames (frame: none | black | gold |
+  // float, plus light: left | right), and before that a moulding x mount pair. Everything else is dropped.
+  function fromOld(o) {
+    if (o.moulding !== undefined || o.mount !== undefined) {
+      if (o.moulding === 'none') return look('none');
+      if (o.mount === 'fillet' || o.mount === 'bevel' || o.mount === 'goldline') return look('thin', 'gold');
+      if (o.mount === 'float') return look('gap', 'black');
+      return look('thin', 'black');
     }
-    if (o.light !== 'left' && o.light !== 'right') o.light = DEFAULTS.light;
-    if (o.drift !== 'on' && o.drift !== 'off') o.drift = DEFAULTS.drift;
-    DROPPED.forEach(function (k) { delete o[k]; });
-    return o;
+    if (o.frame === 'none') return look('none');
+    if (o.frame === 'gold') return look('thin', 'gold');
+    if (o.frame === 'float') return look('gap', 'black');
+    return look(DEFAULT.style, DEFAULT.color);
+  }
+
+  // Keep the repo's separate per-picture store and migrate each record on read.
+  var DEFAULTS = { style: 'thin', color: 'black', drift: 'on' };
+  function sanitize(o) {
+    var next = styleOf(o.style) ? look(o.style, o.color) : fromOld(o);
+    next.drift = o.drift === 'off' ? 'off' : DEFAULTS.drift;
+    return next;
   }
 
   function mix() {
@@ -71,22 +82,19 @@ window.framed = window.framed || {};
     }
     return out;
   }
-  function globalLook() { return mix(DEFAULTS, F.store.get('art', {})); }
+  function globalLook() { return F.store.get('art', {}); }
   // stored settings from any version still get sanitized, per-picture or global
   function effective(id) {
     var per = F.store.get('artPer', {});
-    return id && per[id] ? sanitize(mix(DEFAULTS, per[id])) : sanitize(globalLook());
+    return id && per[id] ? sanitize(per[id]) : sanitize(globalLook());
   }
 
-  // Anti-burn-in drift: the whole stage is oversized by DRIFT_MAX px on every side and nudged
-  // within that overscan once per hour, so the art shifts a few pixels without ever revealing
-  // an edge — the same idea as Samsung's periodic image shift, derived from the hour-of-epoch
-  // so it survives reloads and needs no stored state.
-  var DRIFT_MAX = 10; // logical px each way (~20 px on the 4K panel)
-  // Overscan must exceed the drift: at a maximum nudge the stage edge would land exactly on the
-  // screen edge, and subpixel rounding on the TV exposes a sliver of the wall behind it — most
-  // visible with no mat, where nothing else cushions the seam. Extra margin keeps it off-screen.
-  var DRIFT_PAD = DRIFT_MAX + 6;
+  // Hourly drift, capped at six physical pixels per axis on a 3840 x 2160 panel.
+  // Tizen may lay out at 1920 x 1080 and upscale, so convert from panel pixels
+  // using the full screen's CSS dimensions (not devicePixelRatio or panel width).
+  // Inset the stage by the same amount: the whole picture and frame stay on-screen
+  // even at either extreme. The uncovered margin is the screen's bezel black.
+  var DRIFT_MAX = 6;
   function driftAxis(h, salt) {
     var a = (h ^ salt) >>> 0;
     a = (a + 0x6D2B79F5) >>> 0;
@@ -100,12 +108,14 @@ window.framed = window.framed || {};
       stage.style.top = stage.style.bottom = stage.style.left = stage.style.right = stage.style.transform = '';
       return;
     }
+    var r = el.getBoundingClientRect();
+    var scale = Math.min(r.width / 3840, r.height / 2160);
+    var pad = DRIFT_MAX * scale;
     var h = Math.floor(Date.now() / 3600000);
-    stage.style.top = -DRIFT_PAD + 'px';
-    stage.style.bottom = -DRIFT_PAD + 'px';
-    stage.style.left = -DRIFT_PAD + 'px';
-    stage.style.right = panelOpen ? '' : -DRIFT_PAD + 'px'; // while the panel is open, CSS owns right
-    stage.style.transform = 'translate(' + driftAxis(h, 0x9E3779B1) + 'px,' + driftAxis(h, 0x85EBCA6B) + 'px)';
+    stage.style.top = stage.style.bottom = stage.style.left = pad + 'px';
+    stage.style.right = panelOpen ? 'calc(var(--fr-panel-width) + ' + pad + 'px)' : pad + 'px';
+    stage.style.transform = 'translate(' + (driftAxis(h, 0x9E3779B1) * scale) + 'px,' +
+      (driftAxis(h, 0x85EBCA6B) * scale) + 'px)';
   }
 
   var s = effective(F.slideshow.current() && F.slideshow.current().id);
@@ -138,38 +148,30 @@ window.framed = window.framed || {};
     return isNaN(v) ? 0 : v;
   }
 
-  // Dress any stage (the Art screen, or the launcher's miniature) in the given look.
-  // The picture is 16:9 and as large as the stage allows; the liner and moulding hug it, the same width
-  // all round, so the moulding meets the stage's (screen's) edge at the top and bottom and the bezel's
-  // black shows for the few mm left at the sides. With no frame the picture is the whole screen.
+  // Dress any stage (the Art screen, or the launcher's miniature) for the current picture.
+  // The picture is 16:9 and as large as the stage allows; the band hugs it, the same width all round, so
+  // it meets the stage's (screen's) edge at the top and bottom and the bezel's black shows for the few mm
+  // left at the sides. With None the picture is the whole screen and nothing else is drawn.
   function dress(st, fr, eff) {
-    eff = eff || s;
-    var f = frameOf(eff.frame);
-    fr.setAttribute('data-mount', f.mount);
-    fr.setAttribute('data-moulding', f.moulding);
-    fr.setAttribute('data-light', eff.light);
+    var lk = eff || s;
+    fr.setAttribute('data-style', lk.style);
+    fr.setAttribute('data-color', lk.color);
 
     var r = st.getBoundingClientRect();
-    var u = Math.min(r.width, r.height) / 100;
-    var mm = u / MM_PER_U;
-    var framed = f.moulding !== 'none';
-    var mw = framed ? cssMM(fr, '--l-mm') * mm : 0;
-    var fw = framed ? cssMM(fr, '--m-mm') * mm : 0;
-    var t = fw + mw;
-
-    st.setAttribute('data-framed', String(framed));
-    st.style.setProperty('--u', u + 'px');
+    if (!r.width || !r.height) return;   // not laid out (screen hidden): dressed again when shown
+    var mm = Math.min(r.width, r.height) / SCREEN_MM_SHORT;
+    var bw = lk.style === 'none' ? 0 : Math.max(1, Math.round(cssMM(fr, '--band-mm') * mm));
     st.style.setProperty('--mm', mm + 'px');
-    st.style.setProperty('--mw', mw + 'px');
-    st.style.setProperty('--fw', fw + 'px');
-    st.style.setProperty('--lx', eff.light === 'right' ? -1 : 1);
+    st.style.setProperty('--bw', bw + 'px');
 
-    var h = Math.max(1, Math.min(r.height - 2 * t, (r.width - 2 * t) / SCREEN)), w = h * SCREEN;
+    // Whole px, and the same parity as the stage, so the centred picture's edges (and the band's
+    // hairlines) sit on the pixel grid instead of blending half a pixel of the picture into the band.
+    var h = Math.max(1, Math.floor(Math.min(r.height - 2 * bw, (r.width - 2 * bw) / SCREEN)));
+    var w = Math.min(Math.round(h * SCREEN), Math.floor(r.width - 2 * bw));
+    if ((Math.round(r.height) - h) % 2) h -= 1;
+    if ((Math.round(r.width) - w) % 2) w -= 1;
     fr.style.width = w + 'px';
     fr.style.height = h + 'px';
-
-    // the moulding's outer edge, measured from the picture's edge: the same all round
-    ['--ft', '--fb', '--fl', '--fr'].forEach(function (k) { st.style.setProperty(k, t + 'px'); });
   }
 
   // Dimming and sensor-driven RGB gains affect only the art stage. The settings
@@ -199,11 +201,12 @@ window.framed = window.framed || {};
 
   // When the picture changes (slideshow tick, the picture grid), every settings row must show the new
   // picture's own look — not the previous picture's values. Runs whether or not the panel is open.
-  var SYNC_IDS = ['frame', 'light', 'drift'];
   function syncPanel() {
     if (!api) return;
-    for (var i = 0; i < SYNC_IDS.length; i++) api.set(SYNC_IDS[i], s[SYNC_IDS[i]]);
-    api.setHidden('light', s.frame === 'none');
+    if (api.get('style') !== s.style) buildControls();
+    api.set('style', s.style);
+    api.set('color', s.color);
+    api.set('drift', s.drift);
   }
 
   // Paint the picture on the inactive layer, then flip — the opacity transition is --fr-motion-art.
@@ -230,7 +233,7 @@ window.framed = window.framed || {};
     return v + ' ' + (c === 'days' ? (v === 1 ? 'day' : 'days') : (v === 1 ? 'hour' : 'hours'));
   }
 
-  function layout() { dress(stage, frame, s); applyDrift(); }
+  function layout() { applyDrift(); dress(stage, frame, s); }
 
   // ---- the picture grid: every library picture as a thumbnail cropped as the screen will show it ----
   function buildPictures() {
@@ -298,7 +301,7 @@ window.framed = window.framed || {};
 
   function buildControls() {
     var ss = F.slideshow.get();
-    var none = s.frame === 'none';
+    var st = styleOf(s.style);
     var specs = [
       { id: 'cadence', name: 'Slideshow', type: 'choice', value: ss.cadence, options: F.slideshow.CADENCES },
       { id: 'every', name: 'Every', type: 'range', value: ss.every, min: 1, max: F.slideshow.everyMax(ss), step: 1, hidden: ss.cadence === 'off', format: everyLabel },
@@ -318,12 +321,11 @@ window.framed = window.framed || {};
         help: 'Sensor dims the art with the room; Off shows a manual slider' },
       { id: 'adaptiveTone', name: 'Adaptive tone', type: 'choice', value: setting('adaptiveTone', 'on'), options: [
         { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }] },
-      { id: 'frame', name: 'Frame', type: 'choice', value: s.frame, options: FRAMES },
-      { id: 'light', name: 'Light from', type: 'choice', value: s.light, hidden: none, options: [
-        { value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
+      { id: 'style', name: 'Style', type: 'choice', value: s.style, options: STYLES },
+      { id: 'color', name: 'Colour', type: 'choice', value: s.color, options: st.colors, hidden: st.colors.length < 2 },
       { id: 'drift', name: 'Pixel shift', type: 'choice', value: s.drift, options: [
         { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }],
-        help: 'Nudges the art a few pixels each hour against burn-in' },
+        help: 'Shifts up to 6 pixels on a 4K screen each hour; a small margin keeps the whole picture visible' },
       { id: 'reset', name: 'Reset', type: 'action' }
     ];
     api = F.controls.render(controlsEl, specs, function (id, value) {
@@ -358,8 +360,12 @@ window.framed = window.framed || {};
       } else if (id === 'startScreen') {
         F.store.merge('settings', { startScreen: value }, {});
       } else {
-        var patch = {}; patch[id] = value; save(patch);
-        if (id === 'frame') api.setHidden('light', value === 'none');
+        var patch = {}; patch[id] = value;
+        var tones = F.store.get('artTones', {});
+        if (id === 'style') patch.color = colorFor(value, null, tones);
+        save(patch);
+        if (s.color) { tones[s.style] = s.color; F.store.set('artTones', tones); }
+        if (id === 'style') buildControls();
       }
       apply();
     });
@@ -368,6 +374,7 @@ window.framed = window.framed || {};
   // The launcher's miniature uses the same renderer, painting the current picture directly
   // in that picture's own remembered look.
   F.art = {
+    styles: function () { return JSON.parse(JSON.stringify(STYLES)); },
     paintInto: function (st, fr, im) {
       var item = F.slideshow.current();
       if (!item) return;

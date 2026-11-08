@@ -1,119 +1,96 @@
 /*
- * framed — physical rendering of picture frames on the Art screen.
+ * framed — physical rendering of the frame styles on the Art screen.
  *
- * These are material constants of real objects (satin black lacquer, gilding), not
- * interface decisions, so they live here rather than in the theme. The canon's no-shadow law governs
- * the UI; a framed picture on a wall is lit and casts shadows, and pretending otherwise looks flat.
+ * These are material constants of real objects (black lacquer, linen, rag paper, walnut), not
+ * interface decisions, so they live here rather than in the theme.
  *
- * The goal is a TV that passes for a framed painting, so the frame is drawn like a real one:
- *   - The frame is thin and continues the TV's own 14 mm black bezel: its flat face is the bezel's
- *     black, then a lit step down to the picture. It hugs the 16:9 picture, the same width all round,
- *     so it meets the screen's edge at the top and bottom; the few mm left at the sides are bezel black.
- *   - Mouldings and liners are bitmaps rendered offline by tools/gen_frames.py from real
- *     cross-sections (normals, a soft key from above-left, the room, self-shadowing, satin black,
- *     burnished/matte gilding), one strip per side because each rail is lit differently.
- *     CSS only places the four mitred strips; there are no CSS gradients on the frame (they band).
- *   - Real widths: mouldings are sized in mm against the 55" Frame's 1208.7 x 679.9 mm screen.
- *   - The light comes from above and to one side (data-light: the side the room's window is on).
- *     The frame shades whatever sits inside it (mat, liner, picture), most at the top.
+ * The goal is a TV that passes for a framed painting. The room's light keeps changing and moves as you
+ * walk past; light painted into a frame never does, and that gives it away. So the styles are FLAT:
+ *   - no highlights, no speculars, no shading that depends on where the light is;
+ *   - only cues that hold in any light: the material's texture, hairlines at sight edges, an even soft
+ *     occlusion where the picture meets what surrounds it (the same on all four sides), and depth
+ *     implied by a recess wall or a gap.
+ * The TV's real edge is black all round, so every style sits inside a black ring.
+ *
+ * Geometry (js/screens/art.js dress()): the picture is 16:9 and the band hugs it, the same width all
+ * round, so the band meets the screen's edge at the top and bottom and the few mm left at the sides are
+ * the bezel's black (--fr-bezel-black, the stage's background). The frame box (.art-frame) is the
+ * picture itself; the band's four mitred sides sit outside it.
  *
  * The stage provides (set by js/screens/art.js):
- *   --u   one hundredth of the stage's shorter edge, in px (so the miniature scales exactly)
  *   --mm  px per real millimetre (the stage's short edge is 679.9 mm)
- *   --mw  liner width (mount)                --fw  moulding width
- *   --ft --fr --fb --fl  distance from the picture's edge to the moulding's outer edge, per side
- *   --lx  1 when the light is on the left, -1 on the right (for shadows inside the un-mirrored image)
- * The frame box (.art-frame) is the picture itself; liner and moulding sit outside it.
- * Generated per design (end of file): --m-mm/--l-mm nominal width, --m-lip/--l-lip lip height, strips.
+ *   --bw  the band's width in px
+ * Supplied by the frame design handoff (end of file): --band-mm, and one strip per side and
+ * colour (texture, hairlines and the occlusion that falls on the band, baked and dithered: CSS gradients
+ * band on the TV). Shadows that fall on the picture are box-shadows here, per style.
  */
 
-/* ---------- the stage: the TV's (or the moulding's) opening, filled by the picture ----------
- *   ::after   with no moulding, the TV bezel's lip shadowing the picture's edges, strongest at the top */
-.art-stage::after {
-  content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
-}
-.art-stage:not([data-framed="true"])::after {
-  z-index: 4;
-  box-shadow: inset 0 calc(var(--u) * 1.4) calc(var(--u) * 2.2) calc(var(--u) * -1.2) rgba(0, 0, 0, 0.22),
-              inset 0 calc(var(--u) * -0.6) calc(var(--u) * 1.6) calc(var(--u) * -1.2) rgba(0, 0, 0, 0.08),
-              inset 0 0 calc(var(--u) * 1.8) calc(var(--u) * -0.6) rgba(0, 0, 0, 0.10);
-}
+/* ---------- the stage: the picture inside the TV's opening ----------
+ * With "None" nothing at all is drawn over or around the picture (no sides, no shadow, no line). */
 .art-stage .art-frame { z-index: 1; }
 
-/* ---------- the four mitred sides, shared by liner (mount) and moulding ---------- */
-.side { position: absolute; display: none; pointer-events: none; background-color: var(--fr-bezel-black); }
+/* ---------- the band: four mitred sides, z below the picture so its shadows can fall on them ----------
+ * Only the left and right sides are clipped to the mitre, and they lie over the top and bottom, which run
+ * the full width: two clipped edges meeting on the diagonal would each be anti-aliased and let the black
+ * show through as a dark seam (wrong on a paper sheet or a mat, which have no joint at all). Where the
+ * grain turns (wood, brushed metal) the mitre still shows, as a real joint does. */
+.side {
+  position: absolute; display: none; pointer-events: none;
+  background-color: var(--fr-bezel-black); background-repeat: repeat;
+}
 .side--t {
-  top: calc(var(--o-t) * -1); left: calc(var(--o-l) * -1); right: calc(var(--o-r) * -1); height: var(--w);
+  top: calc(var(--bw) * -1); left: calc(var(--bw) * -1); right: calc(var(--bw) * -1); height: var(--bw);
   background-repeat: repeat-x; background-size: auto 100%;
-  --tint-in: rgba(0, 0, 0, 0.16);
-  -webkit-clip-path: polygon(0 0, 100% 0, calc(100% - var(--w)) 100%, var(--w) 100%);
-  clip-path: polygon(0 0, 100% 0, calc(100% - var(--w)) 100%, var(--w) 100%);
 }
 .side--b {
-  bottom: calc(var(--o-b) * -1); left: calc(var(--o-l) * -1); right: calc(var(--o-r) * -1); height: var(--w);
+  bottom: calc(var(--bw) * -1); left: calc(var(--bw) * -1); right: calc(var(--bw) * -1); height: var(--bw);
   background-repeat: repeat-x; background-size: auto 100%;
-  --tint-in: rgba(255, 255, 255, 0.14);
-  -webkit-clip-path: polygon(var(--w) 0, calc(100% - var(--w)) 0, 100% 100%, 0 100%);
-  clip-path: polygon(var(--w) 0, calc(100% - var(--w)) 0, 100% 100%, 0 100%);
 }
 .side--l {
-  left: calc(var(--o-l) * -1); top: calc(var(--o-t) * -1); bottom: calc(var(--o-b) * -1); width: var(--w);
+  left: calc(var(--bw) * -1); top: calc(var(--bw) * -1); bottom: calc(var(--bw) * -1); width: var(--bw);
   background-repeat: repeat-y; background-size: 100% auto;
-  --tint-in: rgba(0, 0, 0, 0.08);
-  -webkit-clip-path: polygon(0 0, 100% var(--w), 100% calc(100% - var(--w)), 0 100%);
-  clip-path: polygon(0 0, 100% var(--w), 100% calc(100% - var(--w)), 0 100%);
+  -webkit-clip-path: polygon(0 0, 100% var(--bw), 100% calc(100% - var(--bw)), 0 100%);
+  clip-path: polygon(0 0, 100% var(--bw), 100% calc(100% - var(--bw)), 0 100%);
 }
 .side--r {
-  right: calc(var(--o-r) * -1); top: calc(var(--o-t) * -1); bottom: calc(var(--o-b) * -1); width: var(--w);
+  right: calc(var(--bw) * -1); top: calc(var(--bw) * -1); bottom: calc(var(--bw) * -1); width: var(--bw);
   background-repeat: repeat-y; background-size: 100% auto;
-  --tint-in: rgba(255, 255, 255, 0.04);
-  -webkit-clip-path: polygon(0 var(--w), 100% 0, 100% 100%, 0 calc(100% - var(--w)));
-  clip-path: polygon(0 var(--w), 100% 0, 100% 100%, 0 calc(100% - var(--w)));
+  -webkit-clip-path: polygon(0 var(--bw), 100% 0, 100% 100%, 0 calc(100% - var(--bw)));
+  clip-path: polygon(0 var(--bw), 100% 0, 100% 100%, 0 calc(100% - var(--bw)));
 }
-.mount { --o-t: var(--mw); --o-r: var(--mw); --o-b: var(--mw); --o-l: var(--mw); --w: var(--mw); z-index: 1; }
-.mould { --o-t: var(--ft); --o-r: var(--fr); --o-b: var(--fb); --o-l: var(--fl); --w: var(--fw); z-index: 3; }
+.art-frame[data-style]:not([data-style="none"]) .side { display: block; }
+.side--t, .side--b { z-index: 1; }
+.side--l, .side--r { z-index: 2; }
+.art-image { z-index: 3; }
+.art-image::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; display: none; }
+.art-frame[data-style]:not([data-style="none"]) .art-image::after { display: block; }
 
-/* Tizen fallback: without clip-path the four sides can't mitre — give them butt joints
- * instead (left/right stop where top/bottom end) so corners don't double-draw. */
-@supports not (clip-path: polygon(0 0, 100% 0, 0 100%)) {
-  .side--l, .side--r { top: calc(var(--w) - var(--o-t)); bottom: calc(var(--w) - var(--o-b)); }
+/* ---------- what falls on the picture, per style (even all round: no light direction) ---------- */
+/* Set in: the painting sits a few mm behind the TV's edge; the edge shades it softly all round */
+.art-frame[data-style="setin"] .art-image::after {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45),
+              inset 0 0 calc(var(--mm) * 5) calc(var(--mm) * 0.4) rgba(0, 0, 0, 0.42);
 }
-.art-image { z-index: 0; }
-.art-image::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
-
-/* light from the right: mirror the whole frame, then un-mirror the picture */
-.art-frame[data-light="right"], .art-frame[data-light="right"] .art-image { transform: scaleX(-1); }
-
-/* ---------- liners: what sits between the picture and the moulding ---------- */
-.art-frame[data-mount="goldline"] .mount { display: block; }
-.art-frame[data-moulding]:not([data-moulding="none"])[data-mount="float"] .mount { display: block; }
-
-/* the liner's sight edge stands a few mm proud of the picture and shades it, mostly from above */
-.art-frame[data-mount="goldline"] .art-image::after {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35),
-              inset calc(var(--lx) * var(--mm) * var(--l-lip) * 0.6) calc(var(--mm) * var(--l-lip) * 1.4)
-                    calc(var(--mm) * var(--l-lip) * 1.3) rgba(0, 0, 0, 0.38),
-              inset 0 0 calc(var(--mm) * 2) rgba(0, 0, 0, 0.18);
+/* Shadow gap: the canvas floats in front of the gap, so nothing falls on it (its edge is in the strip) */
+.art-frame[data-style="gap"] .art-image::after { display: none; }
+/* Thin frame, gallery metal, wood: a shallow frame lip, a crisp contact line and a little occlusion */
+.art-frame[data-style="thin"] .art-image::after,
+.art-frame[data-style="wood"] .art-image::after {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.32),
+              inset 0 0 calc(var(--mm) * 2.5) rgba(0, 0, 0, 0.30);
 }
-/* floater: the canvas stands proud of the tray; its own edge is a crisp dark line */
-.art-frame[data-mount="float"] .art-image::after { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45); }
-
-
-/* ---------- the moulding ---------- */
-.art-frame[data-moulding]:not([data-moulding="none"]) .mould { display: block; }
-
-/* The moulding's lip stands above everything inside it and, lit from above-left, throws a soft
- * shadow down and to the right across the top and left of the opening (mat, liner or picture),
- * plus the gentle occlusion found in any inside corner. Sized from the lip height in mm. */
-.art-frame::after {
-  content: ""; position: absolute; display: none; pointer-events: none; z-index: 2;
-  top: calc((var(--ft) - var(--fw)) * -1); right: calc((var(--fr) - var(--fw)) * -1);
-  bottom: calc((var(--fb) - var(--fw)) * -1); left: calc((var(--fl) - var(--fw)) * -1);
-  box-shadow: inset calc(var(--mm) * var(--m-lip) * 0.7) calc(var(--mm) * var(--m-lip) * 1.6)
-                    calc(var(--mm) * var(--m-lip) * 1.5) rgba(0, 0, 0, 0.40),
-              inset 0 0 calc(var(--mm) * 4) rgba(0, 0, 0, 0.20);
+.art-frame[data-style="metal"] .art-image::after {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28),
+              inset 0 0 calc(var(--mm) * 1.5) rgba(0, 0, 0, 0.22);
 }
-.art-frame[data-moulding]:not([data-moulding="none"])::after { display: block; }
+/* Shadowbox and linen: the art is set in below the band; a soft, even occlusion */
+.art-frame[data-style="box"] .art-image::after,
+.art-frame[data-style="linen"] .art-image::after {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28),
+              inset 0 0 calc(var(--mm) * 4.5) rgba(0, 0, 0, 0.30);
+}
+/* Paper edge: the picture is printed on the sheet, so nothing falls on it */
+.art-frame[data-style="paper"] .art-image::after { display: none; }
 
 /* ---------- the TV itself (home miniature, optional) ----------
  * With "TV frame" on, the miniature is a Samsung The Frame (2024, LS03D) to scale, so the whole
@@ -140,30 +117,124 @@
 }
 .home__art--tv .home__stage { box-shadow: 0 0 0 1px #060606; }
 
-/* ===== GENERATED by tools/gen_frames.py (do not edit by hand; edit the generator and re-run it) ===== */
-/* --m-mm / --l-mm: nominal width in mm (read by js/screens/art.js);
- * --m-lip / --l-lip: height of the sight edge above what sits inside it, in mm (cast shadows). */
-/* bezel: satin black, flush with the TV bezel */
-.art-frame[data-moulding="bezel"] { --m-mm: 12; --m-lip: 6; }
-.art-frame[data-moulding="bezel"] .mould.side--t { background-image: url("../assets/frames/bezel-t.jpg"); }
-.art-frame[data-moulding="bezel"] .mould.side--b { background-image: url("../assets/frames/bezel-b.jpg"); }
-.art-frame[data-moulding="bezel"] .mould.side--l { background-image: url("../assets/frames/bezel-l.jpg"); }
-.art-frame[data-moulding="bezel"] .mould.side--r { background-image: url("../assets/frames/bezel-r.jpg"); }
-/* bezelfloat: satin black, flush with the TV bezel */
-.art-frame[data-moulding="bezelfloat"] { --m-mm: 6; --m-lip: 0; }
-.art-frame[data-moulding="bezelfloat"] .mould.side--t { background-image: url("../assets/frames/bezelfloat-t.jpg"); }
-.art-frame[data-moulding="bezelfloat"] .mould.side--b { background-image: url("../assets/frames/bezelfloat-b.jpg"); }
-.art-frame[data-moulding="bezelfloat"] .mould.side--l { background-image: url("../assets/frames/bezelfloat-l.jpg"); }
-.art-frame[data-moulding="bezelfloat"] .mould.side--r { background-image: url("../assets/frames/bezelfloat-r.jpg"); }
-/* goldline: burnished gilt bead */
-.art-frame[data-mount="goldline"] { --l-mm: 5; --l-lip: 3; }
-.art-frame[data-mount="goldline"] .mount.side--t { background-image: url("../assets/frames/goldline-t.jpg"); }
-.art-frame[data-mount="goldline"] .mount.side--b { background-image: url("../assets/frames/goldline-b.jpg"); }
-.art-frame[data-mount="goldline"] .mount.side--l { background-image: url("../assets/frames/goldline-l.jpg"); }
-.art-frame[data-mount="goldline"] .mount.side--r { background-image: url("../assets/frames/goldline-r.jpg"); }
-/* float: floater gap: the black tray floor between the moulding and the canvas */
-.art-frame[data-mount="float"] { --l-mm: 9; --l-lip: 0; }
-.art-frame[data-mount="float"] .mount.side--t { background-image: url("../assets/frames/float-t.jpg"); }
-.art-frame[data-mount="float"] .mount.side--b { background-image: url("../assets/frames/float-b.jpg"); }
-.art-frame[data-mount="float"] .mount.side--l { background-image: url("../assets/frames/float-l.jpg"); }
-.art-frame[data-mount="float"] .mount.side--r { background-image: url("../assets/frames/float-r.jpg"); }
+/* ===== Frame style assets supplied by the 2026-11-07 design handoff. ===== */
+/* --band-mm: the band's width in mm, read by js/screens/art.js. The background colour is the
+ * strip's mean, shown while the strip loads. */
+.art-frame[data-style="setin"] { --band-mm: 2.5; }
+.art-frame[data-style="setin"][data-color="black"] .side { background-color: rgb(14, 13, 11); }
+.art-frame[data-style="setin"][data-color="black"] .side--t { background-image: url("../assets/frames/setin-black-t.jpg"); }
+.art-frame[data-style="setin"][data-color="black"] .side--b { background-image: url("../assets/frames/setin-black-b.jpg"); }
+.art-frame[data-style="setin"][data-color="black"] .side--l { background-image: url("../assets/frames/setin-black-l.jpg"); }
+.art-frame[data-style="setin"][data-color="black"] .side--r { background-image: url("../assets/frames/setin-black-r.jpg"); }
+.art-frame[data-style="gap"] { --band-mm: 7; }
+.art-frame[data-style="gap"][data-color="black"] .side { background-color: rgb(6, 6, 5); }
+.art-frame[data-style="gap"][data-color="black"] .side--t { background-image: url("../assets/frames/gap-black-t.jpg"); }
+.art-frame[data-style="gap"][data-color="black"] .side--b { background-image: url("../assets/frames/gap-black-b.jpg"); }
+.art-frame[data-style="gap"][data-color="black"] .side--l { background-image: url("../assets/frames/gap-black-l.jpg"); }
+.art-frame[data-style="gap"][data-color="black"] .side--r { background-image: url("../assets/frames/gap-black-r.jpg"); }
+.art-frame[data-style="gap"][data-color="charcoal"] .side { background-color: rgb(42, 42, 39); }
+.art-frame[data-style="gap"][data-color="charcoal"] .side--t { background-image: url("../assets/frames/gap-charcoal-t.jpg"); }
+.art-frame[data-style="gap"][data-color="charcoal"] .side--b { background-image: url("../assets/frames/gap-charcoal-b.jpg"); }
+.art-frame[data-style="gap"][data-color="charcoal"] .side--l { background-image: url("../assets/frames/gap-charcoal-l.jpg"); }
+.art-frame[data-style="gap"][data-color="charcoal"] .side--r { background-image: url("../assets/frames/gap-charcoal-r.jpg"); }
+.art-frame[data-style="thin"] { --band-mm: 10; }
+.art-frame[data-style="thin"][data-color="black"] .side { background-color: rgb(5, 5, 5); }
+.art-frame[data-style="thin"][data-color="black"] .side--t { background-image: url("../assets/frames/thin-black-t.jpg"); }
+.art-frame[data-style="thin"][data-color="black"] .side--b { background-image: url("../assets/frames/thin-black-b.jpg"); }
+.art-frame[data-style="thin"][data-color="black"] .side--l { background-image: url("../assets/frames/thin-black-l.jpg"); }
+.art-frame[data-style="thin"][data-color="black"] .side--r { background-image: url("../assets/frames/thin-black-r.jpg"); }
+.art-frame[data-style="thin"][data-color="gold"] .side { background-color: rgb(37, 30, 19); }
+.art-frame[data-style="thin"][data-color="gold"] .side--t { background-image: url("../assets/frames/thin-gold-t.jpg"); }
+.art-frame[data-style="thin"][data-color="gold"] .side--b { background-image: url("../assets/frames/thin-gold-b.jpg"); }
+.art-frame[data-style="thin"][data-color="gold"] .side--l { background-image: url("../assets/frames/thin-gold-l.jpg"); }
+.art-frame[data-style="thin"][data-color="gold"] .side--r { background-image: url("../assets/frames/thin-gold-r.jpg"); }
+.art-frame[data-style="thin"][data-color="silver"] .side { background-color: rgb(37, 37, 36); }
+.art-frame[data-style="thin"][data-color="silver"] .side--t { background-image: url("../assets/frames/thin-silver-t.jpg"); }
+.art-frame[data-style="thin"][data-color="silver"] .side--b { background-image: url("../assets/frames/thin-silver-b.jpg"); }
+.art-frame[data-style="thin"][data-color="silver"] .side--l { background-image: url("../assets/frames/thin-silver-l.jpg"); }
+.art-frame[data-style="thin"][data-color="silver"] .side--r { background-image: url("../assets/frames/thin-silver-r.jpg"); }
+.art-frame[data-style="metal"] { --band-mm: 6; }
+.art-frame[data-style="metal"][data-color="black"] .side { background-color: rgb(27, 27, 27); }
+.art-frame[data-style="metal"][data-color="black"] .side--t { background-image: url("../assets/frames/metal-black-t.jpg"); }
+.art-frame[data-style="metal"][data-color="black"] .side--b { background-image: url("../assets/frames/metal-black-b.jpg"); }
+.art-frame[data-style="metal"][data-color="black"] .side--l { background-image: url("../assets/frames/metal-black-l.jpg"); }
+.art-frame[data-style="metal"][data-color="black"] .side--r { background-image: url("../assets/frames/metal-black-r.jpg"); }
+.art-frame[data-style="metal"][data-color="graphite"] .side { background-color: rgb(68, 69, 73); }
+.art-frame[data-style="metal"][data-color="graphite"] .side--t { background-image: url("../assets/frames/metal-graphite-t.jpg"); }
+.art-frame[data-style="metal"][data-color="graphite"] .side--b { background-image: url("../assets/frames/metal-graphite-b.jpg"); }
+.art-frame[data-style="metal"][data-color="graphite"] .side--l { background-image: url("../assets/frames/metal-graphite-l.jpg"); }
+.art-frame[data-style="metal"][data-color="graphite"] .side--r { background-image: url("../assets/frames/metal-graphite-r.jpg"); }
+.art-frame[data-style="metal"][data-color="bronze"] .side { background-color: rgb(94, 75, 56); }
+.art-frame[data-style="metal"][data-color="bronze"] .side--t { background-image: url("../assets/frames/metal-bronze-t.jpg"); }
+.art-frame[data-style="metal"][data-color="bronze"] .side--b { background-image: url("../assets/frames/metal-bronze-b.jpg"); }
+.art-frame[data-style="metal"][data-color="bronze"] .side--l { background-image: url("../assets/frames/metal-bronze-l.jpg"); }
+.art-frame[data-style="metal"][data-color="bronze"] .side--r { background-image: url("../assets/frames/metal-bronze-r.jpg"); }
+.art-frame[data-style="box"] { --band-mm: 11; }
+.art-frame[data-style="box"][data-color="grey"] .side { background-color: rgb(177, 178, 175); }
+.art-frame[data-style="box"][data-color="grey"] .side--t { background-image: url("../assets/frames/box-grey-t.jpg"); }
+.art-frame[data-style="box"][data-color="grey"] .side--b { background-image: url("../assets/frames/box-grey-b.jpg"); }
+.art-frame[data-style="box"][data-color="grey"] .side--l { background-image: url("../assets/frames/box-grey-l.jpg"); }
+.art-frame[data-style="box"][data-color="grey"] .side--r { background-image: url("../assets/frames/box-grey-r.jpg"); }
+.art-frame[data-style="box"][data-color="white"] .side { background-color: rgb(206, 202, 190); }
+.art-frame[data-style="box"][data-color="white"] .side--t { background-image: url("../assets/frames/box-white-t.jpg"); }
+.art-frame[data-style="box"][data-color="white"] .side--b { background-image: url("../assets/frames/box-white-b.jpg"); }
+.art-frame[data-style="box"][data-color="white"] .side--l { background-image: url("../assets/frames/box-white-l.jpg"); }
+.art-frame[data-style="box"][data-color="white"] .side--r { background-image: url("../assets/frames/box-white-r.jpg"); }
+.art-frame[data-style="box"][data-color="charcoal"] .side { background-color: rgb(50, 50, 50); }
+.art-frame[data-style="box"][data-color="charcoal"] .side--t { background-image: url("../assets/frames/box-charcoal-t.jpg"); }
+.art-frame[data-style="box"][data-color="charcoal"] .side--b { background-image: url("../assets/frames/box-charcoal-b.jpg"); }
+.art-frame[data-style="box"][data-color="charcoal"] .side--l { background-image: url("../assets/frames/box-charcoal-l.jpg"); }
+.art-frame[data-style="box"][data-color="charcoal"] .side--r { background-image: url("../assets/frames/box-charcoal-r.jpg"); }
+.art-frame[data-style="paper"] { --band-mm: 10; }
+.art-frame[data-style="paper"][data-color="white"] .side { background-color: rgb(201, 196, 184); }
+.art-frame[data-style="paper"][data-color="white"] .side--t { background-image: url("../assets/frames/paper-white-t.jpg"); }
+.art-frame[data-style="paper"][data-color="white"] .side--b { background-image: url("../assets/frames/paper-white-b.jpg"); }
+.art-frame[data-style="paper"][data-color="white"] .side--l { background-image: url("../assets/frames/paper-white-l.jpg"); }
+.art-frame[data-style="paper"][data-color="white"] .side--r { background-image: url("../assets/frames/paper-white-r.jpg"); }
+.art-frame[data-style="paper"][data-color="cream"] .side { background-color: rgb(200, 187, 161); }
+.art-frame[data-style="paper"][data-color="cream"] .side--t { background-image: url("../assets/frames/paper-cream-t.jpg"); }
+.art-frame[data-style="paper"][data-color="cream"] .side--b { background-image: url("../assets/frames/paper-cream-b.jpg"); }
+.art-frame[data-style="paper"][data-color="cream"] .side--l { background-image: url("../assets/frames/paper-cream-l.jpg"); }
+.art-frame[data-style="paper"][data-color="cream"] .side--r { background-image: url("../assets/frames/paper-cream-r.jpg"); }
+.art-frame[data-style="paper"][data-color="grey"] .side { background-color: rgb(142, 141, 137); }
+.art-frame[data-style="paper"][data-color="grey"] .side--t { background-image: url("../assets/frames/paper-grey-t.jpg"); }
+.art-frame[data-style="paper"][data-color="grey"] .side--b { background-image: url("../assets/frames/paper-grey-b.jpg"); }
+.art-frame[data-style="paper"][data-color="grey"] .side--l { background-image: url("../assets/frames/paper-grey-l.jpg"); }
+.art-frame[data-style="paper"][data-color="grey"] .side--r { background-image: url("../assets/frames/paper-grey-r.jpg"); }
+.art-frame[data-style="paper"][data-color="black"] .side { background-color: rgb(22, 21, 19); }
+.art-frame[data-style="paper"][data-color="black"] .side--t { background-image: url("../assets/frames/paper-black-t.jpg"); }
+.art-frame[data-style="paper"][data-color="black"] .side--b { background-image: url("../assets/frames/paper-black-b.jpg"); }
+.art-frame[data-style="paper"][data-color="black"] .side--l { background-image: url("../assets/frames/paper-black-l.jpg"); }
+.art-frame[data-style="paper"][data-color="black"] .side--r { background-image: url("../assets/frames/paper-black-r.jpg"); }
+.art-frame[data-style="linen"] { --band-mm: 10; }
+.art-frame[data-style="linen"][data-color="natural"] .side { background-color: rgb(181, 168, 144); }
+.art-frame[data-style="linen"][data-color="natural"] .side--t { background-image: url("../assets/frames/linen-natural-t.jpg"); }
+.art-frame[data-style="linen"][data-color="natural"] .side--b { background-image: url("../assets/frames/linen-natural-b.jpg"); }
+.art-frame[data-style="linen"][data-color="natural"] .side--l { background-image: url("../assets/frames/linen-natural-l.jpg"); }
+.art-frame[data-style="linen"][data-color="natural"] .side--r { background-image: url("../assets/frames/linen-natural-r.jpg"); }
+.art-frame[data-style="linen"][data-color="grey"] .side { background-color: rgb(138, 136, 131); }
+.art-frame[data-style="linen"][data-color="grey"] .side--t { background-image: url("../assets/frames/linen-grey-t.jpg"); }
+.art-frame[data-style="linen"][data-color="grey"] .side--b { background-image: url("../assets/frames/linen-grey-b.jpg"); }
+.art-frame[data-style="linen"][data-color="grey"] .side--l { background-image: url("../assets/frames/linen-grey-l.jpg"); }
+.art-frame[data-style="linen"][data-color="grey"] .side--r { background-image: url("../assets/frames/linen-grey-r.jpg"); }
+.art-frame[data-style="linen"][data-color="black"] .side { background-color: rgb(33, 32, 30); }
+.art-frame[data-style="linen"][data-color="black"] .side--t { background-image: url("../assets/frames/linen-black-t.jpg"); }
+.art-frame[data-style="linen"][data-color="black"] .side--b { background-image: url("../assets/frames/linen-black-b.jpg"); }
+.art-frame[data-style="linen"][data-color="black"] .side--l { background-image: url("../assets/frames/linen-black-l.jpg"); }
+.art-frame[data-style="linen"][data-color="black"] .side--r { background-image: url("../assets/frames/linen-black-r.jpg"); }
+.art-frame[data-style="wood"] { --band-mm: 10; }
+.art-frame[data-style="wood"][data-color="walnut"] .side { background-color: rgb(83, 58, 40); }
+.art-frame[data-style="wood"][data-color="walnut"] .side--t { background-image: url("../assets/frames/wood-walnut-t.jpg"); }
+.art-frame[data-style="wood"][data-color="walnut"] .side--b { background-image: url("../assets/frames/wood-walnut-b.jpg"); }
+.art-frame[data-style="wood"][data-color="walnut"] .side--l { background-image: url("../assets/frames/wood-walnut-l.jpg"); }
+.art-frame[data-style="wood"][data-color="walnut"] .side--r { background-image: url("../assets/frames/wood-walnut-r.jpg"); }
+.art-frame[data-style="wood"][data-color="oak"] .side { background-color: rgb(154, 125, 91); }
+.art-frame[data-style="wood"][data-color="oak"] .side--t { background-image: url("../assets/frames/wood-oak-t.jpg"); }
+.art-frame[data-style="wood"][data-color="oak"] .side--b { background-image: url("../assets/frames/wood-oak-b.jpg"); }
+.art-frame[data-style="wood"][data-color="oak"] .side--l { background-image: url("../assets/frames/wood-oak-l.jpg"); }
+.art-frame[data-style="wood"][data-color="oak"] .side--r { background-image: url("../assets/frames/wood-oak-r.jpg"); }
+.art-frame[data-style="wood"][data-color="ebony"] .side { background-color: rgb(31, 27, 25); }
+.art-frame[data-style="wood"][data-color="ebony"] .side--t { background-image: url("../assets/frames/wood-ebony-t.jpg"); }
+.art-frame[data-style="wood"][data-color="ebony"] .side--b { background-image: url("../assets/frames/wood-ebony-b.jpg"); }
+.art-frame[data-style="wood"][data-color="ebony"] .side--l { background-image: url("../assets/frames/wood-ebony-l.jpg"); }
+.art-frame[data-style="wood"][data-color="ebony"] .side--r { background-image: url("../assets/frames/wood-ebony-r.jpg"); }
