@@ -4,8 +4,21 @@ const s = { brightness:100, artFloor:0, adaptiveBrightness:'on', adaptiveTone:'o
 const sample = (lux,cct=4500) => ({lux,cct_kelvin:cct,color_reliable:lux>=5,receivedAt:1000});
 assert.equal(core.target(s,sample(0),1000).brightness,0.069);
 const gain = p => 0.02 + 0.98 * p / 100;
-for (const [lux, percent] of [[0,5],[2,5],[4.5,8],[12.5,13],[27.5,15],[213,33],[586,45]]) {
-  assert(Math.abs(core.target(s,sample(lux),1000).brightness - gain(percent)) < 1e-10);
+for (const lux of [0, 0.5, 1, 2]) {
+  assert.equal(core.target(s,sample(lux),1000).brightness, gain(5));
+}
+// A smooth fit should stay close to observations, without hitting every noisy point.
+for (const [lux, percent] of [[4.5,8],[12.5,13],[27.5,15],[213,33],[586,45]]) {
+  const actual = (core.target(s,sample(lux),1000).brightness - 0.02) / 0.98 * 100;
+  assert(Math.abs(actual - percent) < 1.2);
+}
+// Above the floor, increasing light has diminishing effect, with no segment corners.
+let previousSlope = Infinity;
+for (let lux = 2.01; lux < 1000; lux += 0.25) {
+  const slope = (core.target(s,sample(lux + 0.001),1000).brightness -
+    core.target(s,sample(lux),1000).brightness) / 0.001;
+  assert(slope > 0 && slope <= previousSlope);
+  previousSlope = slope;
 }
 let previous = 0;
 for (let lux=0; lux<=1000; lux++) {

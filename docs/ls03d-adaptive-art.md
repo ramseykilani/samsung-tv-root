@@ -37,13 +37,18 @@ then automatic brightness smoothly returns to a fixed 15% fallback and neutral t
 Manual brightness is used only when adaptive brightness is off. Independent
 adaptive toggles persist. The Art settings panel displays live lux and kelvin.
 
-Brightness interpolates linearly between room-calibrated lux/slider-percent points:
-(2, 5), (4.5, 8), (12.5, 13), (27.5, 15), (213, 33), (586, 45).
-Zero through two lux stays at 5%; above 586 lux the final slope continues to
-about 58% at the sensor's 1000-lux limit. The 213-lux observation used normal
-room lighting; 586 lux used a direct lamp and remains provisional. Transitions
-retain the three-second exponential smoothing. Auto ignores saved manual
-brightness and legacy Art floor values; Art floor is no longer a setting.
+Brightness uses a smooth shifted power curve, with slider percentage
+`5 * ((lux - 1.18) / 0.82) ** 0.336` above 2 lux and a fixed 5% at 0–2 lux.
+This is a weighted least-squares fit to (4.5, 8), (12.5, 13), (27.5, 15),
+(213, 33), (586, 45), anchored at (2, 5). Fit weights are 3, 3, 3, 1, 0.5:
+low-light observations take precedence; 213 lux used normal room lighting;
+586 lux used a direct lamp and remains provisional. Rounded fit parameters
+produce about 8%, 12%, 16%, 32%, and 45% at those readings, and about 54%
+at the sensor's 1000-lux limit. Above the floor the curve is smooth, increasing,
+and concave, with no interpolation corners. The region above 586 lux is an
+unvalidated extrapolation. Transitions retain three-second exponential smoothing.
+Auto ignores saved manual brightness and legacy Art floor values; Art floor is
+no longer a setting.
 Percentages use the manual slider's gain mapping (2% + 98% × slider/100), so
 5% auto matches 5% manual visually. Tone reduces green and blue relative to red
 as CCT falls, with a capped strength of 0.7. Below 5 lux, CCT is treated as
