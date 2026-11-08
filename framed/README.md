@@ -144,6 +144,7 @@ as `REMOTE_ART_BASE` in `js/library.js`):
 ```js
 var MEDIA_ADDONS = [
   { name: 'Cinemeta',   base: 'https://v3-cinemeta.strem.io' },  // official movie/series catalog + meta
+  { name: 'OpenSubtitles v3', base: 'https://opensubtitles-v3.strem.io' }, // external subtitles
   { name: 'Torrentio',  base: 'https://torrentio.strem.fun' },   // stream results (torrents → unplayable)
   { name: 'Local demo', base: 'addons/demo' }                    // bundled offline catalog
 ];
@@ -208,6 +209,14 @@ var MEDIA_ADDONS = [
   to Art, or return to details. The choice persists in `framed.watch.prefs.endBehavior`;
   existing autoplay preferences migrate automatically. Autoplay waits for the video
   to finish; without a next episode, the finished screen remains.
+- **External subtitles:** OpenSubtitles v3 is included by default through its Stremio
+  addon. Movie and episode subtitles appear in the player's Subtitles menu even
+  when the video has no embedded captions. Choose a language once to reuse it on
+  later videos; Off remains Off. Lookup uses the movie or episode ID, so some
+  releases may need a different file or a timing adjustment. The provider can be
+  disabled/restored from Addons. Provider outages or missing matches leave playback
+  working without external captions. No separate OpenSubtitles API key is needed
+  for this public addon.
 - **Subtitle timing:** the Subtitles menu shifts captions up to 10 seconds earlier or
   later in 0.5-second steps, with Reset timing. Corrections apply to HTML5 text cues and
   the AVPlay subtitle overlay, reset for each video, and remain when switching subtitle
