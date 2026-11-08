@@ -63,6 +63,31 @@ window.framed = window.framed || {};
     var tracks = null;         // [{index,label,lang,codec,enabled}]
     var dtsSwitched = false;
     var generation = 0, active = false, wantPlay = false;
+    var seeking = false, seekTarget = null;
+
+    // AVPlay accepts one asynchronous seek at a time. Keep the newest target
+    // visible and queue it instead of dropping rapid remote presses.
+    function seekTo(ms) {
+      seekTarget = ms;
+      if (seeking) return;
+      seeking = true;
+      var ticket = generation;
+      emit(video, 'seeking');
+      emit(video, 'waiting');
+      function finish(failed) {
+        if (ticket !== generation) return;
+        seeking = false;
+        if (!failed) timeMs = ms;
+        if (seekTarget !== ms) { seekTo(seekTarget); return; }
+        seekTarget = null;
+        emit(video, 'timeupdate');
+        emit(video, 'seeked');
+      }
+      try { av.seekTo(ms, function () { finish(false); }, function () { finish(true); }); }
+      catch (e) { finish(true); }
+    }
+
+
 
     function refreshDuration() {
       try { var d = av.getDuration(); if (d > 0) durMs = d; } catch (e) { /* not ready */ }
@@ -128,6 +153,7 @@ window.framed = window.framed || {};
     }
     function close() {
       generation++; active = false; wantPlay = false;
+      seeking = false; seekTarget = null;
       try { av.stop(); } catch (e) { /* idle */ }
       try { av.close(); } catch (e) { /* none */ }
       document.documentElement.removeAttribute('data-playback-engine');
@@ -143,10 +169,10 @@ window.framed = window.framed || {};
         onbufferingcomplete: guard(function () {
           refreshDuration();
           // Initial buffering may complete before prepareAsync succeeds.
-          if (meta && !pausedFlag) emit(video, 'playing');
+          if (meta && !seeking) emit(video, pausedFlag ? 'pause' : 'playing');
         }),
         onstreamcompleted: guard(function () { pausedFlag = true; wantPlay = false; emit(video, 'ended'); }),
-        oncurrentplaytime: guard(function (ms) { timeMs = ms; emit(video, 'timeupdate'); }),
+        oncurrentplaytime: guard(function (ms) { if (!seeking) { timeMs = ms; emit(video, 'timeupdate'); } }),
         onerror: guard(function (type) { fail(type, 'event'); }),
         onevent: function () {}, onsubtitlechange: function () {}, ondrmevent: function () {}
       };
@@ -191,8 +217,11 @@ window.framed = window.framed || {};
       },
       paused: function () { return pausedFlag; },
       hasMeta: function () { return meta; },
-      seek: function (sec) { try { av.seekTo(Math.round(sec * 1000)); } catch (e) { /* out of range */ } },
-      time: function () { return timeMs / 1000; },
+      seek: function (sec) {
+        if (!meta || !isFinite(sec)) return;
+        seekTo(Math.max(0, Math.min(durMs || Infinity, Math.round(sec * 1000))));
+      },
+      time: function () { return (seekTarget !== null ? seekTarget : timeMs) / 1000; },
       duration: function () { return durMs / 1000; },
       bufferedEnd: function () { return null; }, // AVPlay exposes no buffered range
       setRate: function (r) {
