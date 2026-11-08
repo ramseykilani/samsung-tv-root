@@ -18,7 +18,7 @@
     previousTime = now;
     matrix.setAttribute('values', core.matrix(current));
     stage.style.filter = 'url(#adaptive-art-filter)';
-    var text = !enabled() ? 'Manual' : target.fresh ? Math.round(sensor.lux) + ' lux · ' + sensor.cct_kelvin + ' K' : 'Sensor unavailable · manual brightness';
+    var text = !enabled() ? 'Manual' : target.fresh ? Math.round(sensor.lux) + ' lux · ' + sensor.cct_kelvin + ' K' : (settings().adaptiveBrightness === 'on' ? 'Sensor unavailable · 15% brightness' : 'Sensor unavailable · manual brightness');
     var status = document.getElementById('ambient-status');
     if (status) status.textContent = text;
     var artStatus = document.getElementById('art-ambient-status');

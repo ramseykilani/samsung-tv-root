@@ -33,12 +33,19 @@ The bridge exposes GET `/sensor/ambient`, authenticated by a separate read-only
 token. This token cannot call `/intent`. The server caches samples for two seconds.
 
 Art polls every three seconds while visible. Samples expire after 12 seconds,
-then output smoothly returns to manual brightness and neutral tone. Independent
+then automatic brightness smoothly returns to a fixed 15% fallback and neutral tone.
+Manual brightness is used only when adaptive brightness is off. Independent
 adaptive toggles persist. The Art settings panel displays live lux and kelvin.
 
-Brightness uses `(clamp((lux - 2) / 498, 0, 1)) ** 0.6` between Art floor and
-the manual brightness ceiling, with a three-second exponential transition.
-Art floor 0 permits a 2% image gain. Tone reduces green and blue relative to red
+Brightness interpolates linearly between room-calibrated lux/slider-percent points:
+(2, 5), (4.5, 8), (12.5, 13), (27.5, 15), (213, 33), (586, 45).
+Zero through two lux stays at 5%; above 586 lux the final slope continues to
+about 58% at the sensor's 1000-lux limit. The 213-lux observation used normal
+room lighting; 586 lux used a direct lamp and remains provisional. Transitions
+retain the three-second exponential smoothing. Auto ignores saved manual
+brightness and legacy Art floor values; Art floor is no longer a setting.
+Percentages use the manual slider's gain mapping (2% + 98% × slider/100), so
+5% auto matches 5% manual visually. Tone reduces green and blue relative to red
 as CCT falls, with a capped strength of 0.7. Below 5 lux, CCT is treated as
 unreliable and tone returns to neutral. The SVG matrix affects the art only.
 
@@ -64,8 +71,8 @@ controlled illumination and independent display/light measurements.
    the reachable desktop bridge URL and the read-only token. Never embed the
    privileged bridge/controller credential. Sign and install the Tizen package.
    Treat that package as private because it embeds the read-only credential.
-5. Enable either adaptive toggle in Art. Adjust Art floor for the desired darkest
-   result. The desktop bridge and existing root connection must remain available.
+5. Enable either adaptive toggle in Art. Automatic brightness has a fixed 5%
+   minimum; switch it off to expose the independent manual brightness slider. The desktop bridge and existing root connection must remain available.
 
 The installed Windows deployment runs the ambient bridge at user login through
 the task `Samsung TV Ambient - Frame`. Restarting that task was verified to
@@ -79,3 +86,13 @@ darkness, CCT, manual limits, stale data, and smoothing checks. The native helpe
 built without warnings. Browser verification covered live readings, dimming,
 tone, and saved toggles after reload. The installed TV package passed the user's
 physical cover/uncover test. Tone calibration remains an approximation.
+
+### Calibration reference
+
+Samsung's [Art Mode guide](https://www.samsung.com/us/support/answer/ANS10005239/)
+describes ambient brightness/color adjustment, but does not publish numerical
+lux-to-brightness calibration. Our percentages are software image gain, not a
+Samsung panel-brightness scale. The user measurements above define this curve.
+
+Art menu value rows apply changes with Left/Right or explicit pointer selection.
+OK leaves their current values unchanged; action rows such as Reset still execute.

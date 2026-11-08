@@ -1,15 +1,15 @@
 /*
  * framed — Settings screen: framed-level settings only (home art, theme, about).
- * Art-level settings (brightness, art floor, adaptive, slideshow, start-in,
+ * Art-level settings (brightness, adaptive, slideshow, start-in,
  * frame/matte/fit, pixel shift) live in the Art screen's controls panel, where
  * each change previews on the art itself — see screens/art.js buildControls.
- * Brightness and floor are still pushed through window.__tvBridge at boot so
+ * Manual brightness is still pushed through window.__tvBridge at boot so
  * the TV matches what the user last chose; values persist under "framed.settings".
  */
 window.framed = window.framed || {};
 (function (F) {
   var el = document.getElementById('screen-settings');
-  var DEFAULTS = { brightness: 100, artFloor: 10, adaptiveBrightness: 'on', adaptiveTone: 'on', theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
+  var DEFAULTS = { brightness: 100, adaptiveBrightness: 'on', adaptiveTone: 'on', theme: 'mhach', homeTv: 'on', startScreen: 'launcher' };
   var s = F.store.merge('settings', {}, DEFAULTS);
 
   var aboutBridge = document.getElementById('about-bridge');
@@ -55,7 +55,6 @@ window.framed = window.framed || {};
 
   // push persisted values into the bridge at boot so the TV matches what the user last chose
   window.__tvBridge.setBrightness(s.brightness);
-  window.__tvBridge.setArtFloor(s.artFloor);
 
   F.router.register('settings', {
     el: el,
