@@ -638,7 +638,11 @@ window.framed = window.framed || {};
       stripValues();
     }
     if (id === 'sound' && !spec.gated) {
-      eng.selectAudio(parseInt(v, 10));
+      var switched = eng.selectAudio(parseInt(v, 10));
+      // Controls paint optimistically. Restore the engine's selection so a
+      // rejected switch does not turn the next click into a no-op.
+      ctl.play.set('sound', String(currentAudioTrack()));
+      if (!switched) F.toast('Couldn’t switch sound tracks. Try again or choose another track.', 'warn');
       stripValues();
     }
   }

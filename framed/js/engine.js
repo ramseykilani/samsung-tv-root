@@ -202,9 +202,10 @@ window.framed = window.framed || {};
       rate: function () { try { var s = av.getSpeed && av.getSpeed(); return s || pendingRate; } catch (e) { return pendingRate; } },
       audioTracks: function () { if (tracks === null) refreshTracks(); return tracks; },
       selectAudio: function (i) {
-        if (!tracks || !tracks[i]) return;
-        try { av.setSelectTrack('AUDIO', tracks[i].index); } catch (e) { return; }
+        if (!tracks || !tracks[i]) return false;
+        try { av.setSelectTrack('AUDIO', tracks[i].index); } catch (e) { return false; }
         for (var j = 0; j < tracks.length; j++) tracks[j].enabled = j === i;
+        return true;
       },
       lastError: function () { return err; }
     };
@@ -242,8 +243,11 @@ window.framed = window.framed || {};
       },
       selectAudio: function (i) {
         var t = video.audioTracks;
-        if (!t) return;
-        for (var j = 0; j < t.length; j++) t[j].enabled = j === i;
+        if (!t || !t[i]) return false;
+        try {
+          for (var j = 0; j < t.length; j++) t[j].enabled = j === i;
+        } catch (e) { return false; }
+        return !!t[i].enabled;
       },
       lastError: function () { return video.error; }
     };
