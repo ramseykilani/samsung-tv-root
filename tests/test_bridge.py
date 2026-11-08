@@ -23,12 +23,23 @@ def test_scan_art_lists_images_and_titles(tmp_path):
 
     manifest = _scan_art(tmp_path)
 
+    versions = {im["file"]: im.pop("version") for im in manifest["images"]}
+    assert all(versions.values())
     assert manifest == {
         "images": [
             {"file": "Sunset_Lake.png", "title": "Sunset Lake"},
             {"file": "deep-web.jpg", "title": "deep web"},
         ]
     }
+
+
+def test_scan_art_version_changes_when_file_is_replaced(tmp_path):
+    image = tmp_path / "art.png"
+    image.write_bytes(b"first")
+    first = _scan_art(tmp_path)["images"][0]["version"]
+    assert _scan_art(tmp_path)["images"][0]["version"] == first
+    image.write_bytes(b"replacement")
+    assert _scan_art(tmp_path)["images"][0]["version"] != first
 
 
 def test_scan_art_missing_directory(tmp_path):
@@ -80,8 +91,18 @@ def test_bridge_health_and_art(tmp_path):
             raw = await reader.read()
             writer.close()
             assert raw.startswith(b"HTTP/1.1 200")
+            assert b"Cache-Control: no-store" in raw
             payload = json.loads(raw.split(b"\r\n\r\n", 1)[1])
             assert payload["images"][0]["file"] == "a.png"
+            reader, writer = await asyncio.open_connection("127.0.0.1", port)
+            writer.write(_make_req(port, "GET", "/art/a.png?v=1"))
+            await writer.drain()
+            writer.write_eof()
+            raw = await reader.read()
+            writer.close()
+            assert b"Cache-Control: private, max-age=60" in raw
+            assert raw.endswith(b"PNGDATA")
+
         finally:
             task.cancel()
             with pytest.raises(asyncio.CancelledError):

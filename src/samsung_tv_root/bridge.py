@@ -104,9 +104,11 @@ def _scan_art(directory: Path) -> dict[str, Any]:
     if directory.is_dir():
         for entry in sorted(directory.iterdir(), key=lambda e: e.name):
             if entry.is_file() and entry.suffix.lower() in IMAGE_SUFFIXES:
+                info = entry.stat()
                 images.append(
                     {
                         "file": entry.name,
+                        "version": f"{info.st_mtime_ns}-{info.st_size}",
                         "title": entry.stem.replace("_", " ").replace("-", " "),
                     }
                 )
@@ -162,6 +164,13 @@ class BridgeServer:
             status, body, content_type = _json_response(
                 500, {"error": f"internal: {error}"}
             )
+        # Art URLs carry the file version from the manifest. Keep image responses
+        # reusable across the stage, thumbnails and dimension probes.
+        cache_control = (
+            b"Cache-Control: private, max-age=60\r\n"
+            if status == 200 and content_type.startswith("image/")
+            else b"Cache-Control: no-store\r\n"
+        )
         headers = (
             _status_line(status)
             + f"Content-Type: {content_type}\r\n".encode()
@@ -169,7 +178,7 @@ class BridgeServer:
             + b"Access-Control-Allow-Origin: *\r\n"
             + b"Access-Control-Allow-Headers: Authorization, Content-Type\r\n"
             + b"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-            + b"Cache-Control: no-store\r\n"
+            + cache_control
             + b"Connection: close\r\n\r\n"
         )
         try:

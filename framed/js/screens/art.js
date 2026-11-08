@@ -127,6 +127,7 @@ window.framed = window.framed || {};
   var chromeTimer;
   var driftTimer = null;
   var libraryTimer = null;
+  var picturesDirty = true;
   var driftHour = 0;
   var KEY = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, PLAY_PAUSE: 179, TIZEN_PLAY_PAUSE: 10252 };
 
@@ -237,6 +238,8 @@ window.framed = window.framed || {};
 
   // ---- the picture grid: every library picture as a thumbnail cropped as the screen will show it ----
   function buildPictures() {
+    if (!picturesDirty) return;
+    picturesDirty = false;
     var list = F.library.list();
     picturesEl.innerHTML = '';
     picturesEl.hidden = !list.length;
@@ -282,6 +285,7 @@ window.framed = window.framed || {};
 
   function openPanel() {
     if (panelOpen) return;
+    buildPictures();
     panelOpen = true;
     panel.hidden = false;
     el.classList.add('panel-open');
@@ -386,7 +390,14 @@ window.framed = window.framed || {};
   // the sequencer advanced (timer, catch-up, manual, or from the Settings screen)
   F.slideshow.subscribe(function () { if (!el.hidden) apply(); });
   // library swapped at runtime (remote manifest arrived): rebuild the picture grid
-  window.addEventListener('framed:library', function () { if (!el.hidden) { buildPictures(); apply(); } });
+  window.addEventListener('framed:library', function () {
+    picturesDirty = true;
+    if (panelOpen) {
+      buildPictures();
+      F.nav.setScope(panel, { remember: false, initial: currentPick() });
+    }
+    if (!el.hidden) apply();
+  });
 
   corner.addEventListener('click', openPanel);
   window.addEventListener('resize', layout);
@@ -396,7 +407,6 @@ window.framed = window.framed || {};
     enter: function () {
       F.adaptive.start();
       F.slideshow.start();   // catch up on elapsed periods and tick while art is shown
-      buildPictures();
       apply();               // load this picture's own look first — the panel rows are built from it
       buildControls();
       driftHour = Math.floor(Date.now() / 3600000);
