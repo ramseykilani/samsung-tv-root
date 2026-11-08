@@ -34,6 +34,7 @@ window.framed = window.framed || {};
    * Order = the order catalogs and stream results appear in. Public defaults:
    *   Cinemeta — official movie/series catalogs + metadata.
    *   Torrentio — stream results; its sources are torrents (unplayable on TV, kept for parity).
+   *   OpenSubtitles v3 — external subtitles for movies and series.
    *   Local demo — bundled offline catalog under addons/demo/ so the section works with no network.
    *
    * Personal/debrid addon URLs (e.g. a Torrentio URL configured with a debrid key at
@@ -45,6 +46,7 @@ window.framed = window.framed || {};
   var DEFAULT_ADDONS = [
     { name: 'Cinemeta', base: 'https://v3-cinemeta.strem.io' },
     { name: 'Torrentio', base: 'https://torrentio.strem.fun' },
+    { name: 'OpenSubtitles v3', base: 'https://opensubtitles-v3.strem.io' },
     { name: 'Local demo', base: 'addons/demo' }
   ];
   // Installed set = defaults (minus any the viewer disabled) + addons installed
@@ -482,26 +484,41 @@ window.framed = window.framed || {};
 
   /* ---------- subtitles (addon `subtitles` resource) ---------- */
 
+  // Respect both manifest-wide and resource-specific type/ID restrictions.
+  function supportsSubtitles(m, type, id) {
+    if (!m) return false;
+    return (m.resources || []).some(function (r) {
+      if (r !== 'subtitles' && (!r || r.name !== 'subtitles')) return false;
+      var types = r.types || m.types;
+      var prefixes = r.idPrefixes || m.idPrefixes;
+      return (!types || types.indexOf(type) !== -1) &&
+        (!prefixes || prefixes.some(function (prefix) { return id.indexOf(prefix) === 0; }));
+    });
+  }
+
   function subtitles(type, id, cb) {
-    var per = {};
-    var pending = MEDIA_ADDONS.length;
-    function done() { if (--pending === 0) cb(flatten(per)); }
-    if (!pending || !id) return cb([]);
-    MEDIA_ADDONS.forEach(function (addon, ai) {
-      loadManifest(addon, function (m) {
-        if (m && hasResource(m, 'subtitles')) {
-          var path = 'subtitles/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + '.json';
-          getJSON(addonUrl(addon.base, path), function (json) {
-            var ss = json && json.subtitles;
-            if (ss && ss.length) {
-              per[ai] = [];
-              for (var i = 0; i < ss.length; i++) {
-                if (ss[i] && ss[i].url) per[ai].push({ lang: ss[i].lang || '', url: ss[i].url, addon: addon.name });
+    if (!id) return cb([]);
+    withLocalAddons(function () {
+      var per = {};
+      var pending = MEDIA_ADDONS.length;
+      function done() { if (--pending === 0) cb(flatten(per)); }
+      if (!pending || !id) return cb([]);
+      MEDIA_ADDONS.forEach(function (addon, ai) {
+        loadManifest(addon, function (m) {
+          if (supportsSubtitles(m, type, id)) {
+            var path = 'subtitles/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + '.json';
+            getJSON(addonUrl(addon.base, path), function (json) {
+              var ss = json && json.subtitles;
+              if (ss && ss.length) {
+                per[ai] = [];
+                for (var i = 0; i < ss.length; i++) {
+                  if (ss[i] && ss[i].url) per[ai].push({ lang: ss[i].lang || '', url: ss[i].url, addon: addon.name });
+                }
               }
-            }
-            done();
-          });
-        } else done();
+              done();
+            });
+          } else done();
+        });
       });
     });
   }
