@@ -317,9 +317,6 @@ window.framed = window.framed || {};
         hidden: setting('adaptiveBrightness', 'on') === 'on',
         format: function (v) { return v + '%'; },
         help: 'Software dimming; 0 is near-black, below the panel minimum' },
-      { id: 'artFloor', name: 'Art floor', type: 'range', value: setting('artFloor', 10), min: 0, max: 100, step: 1, fastStep: 5,
-        format: function (v) { return v + '%'; },
-        help: 'The darkest level dimming may reach' },
       { id: 'adaptiveBrightness', name: 'Adaptive brightness', type: 'choice', value: setting('adaptiveBrightness', 'on'), options: [
         { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }],
         help: 'Sensor dims the art with the room; Off shows a manual slider' },
@@ -332,6 +329,7 @@ window.framed = window.framed || {};
         help: 'Shifts up to 6 pixels on a 4K screen each hour; a small margin keeps the whole picture visible' },
       { id: 'reset', name: 'Reset', type: 'action' }
     ];
+    specs.forEach(function (spec) { spec.confirmOnly = true; });
     api = F.controls.render(controlsEl, specs, function (id, value) {
       if (id === 'reset') {
         var per = F.store.get('artPer', {});
@@ -356,10 +354,6 @@ window.framed = window.framed || {};
       } else if (id === 'brightness') {
         F.store.merge('settings', { brightness: value }, {});
         window.__tvBridge.setBrightness(value);
-        window.dispatchEvent(new CustomEvent('framed:settings'));
-      } else if (id === 'artFloor') {
-        F.store.merge('settings', { artFloor: value }, {});
-        window.__tvBridge.setArtFloor(value);
         window.dispatchEvent(new CustomEvent('framed:settings'));
       } else if (id === 'startScreen') {
         F.store.merge('settings', { startScreen: value }, {});

@@ -3,7 +3,7 @@
  *   Up/Down move between rows (nav engine), Left/Right adjust the value, Enter cycles/acts.
  * spec: { id, name, type: 'range'|'choice'|'swatch'|'action', value, min, max, step, unit,
  *         options:[{value,label,color,disabled}], help, format(v), hidden,
- *         note, gated, fault }
+ *         note, gated, fault, confirmOnly }
  * render(container, specs, onChange(id, value, spec)) -> { get, set, setHidden, el(id),
  *         setNote, setGated, setFault }
  * note: a visible reason line (.control__note); gated: reachable but unusable, reason in
@@ -64,6 +64,7 @@ window.framed = window.framed || {};
         track.appendChild(bar);
         state.fill = fill; state.thumb = thumb;
         bar.addEventListener('click', function (e) {
+          e.stopPropagation();
           var r = bar.getBoundingClientRect();
           var t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
           commit(state, snap(spec, spec.min + t * (spec.max - spec.min)));
@@ -103,6 +104,7 @@ window.framed = window.framed || {};
         if (spec.gated) { onChange(spec.id, state.value, spec, { rejected: true }); return; }
         if (spec.fault) { onChange(spec.id, true, spec, { retry: true }); return; }
         if (spec.type === 'action') onChange(spec.id, true, spec);
+        else if (spec.confirmOnly) return; // Art values are already applied; OK confirms.
         else if (spec.type === 'choice' || spec.type === 'swatch') adjust(state, 1, false, true);
         else if (spec.type === 'range') adjust(state, 1, false, true);
       });
