@@ -66,6 +66,16 @@ Checked for a writable panel-brightness interface reachable by the root agent:
 - **sysfs `/sys/class/backlight`** — no evidence of a writable node on this
   platform; the Frame's panel brightness is owned by the AV pipeline.
 
+## App-only implementation (2026-11-08)
+
+Framed now has a software-dimming first step in `framed/js/brightness.js`:
+Channel Up/Down adjusts non-Art screens and displays a temporary percentage bar.
+Art keeps its separate brightness pipeline. This does not implement the global
+panel action discussed below, and the root daemon's example rules must not be
+installed as though those actions exist. Native AVPlay compositing and physical
+remote delivery still need TV verification. The previous "no on-screen UI"
+proposal below is superseded for Framed by the owner's requested slider.
+
 ## Verdict
 
 The *claim* half is done — Channel Up/Down are claimable by `code` rules today,

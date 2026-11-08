@@ -31,6 +31,7 @@ window.framed = window.framed || {};
     next.el.style.animation = '';
     if (next.enter) next.enter();
     document.body.setAttribute('data-screen', name);
+    if (F.brightness) F.brightness.refresh();
     F.nav.setKeyIntercept(next.onKey || null);
   }
 
