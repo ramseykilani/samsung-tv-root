@@ -106,7 +106,7 @@ window.framed = window.framed || {};
   /* ---------- chrome ---------- */
 
   function showChrome() {
-    if (chrome === 'shown' && hideTimer) { clear(hideTimer); }
+    clear(hideTimer); hideTimer = 0;
     if (chrome !== 'shown') { chrome = 'shown'; attr('chrome', 'shown'); liftCues(); }
     paintLine();
     // linger only while actually playing: a paused or scrubbing band stays
@@ -116,7 +116,7 @@ window.framed = window.framed || {};
   }
   function hideChrome() {
     clear(hideTimer); hideTimer = 0;
-    if (panel === 'open' || scrub === 'active') return;
+    if (state !== 'playing' || panel === 'open' || scrub === 'active') return;
     if (chrome === 'hidden') return;
     chrome = 'hidden'; attr('chrome', 'hidden');
     lowerCues();
@@ -125,7 +125,7 @@ window.framed = window.framed || {};
 
   /* ---------- line / legend ---------- */
 
-  var STATE_WORDS = { starting: 'Opening', playing: '', paused: '', buffering: 'Buffering', ended: '', refused: '' };
+  var STATE_WORDS = { starting: 'Opening', playing: 'Playing', paused: 'Paused', buffering: 'Buffering', ended: '', refused: '' };
   function paintLine() {
     stateEl.textContent = chromeOn() ? (STATE_WORDS[state] || '') : '';
     nextBtn.hidden = !nextEp;
@@ -151,7 +151,9 @@ window.framed = window.framed || {};
     var b = eng.bufferedEnd();
     bufferedEl.style.width = (b ? pct(b) : 0) + '%';
     if (scrub === 'active') {
-      previewEl.style.width = pct(scrubTarget) + '%';
+      previewEl.style.left = pct(scrubTarget) + '%';
+      spanEl.style.left = Math.min(p, pct(scrubTarget)) + '%';
+      spanEl.style.width = Math.abs(pct(scrubTarget) - p) + '%';
       tipEl.style.left = pct(scrubTarget) + '%';
       var delta = Math.round(scrubTarget - t);
       tipDeltaEl.textContent = (delta >= 0 ? '+' : '−') + fmt(Math.abs(delta));
@@ -282,6 +284,7 @@ window.framed = window.framed || {};
     if (s === 'starting') { attr('slow', 'false'); paintVeil('starting'); showChrome(); }
     if (s === 'refused') { attr('slow', 'false'); paintVeil('refused'); chromeShowForce(); focusFirstVeil(); }
     if (s === 'buffering') {
+      showChrome();
       clear(stallTimer);
       stallTimer = setTimeout(function () { if (state === 'buffering') paintVeil('stalled'); }, themeMs('--fr-stall', 20000));
     } else clear(stallTimer);
@@ -299,6 +302,10 @@ window.framed = window.framed || {};
   video.addEventListener('playing', function () { if (state !== 'refused') setState('playing'); silentCheck(); });
   video.addEventListener('pause', function () { if (state === 'playing' || state === 'buffering') setState('paused'); });
   video.addEventListener('waiting', function () { if (state === 'playing' || state === 'paused') setState('buffering'); });
+  video.addEventListener('seeked', function () {
+    if (state !== 'refused' && state !== 'ended') setState(eng.paused() ? 'paused' : 'playing');
+    paintTimeline(); paintLine();
+  });
   video.addEventListener('timeupdate', function () {
     if (cueOverlay) cueOverlay.tick(eng.time() - subDelay);
     paintTimeline();
