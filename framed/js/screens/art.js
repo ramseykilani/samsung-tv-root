@@ -420,7 +420,7 @@ window.framed = window.framed || {};
     },
     leave: function () {
       if (window.__tvBridge && window.__tvBridge.setArtActive) window.__tvBridge.setArtActive(false);
-      F.adaptive.stop(); F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); clearInterval(libraryTimer);
+      F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); clearInterval(libraryTimer);
     },
     back: function () {
       if (panelOpen) { closePanel(); return true; }

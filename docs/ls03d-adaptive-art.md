@@ -32,8 +32,15 @@ around it. The Python adapter rejects failed, missing, or out-of-range samples.
 The bridge exposes GET `/sensor/ambient`, authenticated by a separate read-only
 token. This token cannot call `/intent`. The server caches samples for two seconds.
 
-Art polls every three seconds while visible. Samples expire after 12 seconds,
+The app polls every three seconds while visible, including on the launcher and
+other screens, so Art's brightness and tone are prepared before entry. Off Art,
+new readings apply immediately to its hidden stage; while viewing Art, changes
+retain smooth transitions. Samples expire after 12 seconds,
 then automatic brightness smoothly returns to a fixed 15% fallback and neutral tone.
+Hiding the app pauses polling but retains the last reading and displayed
+brightness/tone for the current app session. Resuming starts at that same output
+and resumes adjustment without resetting to the fallback. Retained readings keep
+their original expiry time. A cold launch still needs its first sensor response.
 Manual brightness is used only when adaptive brightness is off. Independent
 adaptive toggles persist. The Art settings panel displays live lux and kelvin.
 
