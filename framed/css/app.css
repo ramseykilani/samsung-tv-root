@@ -135,12 +135,12 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
 /* ---------- art stage: the screen, bezel-black around the 16:9 picture ----------
  * The stage's background is the TV bezel's black, so the few mm the picture does not cover read as
  * more bezel. The frame box is sized by JS (art.js layout()) to be the largest centred 16:9 rect
- * inside the stage, less the frame's own thickness all round — the moulding then meets the screen's
+ * inside the stage, less the frame's own thickness all round — the frame band then meets the screen's
  * edge at top and bottom and its flat face continues the bezel black at the sides. The picture
- * always covers: the library only holds 16:9 works, so nothing is ever cropped or matted. */
+ * uses contain so even works within the library’s 16:9 tolerance keep every corner visible. */
 .screen--art { background: var(--fr-bezel-black); overflow: hidden; }
 .art-stage {
-  --u: 1vmin; --mw: 0px; --fw: 0px;      /* mount / moulding geometry (JS, see css/frames.css) */
+  --mm: 1px; --bw: 0px;                 /* frame band geometry (JS, see css/frames.css) */
   position: absolute; top: 0; right: 0; bottom: 0; left: 0;
   background: var(--fr-bezel-black);
   display: flex; align-items: center; justify-content: center;
@@ -148,12 +148,12 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
 }
 .screen--art.panel-open .art-stage { right: var(--fr-panel-width); }
 .art-frame { position: relative; flex: none; }
-.art-image { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background-repeat: no-repeat; background-position: center; background-size: cover; }
+.art-image { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background-repeat: no-repeat; background-position: center; background-size: contain; }
 /* slideshow cross-fade: two stacked layers; JS paints the next picture on the inactive one, then
  * flips data-active. A slow dissolve, as a gallery lights a new work. */
 .art-layer {
   position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-  background-repeat: no-repeat; background-position: center; background-size: cover;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
   opacity: 0; transition: opacity var(--fr-motion-art);
 }
 .art-layer[data-active="true"] { opacity: 1; }
