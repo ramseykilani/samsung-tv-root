@@ -498,3 +498,21 @@ remote's RETURN key (keyCode `10009`) reaches the page instead of closing the ap
 - Slideshow timers are plain `setTimeout`s and are cleared whenever the Art screen is left; the
   TV may suspend timers when the app is backgrounded — catch-up on entry covers that case.
 - `cursor: none` by default; a real pointer movement (`body.has-pointer`) shows it and lets hover move focus.
+
+### Channel-button brightness (app-only)
+
+Channel Up/Down changes Framed's non-Art screens in 5-point steps between 5%
+and 100%, with a percentage bar at the top right for two seconds after the last
+press. The setting is saved as `settings.appBrightness`, independently of Art's
+manual and adaptive brightness. The bar does not take focus. Art ignores these
+adjustments and shows a reminder that it has its own brightness settings.
+
+This version uses a black software overlay, not panel-backlight control. It
+covers Framed's UI and HTML video; compositing over native AVPlay still needs
+verification on the TV. External apps are unaffected. Tizen ChannelUp/Down are
+registered as web key codes 427/428; colour-key shortcuts 403/404 remain intact.
+The lower bound keeps the screen recoverable with Channel Up.
+
+Validate with `node tests/test_brightness.js` (Playwright/Chromium). Before TV
+release, check physical channel keys, hold repeat, AVPlay dimming, Art isolation,
+and that the normal channel keys still work after leaving Framed.

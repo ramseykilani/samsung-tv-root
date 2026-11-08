@@ -167,6 +167,7 @@ window.framed = window.framed || {};
 
   function onKeyDown(e) {
     if (e.defaultPrevented) return;
+    if (F.brightness && F.brightness.onKey(e)) { e.preventDefault(); return; }
     var tag = (e.target && e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea') return;
 
@@ -240,7 +241,7 @@ window.framed = window.framed || {};
     // Tizen: register additional remote keys we care about (optional; arrows/Enter/Return are default).
     try {
       if (window.tizen && tizen.tvinputdevice) {
-        ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaRewind', 'MediaFastForward', 'ColorF0Red', 'ColorF1Green'].forEach(function (k) {
+        ['ChannelUp', 'ChannelDown', 'MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaRewind', 'MediaFastForward', 'ColorF0Red', 'ColorF1Green'].forEach(function (k) {
           try { tizen.tvinputdevice.registerKey(k); } catch (e) { /* key not on this remote */ }
         });
       }

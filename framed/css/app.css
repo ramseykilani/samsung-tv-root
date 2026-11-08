@@ -732,3 +732,18 @@ html[data-playback-engine="avplay"], html[data-playback-engine="avplay"] body { 
 .panel__group:first-of-type { margin-top: 0; }
 .panel__body .control { margin-bottom: var(--fr-space-2); }
 .panel__foot { padding: var(--fr-space-4) var(--fr-space-7) var(--fr-space-6); border-top: var(--fr-border-width) solid var(--fr-color-border); }
+
+/* App brightness: above web/native video, below its readable indicator. */
+.brightness-veil {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 20;
+  background: var(--fr-color-veil); opacity: 0; pointer-events: none;
+}
+.brightness-hud {
+  position: fixed; right: var(--fr-space-7); top: var(--fr-space-7); z-index: 21;
+  width: var(--fr-brightness-width); padding: var(--fr-space-4);
+  background: var(--fr-color-surface-raised); color: var(--fr-color-text);
+  border-radius: var(--fr-radius); pointer-events: none;
+}
+.brightness-hud__label { display: flex; justify-content: space-between; margin-bottom: var(--fr-space-3); }
+.brightness-hud__track { height: var(--fr-brightness-track-height); background: var(--fr-color-border); }
+.brightness-hud__fill { height: 100%; background: var(--fr-color-focus); }

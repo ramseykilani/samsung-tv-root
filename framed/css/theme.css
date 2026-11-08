@@ -97,6 +97,8 @@ html[data-theme="mhach"] {
   --fr-home-art-recede: 0.45;          /* how far it dims while another app is focused */
 
   /* ---- shape & motion: the pyramid does not forgive curves; motion cuts ---- */
+  --fr-brightness-width: 40rem;
+  --fr-brightness-track-height: 0.6rem;
   --fr-radius: 0;
   --fr-motion: 60ms ease-out;
   --fr-motion-reveal: 110ms ease-out;
