@@ -9,6 +9,7 @@
  *   launch(appId: string): Promise<{ok:boolean}>
  *   setBrightness(level: 0..100): void
  *   setArtFloor(level: 0..100): void
+ *   setArtActive(active: boolean): void
  *   getState(): { platform, brightness, artFloor, lastLaunch, isStub }
  */
 (function () {
@@ -56,6 +57,7 @@
       state.artFloor = clamp(level);
       log('setArtFloor', state.artFloor);
     },
+    setArtActive: function () {},
     getState: function () {
       return {
         platform: state.platform,

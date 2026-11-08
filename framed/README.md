@@ -473,6 +473,12 @@ remote's RETURN key (keyCode `10009`) reaches the page instead of closing the ap
 
 ## Runtime notes (Tizen 8 web engine)
 
+- Art mode disables Samsung's idle screensaver through `webapis.appcommon`, renews
+  the request once a minute, and reapplies it when the app returns to the foreground.
+  Leaving Art, hiding the app, or unloading the page restores the screensaver.
+  This also applies with slideshow rotation off. The packaged app requires the
+  `appcommon` privilege; reinstall the updated widget to apply manifest changes.
+  This does not override TV sleep timers or power-saving shutdown settings.
 - Tizen TV web apps render at **1920×1080 logical**; the panel upscales to 4K. Sizes are authored in
   logical px via `rem`; `<meta name="viewport" content="width=1920">` pins this.
 - Plain scripts (no ES modules) so `file://` and the wgt load without CORS. ES2015-level syntax —

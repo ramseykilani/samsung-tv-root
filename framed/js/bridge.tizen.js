@@ -3,6 +3,44 @@
 (function () {
   var config = null, loading = null;
   var state = { platform: 'Tizen / software dimming', brightness: 100, artFloor: 10, isStub: false };
+  var artActive = false, screenSaverTimer = null, screenSaverRequested = false;
+  var screenSaverWarning = false;
+  function screenSaverError(error) {
+    if (!screenSaverWarning) console.warn('[framed] Cannot set screensaver', error);
+    screenSaverWarning = true;
+  }
+  function setScreenSaver(disabled) {
+    var api = window.webapis && window.webapis.appcommon;
+    if (!api || !api.setScreenSaver) {
+      if (window.tizen) screenSaverError('Samsung AppCommon API unavailable');
+      return;
+    }
+    // Mark before calling: even a failed callback may follow an applied request.
+    screenSaverRequested = disabled;
+    try {
+      api.setScreenSaver(disabled ? api.AppCommonScreenSaverState.SCREEN_SAVER_OFF :
+        api.AppCommonScreenSaverState.SCREEN_SAVER_ON,
+      function () { screenSaverWarning = false; }, screenSaverError);
+    } catch (e) { screenSaverError(e); }
+  }
+  function syncScreenSaver() {
+    clearInterval(screenSaverTimer);
+    screenSaverTimer = null;
+    if (artActive && !document.hidden) {
+      setScreenSaver(true);
+      // Reassert after transient failures or a TV runtime reset during long sessions.
+      screenSaverTimer = setInterval(function () { setScreenSaver(true); }, 60000);
+    } else if (screenSaverRequested) {
+      setScreenSaver(false);
+    }
+  }
+  document.addEventListener('visibilitychange', syncScreenSaver);
+  window.addEventListener('pagehide', function () {
+    clearInterval(screenSaverTimer);
+    screenSaverTimer = null;
+    if (screenSaverRequested) setScreenSaver(false);
+  });
+  window.addEventListener('pageshow', syncScreenSaver);
   function request(url, token) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
@@ -35,6 +73,7 @@
     },
     setBrightness: function (v) { state.brightness = v; },
     setArtFloor: function (v) { state.artFloor = v; },
+    setArtActive: function (active) { artActive = !!active; syncScreenSaver(); },
     getState: function () { return state; },
     readAmbient: function () {
       return configuration().then(function (c) { return request(c.url.replace(/\/$/, '') + '/sensor/ambient', c.sensorToken); })

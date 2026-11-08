@@ -38,6 +38,8 @@
   <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
   <!-- Needed by the AVPlay backend (webapis.avplay): hardware decode of AC3/E-AC3 the <video> element can't do. -->
   <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
+  <!-- Allow art mode to suppress Samsung's idle screensaver while visible. -->
+  <tizen:privilege name="http://developer.samsung.com/privilege/appcommon"/>
 
   <!-- Only js/library.js may reach the network: the optional LAN art folder (REMOTE_ART_BASE). Everything else is offline. -->
   <access origin="*" subdomains="true"/>

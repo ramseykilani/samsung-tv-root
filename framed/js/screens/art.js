@@ -399,6 +399,7 @@ window.framed = window.framed || {};
   F.router.register('art', {
     el: el,
     enter: function () {
+      if (window.__tvBridge && window.__tvBridge.setArtActive) window.__tvBridge.setArtActive(true);
       F.adaptive.start();
       F.slideshow.start();   // catch up on elapsed periods and tick while art is shown
       apply();               // load this picture's own look first — the panel rows are built from it
@@ -417,7 +418,10 @@ window.framed = window.framed || {};
       clearInterval(libraryTimer);
       libraryTimer = setInterval(function () { F.library.reload(); }, 60000);
     },
-    leave: function () { F.adaptive.stop(); F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); clearInterval(libraryTimer); },
+    leave: function () {
+      if (window.__tvBridge && window.__tvBridge.setArtActive) window.__tvBridge.setArtActive(false);
+      F.adaptive.stop(); F.slideshow.pause(); closePanel(); clearTimeout(chromeTimer); clearInterval(driftTimer); clearInterval(libraryTimer);
+    },
     back: function () {
       if (panelOpen) { closePanel(); return true; }
       return false;
