@@ -129,7 +129,7 @@ button:focus, [data-focusable]:focus { outline: none; }  /* focus is drawn expli
   box-shadow: var(--fr-shadow-panel);
 }
 .panel__sensor { padding: 16px 32px 0; font-size: 16px; opacity: 0.8; }
-.panel__body { flex: 1; overflow-y: auto; padding: var(--fr-space-7) var(--fr-space-7); scrollbar-width: none; }
+.panel__body { flex: 1; min-height: 0; overflow-y: auto; scroll-padding: var(--fr-space-7); padding: var(--fr-space-7) var(--fr-space-7); scrollbar-width: none; }
 .panel__body::-webkit-scrollbar { display: none; }
 
 /* ---------- art stage: the screen, bezel-black around the 16:9 picture ----------
