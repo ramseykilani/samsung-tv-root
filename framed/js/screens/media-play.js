@@ -506,27 +506,26 @@ window.framed = window.framed || {};
     });
   }
 
-  /* ---------- cue lift ---------- */
-  // cues sit where the band is: while chrome shows, pin cue lines above the band
-  // (::cue can't be positioned; VTTCue.line is writable per cue)
-  function liftCues() {
-    if (eng.kind === 'avplay') { if (subsOverlayEl) subsOverlayEl.classList.add('is-lifted'); return; }
-    setCueLine(-6);
+  /* ---------- subtitle position ---------- */
+  function subPosition() {
+    var value = prefs().subPosition;
+    return typeof value === 'number' && isFinite(value) ? Math.max(0, Math.min(80, value)) : 6;
   }
-  function lowerCues() {
-    if (eng.kind === 'avplay') { if (subsOverlayEl) subsOverlayEl.classList.remove('is-lifted'); return; }
-    setCueLine('auto');
-  }
-  function setCueLine(line) {
+  // Keep captions above the controls, then return to the saved position.
+  function liftCues() { applySubPosition(); }
+  function lowerCues() { applySubPosition(); }
+  function applySubPosition() {
+    var bottom = Math.max(subPosition(), chrome === 'shown' ? 22 : 0);
+    if (subsOverlayEl) subsOverlayEl.style.bottom = bottom + '%';
     var tracks = video.textTracks;
     for (var i = 0; i < tracks.length; i++) {
       var tr = tracks[i];
       if (tr.mode !== 'showing' || !tr.cues) continue;
       for (var j = 0; j < tr.cues.length; j++) {
-        var cue = tr.cues[j];
         try {
-          if (line === 'auto') { if (cue._frLine !== undefined) { cue.line = cue._frLine; delete cue._frLine; } }
-          else { if (cue._frLine === undefined) cue._frLine = cue.line; cue.line = line; }
+          tr.cues[j].snapToLines = false;
+          tr.cues[j].lineAlign = 'end';
+          tr.cues[j].line = 100 - bottom;
         } catch (e) { /* cue is gone */ }
       }
     }
@@ -589,8 +588,11 @@ window.framed = window.framed || {};
         note: !subLangs.length ? 'No subtitles arrived for this video.' : null },
       { id: 'version', name: 'Version', type: 'choice', value: subUrl, options: versionOptions(),
         hidden: !(subLang && (subFiles[subLang] || []).length > 1) },
-      { id: 'size', name: 'Size', type: 'choice', value: String(prefs().subSize),
-        options: [{ value: '80', label: '80' }, { value: '100', label: '100' }, { value: '130', label: '130' }, { value: '160', label: '160' }] },
+      { id: 'size', name: 'Size', type: 'range', value: prefs().subSize, min: 25, max: 300, step: 5,
+        format: function (v) { return v + '%'; } },
+      { id: 'position', name: 'Vertical position', type: 'range', value: subPosition(), min: 0, max: 80, step: 1,
+        format: function (v) { return v + '% from bottom'; },
+        help: 'Left lowers captions; right raises them. Saved for future videos.' },
       { id: 'timing', name: 'Timing', type: 'range', value: subDelay, min: -10, max: 10, step: 0.5,
         format: function (v) { return v === 0 ? 'In sync' : Math.abs(v).toFixed(1) + ' s ' + (v < 0 ? 'earlier' : 'later'); },
         help: 'Adjust by half a second. Resets for each video.' },
@@ -634,6 +636,7 @@ window.framed = window.framed || {};
       for (var i = 0; i < files.length; i++) if (files[i].url === v) { selectAddonSub(files[i]); break; }
     }
     else if (id === 'size') { F.media.setPrefs({ subSize: parseInt(v, 10) }); applySubSize(); }
+    else if (id === 'position') { F.media.setPrefs({ subPosition: v }); applySubPosition(); }
     stripValues();
   }
   function onPlayChange(id, v, spec, meta) {
@@ -759,6 +762,7 @@ window.framed = window.framed || {};
     stallTimer = setTimeout(function () {
       if (state === 'starting' || state === 'buffering') { attr('slow', 'true'); paintVeil('stalled'); }
     }, themeMs('--fr-stall', 20000));
+    applySubPosition();
     loadSubtitles();
     buildDrawer();
     paintVeil('starting');

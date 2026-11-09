@@ -589,7 +589,6 @@ html[data-playback-engine="avplay"], html[data-playback-engine="avplay"] body { 
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-family: var(--fr-cue-font); font-size: 28px;
 }
-.player__subs.is-lifted { bottom: 22%; }
 .player__sub-line {
   max-width: 80%; text-align: center; line-height: 1.3;
   color: var(--fr-cue-ink); background: var(--fr-cue-ground);
