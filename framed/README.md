@@ -220,7 +220,10 @@ var MEDIA_ADDONS = [
 - **Subtitle timing:** the Subtitles menu shifts captions up to 10 seconds earlier or
   later in 0.5-second steps, with Reset timing. Corrections apply to HTML5 text cues and
   the AVPlay subtitle overlay, reset for each video, and remain when switching subtitle
-  files within that video. Subtitle language, size, and playback speed still persist.
+  files within that video. Subtitle language, size, vertical position, and playback speed persist.
+- **Subtitle appearance:** Size adjusts from 25% to 300% in 5% steps. Vertical
+  position adjusts from 0% to 80% above the bottom in 1% steps with Left/Right.
+  Captions temporarily move above the playback controls while those are visible.
 - **Search history:** the last eight searches sit under the keyboard as one-click chips.
 - **Continue Watching:** the player writes its position (throttled, and on pause/Back) and
   seeks back to it on entry; the shelf lists in-progress titles newest first, cards and
