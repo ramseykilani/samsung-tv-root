@@ -44,16 +44,21 @@ their original expiry time. A cold launch still needs its first sensor response.
 Manual brightness is used only when adaptive brightness is off. Independent
 adaptive toggles persist. The Art settings panel displays live lux and kelvin.
 
-Brightness uses a smooth shifted power curve, with slider percentage
-`5 * ((lux - 1.18) / 0.82) ** 0.336` above 2 lux and a fixed 5% at 0–2 lux.
-This is a weighted least-squares fit to (4.5, 8), (12.5, 13), (27.5, 15),
-(213, 33), (586, 45), anchored at (2, 5). Fit weights are 3, 3, 3, 1, 0.5:
-low-light observations take precedence; 213 lux used normal room lighting;
-586 lux used a direct lamp and remains provisional. Rounded fit parameters
-produce about 8%, 12%, 16%, 32%, and 45% at those readings, and about 54%
-at the sensor's 1000-lux limit. Above the floor the curve is smooth, increasing,
-and concave, with no interpolation corners. The region above 586 lux is an
-unvalidated extrapolation. Transitions retain three-second exponential smoothing.
+Automatic brightness has a 1% minimum at 0–1 lux, then follows the lux reading
+as a slider percentage through 5 lux: 2 lux → 2%, 3 → 3%, 4 → 4%, and 5 → 5%.
+From 5 to 12.5 lux, a cubic Hermite segment matches the values and slopes of
+this linear section and the original shifted power curve. At and above 12.5 lux,
+the curve remains `5 * ((lux - 1.18) / 0.82) ** 0.336` (capped at 100%).
+The join is smooth and increasing; the brighter-room calibration is unchanged.
+
+The original power curve was a weighted least-squares fit to (4.5, 8),
+(12.5, 13), (27.5, 15), (213, 33), (586, 45), anchored at (2, 5), with weights
+3, 3, 3, 1, 0.5. New manual low-light tests supersede its 2- and 4.5-lux
+calibration. The retained curve produces about 12%, 16%, 32%, and 45% at
+12.5, 27.5, 213, and 586 lux, and about 54% at the sensor's 1000-lux limit.
+The 586-lux direct-lamp observation remains provisional, and the region above
+it is an unvalidated extrapolation. Transitions retain three-second exponential
+smoothing. Manual brightness continues to allow the full 0–100% range.
 Auto ignores saved manual brightness and legacy Art floor values; Art floor is
 no longer a setting.
 Percentages use the manual slider's gain mapping (2% + 98% × slider/100), so
@@ -83,7 +88,7 @@ controlled illumination and independent display/light measurements.
    the reachable desktop bridge URL and the read-only token. Never embed the
    privileged bridge/controller credential. Sign and install the Tizen package.
    Treat that package as private because it embeds the read-only credential.
-5. Enable either adaptive toggle in Art. Automatic brightness has a fixed 5%
+5. Enable either adaptive toggle in Art. Automatic brightness has a fixed 1%
    minimum; switch it off to expose the independent manual brightness slider. The desktop bridge and existing root connection must remain available.
 
 The installed Windows deployment runs the ambient bridge at user login through
