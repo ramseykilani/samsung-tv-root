@@ -1,9 +1,9 @@
 /*
  * framed — declarative TV controls. Each control is one focusable row:
- *   Up/Down move between rows (nav engine), Left/Right adjust the value, Enter cycles/acts.
+ *   Up/Down move between rows (nav engine), Left/Right adjust the value, Enter confirms/acts.
  * spec: { id, name, type: 'range'|'choice'|'swatch'|'action', value, min, max, step, unit,
  *         options:[{value,label,color,disabled}], help, format(v), hidden,
- *         note, gated, fault, confirmOnly }
+ *         note, gated, fault }
  * render(container, specs, onChange(id, value, spec)) -> { get, set, setHidden, el(id),
  *         setNote, setGated, setFault }
  * note: a visible reason line (.control__note); gated: reachable but unusable, reason in
@@ -104,9 +104,8 @@ window.framed = window.framed || {};
         if (spec.gated) { onChange(spec.id, state.value, spec, { rejected: true }); return; }
         if (spec.fault) { onChange(spec.id, true, spec, { retry: true }); return; }
         if (spec.type === 'action') onChange(spec.id, true, spec);
-        else if (spec.confirmOnly) return; // Art values are already applied; OK confirms.
-        else if (spec.type === 'choice' || spec.type === 'swatch') adjust(state, 1, false, true);
-        else if (spec.type === 'range') adjust(state, 1, false, true);
+        // Value changes are applied by arrows or an explicit pointer selection.
+        // OK confirms the current value without advancing or wrapping it.
       });
 
       paint(state);
@@ -121,22 +120,21 @@ window.framed = window.framed || {};
 
     // Returns whether the key actually changed (or was consumed by) the row; a
     // no-op at the row's limit lets the nav engine fall through to spatial move.
-    function adjust(state, delta, fast, wrap) {
+    function adjust(state, delta, fast) {
       var spec = state.spec;
       if (spec.type === 'range') {
         var step = (spec.step || 1) * (fast ? (spec.fastStep || 2) : 1);
         var v = snap(spec, state.value + delta * step);
-        if (v === state.value && wrap) v = spec.min; // Enter at max wraps to min
         return commit(state, v);
       } else if (spec.type === 'choice' || spec.type === 'swatch') {
         var opts = spec.options, n = opts.length;
         var idx = indexOf(opts, state.value);
         for (var k = 1; k <= n; k++) {
           var j = idx + delta * k;
-          if (wrap) j = ((j % n) + n) % n; else if (j < 0 || j >= n) return false;
+          if (j < 0 || j >= n) return false;
           if (opts[j].disabled) {
             onChange(spec.id, opts[j].value, spec, { rejected: true });
-            if (!wrap) return true; else continue;
+            return true;
           }
           return commit(state, opts[j].value);
         }
