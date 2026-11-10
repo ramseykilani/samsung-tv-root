@@ -29,17 +29,20 @@ const root = path.resolve(__dirname, '../framed');
           window.attempts.push(index);
           if (window.failSwitch) throw new Error('InvalidStateError');
         },
-        stop() {}, open() {}, setDisplayRect() {}, setListener() {}, prepareAsync(done) { done(); }, play() {},
+        stop() {}, open() {}, setDisplayRect() {}, setListener() {}, prepareAsync(done) { done(); }, play() {}, pause() {},
         getDuration: () => 120000
       } };
       window.framed = {
         nav: { focus: el => el.focus(), setScope() {} },
-        router: { register() {} },
+        router: { register(name, screen) { window.screenPlayer = screen; }, go(name) { window.destination = name; } },
         media: { prefs: () => ({ subSize: 100, autoplayNext: false }) },
         toast: message => window.notices.push(message)
       };
       document.getElementById('screen-media-play').hidden = false;
     });
+    await page.addScriptTag({ path: path.join(root, 'js/store.js') });
+    await page.addScriptTag({ path: path.join(root, 'js/media.js') });
+    await page.evaluate(() => { framed.media.subtitles = (type, id, done) => done([]); });
     await page.addScriptTag({ path: path.join(root, 'js/engine.js') });
     await page.evaluate(() => {
       const attach = framed.engine.attach;
@@ -51,6 +54,7 @@ const root = path.resolve(__dirname, '../framed');
     const french = '#mp-ctl-play [data-control-id="sound"] [data-value="1"]';
     const selected = () => page.locator('#mp-ctl-play [data-control-id="sound"] [data-selected="true"]').textContent();
     await page.click(french);
+    assert.equal(await page.evaluate(() => framed.media.prefs().audioLang), '', 'failed selection must not persist');
     assert.equal(await selected(), 'English', 'failed switch must restore the actual selection');
     assert.equal(await page.locator('#mp-sound .act__value').textContent(), 'English');
     assert.equal(await page.evaluate(() => notices.length), 1, 'failure must be visible');
@@ -58,6 +62,7 @@ const root = path.resolve(__dirname, '../framed');
     await page.click(french);
     assert.deepEqual(await page.evaluate(() => attempts), [5, 5], 'same option must retry using the native track index');
     assert.equal(await selected(), 'French');
+    assert.equal(await page.evaluate(() => framed.media.prefs().audioLang), 'french');
     assert.equal(await page.locator('#mp-sound .act__value').textContent(), 'French');
     await page.click(french);
     assert.equal(await page.evaluate(() => attempts.length), 2, 'successful selection remains a no-op');
@@ -73,6 +78,41 @@ const root = path.resolve(__dirname, '../framed');
     await page.evaluate(() => { engine.open('test://movie'); engine.play(); });
     assert.deepEqual(await page.evaluate(() => engine.audioTracks().map(t => t.enabled)), [false, true]);
     assert.equal(await page.evaluate(() => engine.selectAudio(99)), false);
+    // Leave/re-enter with reordered tracks: restore language, not the old index.
+    await page.evaluate(() => {
+      framed.media.setPrefs({ audioLang: 'french' });
+      framed.media.start({ url: 'test://movie' }, { item: { id: 'movie', type: 'movie', name: 'Movie' } });
+      screenPlayer.enter();
+      screenPlayer.leave();
+      webapis.avplay.getTotalTrackInfo = () => [
+        { type: 'AUDIO', index: 8, extra_info: '{"track_lang":"French","codec":"AAC"}' },
+        { type: 'AUDIO', index: 3, extra_info: '{"track_lang":"English","codec":"AAC"}' }
+      ];
+      webapis.avplay.getCurrentStreamInfo = () => [{ type: 'AUDIO', index: 3 }];
+      screenPlayer.enter();
+    });
+    assert.equal(await page.evaluate(() => attempts.at(-1)), 8);
+    assert.equal(await page.locator('#mp-sound .act__value').textContent(), 'French');
+    // Back closes the drawer, then the paused controls, then exits.
+    await page.click('#mp-sound');
+    await page.evaluate(() => screenPlayer.back());
+    assert.equal(await page.locator('#mp').getAttribute('data-panel'), 'closed');
+    await page.evaluate(() => engine.pause());
+    await page.evaluate(() => screenPlayer.back());
+    assert.equal(await page.locator('#mp').getAttribute('data-chrome'), 'hidden');
+    assert.equal(await page.locator('#mp').getAttribute('data-state'), 'paused');
+    assert.equal(await page.evaluate(() => window.destination), undefined);
+    await page.evaluate(() => screenPlayer.back());
+    assert.equal(await page.evaluate(() => window.destination), 'media-item');
+    await page.evaluate(() => screenPlayer.leave());
+    // Unavailable languages keep the default without erasing the preference.
+    await page.evaluate(() => {
+      framed.media.setPrefs({ audioLang: 'japanese' });
+      screenPlayer.enter();
+    });
+    assert.equal(await page.evaluate(() => engine.audioTracks().find(t => t.enabled).lang), 'English');
+    assert.equal(await page.evaluate(() => framed.media.prefs().audioLang), 'japanese');
+    await page.evaluate(() => screenPlayer.leave());
     // HTML5 backend: invalid selection must not disable all audio.
     assert.deepEqual(await page.evaluate(() => {
       delete window.tizen;

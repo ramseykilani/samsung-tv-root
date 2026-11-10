@@ -67,7 +67,7 @@ framed/
 | `#/settings` | Home art · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
 | `#/media` | Watch home, modelled on Stremio: **Board** (Continue + My List rows, then a row per catalog), Browse (one catalog, paged, with its genre filter), My List (sortable, type-filtered), Continue, Addons; Search over all of it | ▴ ▾ browse · ◂ ▸ switch catalog/shelf/filter · OK open · red (`s`) save · green (`w`) mark watched · Back clears search, then → home |
 | `#/media-item` | Detail: backdrop, poster, title, year/genres/rating/cert/country, cast & director, description, Save/Resume/Mark watched/Dismiss actions, episodes (series), stream list with quality tags | ▴ ▾ move · OK act / play (or quiet refusal for unplayable sources) · Back → browse |
-| `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back → detail (position kept) |
+| `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back closes visible controls first, then → detail (position kept) |
 
 Art options are persisted **per picture** in `localStorage["framed.artPer"]`; the most
 recent look in `localStorage["framed.art"]` is the default for pictures without their own
@@ -220,7 +220,7 @@ var MEDIA_ADDONS = [
 - **Subtitle timing:** the Subtitles menu shifts captions up to 10 seconds earlier or
   later in 0.25-second steps, with Reset timing. Corrections apply to HTML5 text cues and
   the AVPlay subtitle overlay, reset for each video, and remain when switching subtitle
-  files within that video. Subtitle language, size, vertical position, and playback speed persist.
+  files within that video. Audio language, subtitle language, size, vertical position, and playback speed persist. The saved audio language is restored when available in the stream.
 - **Subtitle appearance:** Size adjusts from 25% to 300% in 5% steps. Vertical
   position adjusts from 0% to 80% above the bottom in 1% steps with Left/Right.
   Captions temporarily move above the playback controls while those are visible.
@@ -455,6 +455,8 @@ Open `index.html` directly (file://) or serve the folder:
 ```sh
 cd framed && python3 -m http.server 8765   # http://localhost:8765/
 ```
+
+In value controls throughout the app, Left/Right applies a change and OK confirms the current value without advancing it.
 
 Arrow keys = d-pad, Enter = OK, Backspace/Escape = Back, `s` toggles the art panel; on the art
 screen with the panel closed, ◂ ▸ step pictures and `p` toggles the slideshow. The authoring

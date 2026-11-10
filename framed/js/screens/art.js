@@ -329,7 +329,6 @@ window.framed = window.framed || {};
         help: 'Shifts up to 6 pixels on a 4K screen each hour; a small margin keeps the whole picture visible' },
       { id: 'reset', name: 'Reset', type: 'action' }
     ];
-    specs.forEach(function (spec) { spec.confirmOnly = true; });
     api = F.controls.render(controlsEl, specs, function (id, value) {
       if (id === 'reset') {
         var per = F.store.get('artPer', {});

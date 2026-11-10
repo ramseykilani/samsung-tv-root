@@ -121,9 +121,9 @@ window.framed = window.framed || {};
       hideTimer = setTimeout(hideChrome, themeMs('--fr-chrome-linger', 5000));
     }
   }
-  function hideChrome() {
+  function hideChrome(force) {
     clear(hideTimer); hideTimer = 0;
-    if (state !== 'playing' || panel === 'open' || scrub === 'active') return;
+    if ((!force && state !== 'playing') || panel === 'open' || scrub === 'active') return;
     if (chrome === 'hidden') return;
     chrome = 'hidden'; attr('chrome', 'hidden');
     lowerCues();
@@ -306,7 +306,7 @@ window.framed = window.framed || {};
   }
 
   video.addEventListener('play', function () { if (state !== 'refused' && !eng.paused()) setState('playing'); });
-  video.addEventListener('playing', function () { if (state !== 'refused' && !eng.paused()) setState('playing'); silentCheck(); });
+  video.addEventListener('playing', function () { if (state !== 'refused' && !eng.paused()) setState('playing'); restoreAudioLanguage(); silentCheck(); });
   // AVPlay relays events through this element, which can also emit native or
   // queued events. Only accept a pause that agrees with the active engine.
   video.addEventListener('pause', function () {
@@ -554,6 +554,26 @@ window.framed = window.framed || {};
 
   /* ---------- sound (DTS is the silent killer) ---------- */
 
+  var audioRestored = false;
+  function audioLanguage(track) {
+    return String(track && (track.lang || track.language) || '').trim().toLowerCase();
+  }
+  function restoreAudioLanguage() {
+    if (audioRestored) return;
+    var tracks = eng.audioTracks();
+    if (!tracks || !tracks.length) return;
+    audioRestored = true;
+    var want = prefs().audioLang;
+    if (!want) return;
+    for (var i = 0; i < tracks.length; i++) {
+      if (audioLanguage(tracks[i]) === want && eng.selectAudio(i)) {
+        stripValues();
+        if (ctl.play) ctl.play.set('sound', String(i));
+        return;
+      }
+    }
+  }
+
   function soundSpec() {
     var tracks = eng.audioTracks();
     if (tracks === undefined) {
@@ -677,6 +697,10 @@ window.framed = window.framed || {};
       // Controls paint optimistically. Restore the engine's selection so a
       // rejected switch does not turn the next click into a no-op.
       ctl.play.set('sound', String(currentAudioTrack()));
+      if (switched) {
+        audioRestored = true;
+        F.media.setPrefs({ audioLang: audioLanguage(eng.audioTracks()[currentAudioTrack()]) });
+      }
       if (!switched) F.toast('Couldn’t switch sound tracks. Try again or choose another track.', 'warn');
       stripValues();
     }
@@ -754,6 +778,7 @@ window.framed = window.framed || {};
     clearTimers();
     state = 'starting';
     silentWarned = false;
+    audioRestored = false;
     attr('state', 'starting'); attr('slow', 'false'); attr('scrub', 'idle');
     attr('upnext', 'none'); attr('panel', 'closed'); attr('chrome', 'shown');
     chrome = 'shown'; scrub = 'idle'; panel = 'closed'; upnext = 'none';
@@ -831,6 +856,10 @@ window.framed = window.framed || {};
       if (closePanel()) return true;
       if (cancelScrub()) return true;
       if (upnext !== 'none') { stopUpnext(); return true; }
+      if (chromeOn() && (state === 'playing' || state === 'paused' || state === 'buffering')) {
+        hideChrome(true);
+        return true;
+      }
       exitPlayer(); // Back lands on the detail, not the launcher
       return true;
     },
