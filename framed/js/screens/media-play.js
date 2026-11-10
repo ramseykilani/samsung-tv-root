@@ -41,6 +41,13 @@ window.framed = window.framed || {};
   var optionsBtn = document.getElementById('mp-options');
   var panelMenu = 'options';
   var nextBtn = document.getElementById('mp-next');
+  var lastStripAction = optionsBtn;
+  function stripReturnTarget() {
+    return lastStripAction.hidden || lastStripAction.disabled ? optionsBtn : lastStripAction;
+  }
+  [subsBtn, speedBtn, soundBtn, optionsBtn, nextBtn, exitBtn].forEach(function (button) {
+    button.addEventListener('focus', function () { lastStripAction = button; });
+  });
   var legendEl = document.getElementById('mp-legend');
   var veilEl = document.getElementById('mp-veil');
   var veilKicker = document.getElementById('mp-veil-kicker');
@@ -132,7 +139,7 @@ window.framed = window.framed || {};
     var legend;
     if (scrub === 'active') legend = '<span class="legend__item"><span class="key">OK</span> Jump</span><span class="legend__item"><span class="key">Back</span> Cancel</span>';
     else if (!chromeOn()) legend = '<span class="legend__item"><span class="key">OK</span> Pause</span><span class="legend__item"><span class="key">◂ ▸</span> Skip</span>';
-    else if (document.activeElement === timeline) legend = '<span class="legend__item"><span class="key">OK</span> ' + (eng.paused() ? 'Play' : 'Pause') + '</span><span class="legend__item"><span class="key">◂ ▸</span> ±10 s · hold skips farther</span><span class="legend__item"><span class="key">▾</span> Options</span>';
+    else if (document.activeElement === timeline) legend = '<span class="legend__item"><span class="key">OK</span> ' + (eng.paused() ? 'Play' : 'Pause') + '</span><span class="legend__item"><span class="key">◂ ▸</span> ±10 s · hold skips farther</span><span class="legend__item"><span class="key">▾</span> ' + stripReturnTarget().querySelector('.act__name').textContent + '</span>';
     else legend = '<span class="legend__item"><span class="key">OK</span> Choose</span><span class="legend__item"><span class="key">▴</span> Timeline</span>';
     if (scrub !== 'active') legend += '<span class="legend__item"><span class="key">Back</span> Exit player</span>';
     legendEl.innerHTML = legend;
@@ -298,9 +305,13 @@ window.framed = window.framed || {};
     if (!veilGo.hidden) F.nav.focus(veilGo);
   }
 
-  video.addEventListener('play', function () { if (state !== 'refused') setState('playing'); });
-  video.addEventListener('playing', function () { if (state !== 'refused') setState('playing'); silentCheck(); });
-  video.addEventListener('pause', function () { if (state === 'playing' || state === 'buffering') setState('paused'); });
+  video.addEventListener('play', function () { if (state !== 'refused' && !eng.paused()) setState('playing'); });
+  video.addEventListener('playing', function () { if (state !== 'refused' && !eng.paused()) setState('playing'); silentCheck(); });
+  // AVPlay relays events through this element, which can also emit native or
+  // queued events. Only accept a pause that agrees with the active engine.
+  video.addEventListener('pause', function () {
+    if (eng.paused() && (state === 'playing' || state === 'buffering')) setState('paused');
+  });
   video.addEventListener('waiting', function () { if (state === 'playing' || state === 'paused') setState('buffering'); });
   video.addEventListener('seeked', function () {
     if (state !== 'refused' && state !== 'ended') setState(eng.paused() ? 'paused' : 'playing');
@@ -422,6 +433,16 @@ window.framed = window.framed || {};
   function applySubSize() {
     video.style.setProperty('--cue-size', prefs().subSize + '%');
     if (subsOverlayEl) subsOverlayEl.style.fontSize = (28 * prefs().subSize / 100) + 'px';
+  }
+  function subBackground() {
+    var value = prefs().subBackground;
+    return value === 'black' || value === 'tinted' ? value : 'off';
+  }
+  function applySubBackground() {
+    var value = subBackground();
+    var color = value === 'black' ? '#000000' : value === 'tinted' ? 'var(--fr-cue-ground)' : 'transparent';
+    video.style.setProperty('--cue-background', color);
+    if (subsOverlayEl) subsOverlayEl.style.setProperty('--cue-background', color);
   }
   function groupSubs() {
     subFiles = {}; subLangs = [];
@@ -590,12 +611,15 @@ window.framed = window.framed || {};
         hidden: !(subLang && (subFiles[subLang] || []).length > 1) },
       { id: 'size', name: 'Size', type: 'range', value: prefs().subSize, min: 25, max: 300, step: 5,
         format: function (v) { return v + '%'; } },
+      { id: 'background', name: 'Background', type: 'choice', value: subBackground(),
+        options: [{ value: 'off', label: 'Off' }, { value: 'black', label: 'Black' }, { value: 'tinted', label: 'Tinted' }],
+        help: 'Off removes the box behind captions. Saved for future videos.' },
       { id: 'position', name: 'Vertical position', type: 'range', value: subPosition(), min: 0, max: 80, step: 1,
         format: function (v) { return v + '% from bottom'; },
         help: 'Left lowers captions; right raises them. Saved for future videos.' },
-      { id: 'timing', name: 'Timing', type: 'range', value: subDelay, min: -10, max: 10, step: 0.5,
-        format: function (v) { return v === 0 ? 'In sync' : Math.abs(v).toFixed(1) + ' s ' + (v < 0 ? 'earlier' : 'later'); },
-        help: 'Adjust by half a second. Resets for each video.' },
+      { id: 'timing', name: 'Timing', type: 'range', value: subDelay, min: -10, max: 10, step: 0.25,
+        format: function (v) { return v === 0 ? 'In sync' : Math.abs(v).toFixed(2) + ' s ' + (v < 0 ? 'earlier' : 'later'); },
+        help: 'Adjust by a quarter second. Resets for each video.' },
       { id: 'timing-reset', name: 'Reset timing', type: 'action' }
     ];
     var playSpecs = [
@@ -636,6 +660,7 @@ window.framed = window.framed || {};
       for (var i = 0; i < files.length; i++) if (files[i].url === v) { selectAddonSub(files[i]); break; }
     }
     else if (id === 'size') { F.media.setPrefs({ subSize: parseInt(v, 10) }); applySubSize(); }
+    else if (id === 'background') { F.media.setPrefs({ subBackground: v }); applySubBackground(); }
     else if (id === 'position') { F.media.setPrefs({ subPosition: v }); applySubPosition(); }
     stripValues();
   }
@@ -735,6 +760,7 @@ window.framed = window.framed || {};
     panelEl.hidden = true;
     try { eng.pause(); } catch (e) { /* ignore */ }
     applySubSize();
+    applySubBackground();
     var resume = F.media.progressFor(ctx.item.type, ctx.episodeId || ctx.item.id);
     metadataHandler = function () {
       video.removeEventListener('loadedmetadata', metadataHandler);
@@ -844,6 +870,10 @@ window.framed = window.framed || {};
       }
       if (e.keyCode === 38 || e.keyCode === 40) { // ▴ ▾: reveal chrome, stay in nav flow
         if (!chromeOn()) { showChrome(); return true; }
+        if (e.keyCode === 40 && document.activeElement === timeline) {
+          F.nav.focus(stripReturnTarget());
+          return true;
+        }
         return false;
       }
       return false;
