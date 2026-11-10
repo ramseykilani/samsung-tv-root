@@ -7,14 +7,24 @@
     return s && typeof s.lux === 'number' && isFinite(s.lux) && s.lux >= 0 && s.lux <= 1000 &&
       typeof s.cct_kelvin === 'number' && isFinite(s.cct_kelvin) && s.cct_kelvin >= 2700 && s.cct_kelvin <= 6500;
   }
-  // Smooth shifted power fit to room measurements, anchored at 2 lux = 5%.
+  // Original shifted power fit retained from 12.5 lux upward.
   // Fit weights: 3 each at 4.5/12.5/27.5 lux, 1 at 213, 0.5 at 586
   // (direct lamp, provisional). Rounded fit: shift 1.18, exponent 0.336.
   // Percentages use the same scale as the manual slider.
   function gain(percent) { return 0.02 + 0.98 * clamp(percent, 0, 100) / 100; }
+  function fittedPercent(lux) {
+    return 5 * Math.pow((lux - 1.18) / 0.82, 0.336);
+  }
   function autoPercent(lux) {
-    if (lux <= 2) return 5;
-    return clamp(5 * Math.pow((lux - 1.18) / 0.82, 0.336), 5, 100);
+    if (lux <= 5) return Math.max(1, lux);
+    if (lux < 12.5) {
+      // Cubic Hermite join: match both value and slope at 5 and 12.5 lux.
+      var t = (lux - 5) / 7.5, t2 = t * t, t3 = t2 * t;
+      var end = fittedPercent(12.5), endSlope = end * 0.336 / (12.5 - 1.18);
+      return (2*t3 - 3*t2 + 1) * 5 + (t3 - 2*t2 + t) * 7.5 +
+        (-2*t3 + 3*t2) * end + (t3 - t2) * 7.5 * endSlope;
+    }
+    return clamp(fittedPercent(lux), 1, 100);
   }
   function target(settings, sensor, now) {
     var manual = gain(number(settings.brightness, 100));
