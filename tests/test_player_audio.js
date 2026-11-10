@@ -29,7 +29,7 @@ const root = path.resolve(__dirname, '../framed');
           window.attempts.push(index);
           if (window.failSwitch) throw new Error('InvalidStateError');
         },
-        stop() {}, open() {}, setDisplayRect() {}, setListener() {}, prepareAsync(done) { done(); }, play() {},
+        stop() {}, open() {}, setDisplayRect() {}, setListener() {}, prepareAsync(done) { done(); }, play() {}, pause() {},
         getDuration: () => 120000
       } };
       window.framed = {
@@ -97,7 +97,7 @@ const root = path.resolve(__dirname, '../framed');
     await page.click('#mp-sound');
     await page.evaluate(() => screenPlayer.back());
     assert.equal(await page.locator('#mp').getAttribute('data-panel'), 'closed');
-    await page.evaluate(() => document.querySelector('#screen-media-play video').dispatchEvent(new Event('pause')));
+    await page.evaluate(() => engine.pause());
     await page.evaluate(() => screenPlayer.back());
     assert.equal(await page.locator('#mp').getAttribute('data-chrome'), 'hidden');
     assert.equal(await page.locator('#mp').getAttribute('data-state'), 'paused');

@@ -71,7 +71,7 @@ window.framed = window.framed || {};
   var playingCtx = null;            // { cat, item, episodeId, episodeLabel } for resume bookkeeping
   var localAddonsLoaded = false;    // addons.local.json merge applied (or file absent)
   var WATCH_DEFAULTS = { saved: [], progress: {}, watched: {}, searches: [],
-    prefs: { subLang: '', audioLang: '', subSize: 100, subPosition: 6, speed: 1, autoplayNext: true, endBehavior: null } };
+    prefs: { subLang: '', audioLang: '', subSize: 100, subPosition: 6, subBackground: 'off', speed: 1, autoplayNext: true, endBehavior: null } };
 
   applyAddonPrefs();
 
@@ -459,7 +459,7 @@ window.framed = window.framed || {};
 
   function prefs() {
     var p = (watch().prefs || {});
-    var out = { subLang: '', audioLang: '', subSize: 100, subPosition: 6, speed: 1, autoplayNext: true, endBehavior: null };
+    var out = { subLang: '', audioLang: '', subSize: 100, subPosition: 6, subBackground: 'off', speed: 1, autoplayNext: true, endBehavior: null };
     for (var k in out) if (p[k] !== undefined) out[k] = p[k];
     if (!out.endBehavior) out.endBehavior = out.autoplayNext ? 'auto' : 'ask';
     return out;

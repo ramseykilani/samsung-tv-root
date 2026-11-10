@@ -19,17 +19,58 @@ const { chromium } = require('playwright');
         seekTo(ms, ok, fail) {calls.push({ms, ok, fail});}
       }};
       window.tizen = {};
-      window.framed = {router: {register(name, screen) {window.screenPlayer = screen;}}, nav: {isBackKey() {return false;}}, media: {prefs() {return {};}}};
+      window.framed = {router: {register(name, screen) {window.screenPlayer = screen;}}, nav: {focus(el) {el.focus();}, setScope(el, opts) {if (opts.initial) opts.initial.focus();}, isBackKey() {return false;}}, media: {prefs() {return {subSize: 100};}, setPrefs() {}}};
     });
     await page.addScriptTag({path: path.join(base, 'js/engine.js')});
     await page.evaluate(() => {
       const attach = framed.engine.attach;
       framed.engine.attach = video => (window.engine = attach(video));
     });
+    await page.addScriptTag({path: path.join(base, 'js/controls.js')});
     await page.addScriptTag({path: path.join(base, 'js/screens/media-play.js')});
     await page.evaluate(() => {engine.open('test.mp4'); engine.play(); prepared();});
+    await page.evaluate(() => {
+      document.getElementById('screen-media-play').hidden = false;
+      document.getElementById('mp-timeline').focus();
+    });
+    const downFromTimeline = () => page.evaluate(() => {
+      document.getElementById('mp-timeline').focus();
+      const handled = screenPlayer.onKey({keyCode: 40});
+      return {handled, id: document.activeElement.id};
+    });
+    assert.deepEqual(await downFromTimeline(), {handled: true, id: 'mp-options'}, 'default to Options');
+    await page.locator('#mp-subs').focus();
+    assert.deepEqual(await downFromTimeline(), {handled: true, id: 'mp-subs'}, 'return to the last action');
+    await page.locator('#mp-speed').focus();
+    assert.deepEqual(await downFromTimeline(), {handled: true, id: 'mp-speed'}, 'update the remembered action');
+    await page.evaluate(() => {document.getElementById('mp-speed').disabled = true;});
+    assert.deepEqual(await downFromTimeline(), {handled: true, id: 'mp-options'}, 'fall back when the last action is unavailable');
+    await page.evaluate(() => {document.getElementById('mp-speed').disabled = false;});
     assert.equal(await page.evaluate(() => engine.paused()), false, 'async startup must update pause flag');
     assert.equal(await page.locator('#mp-state').textContent(), 'Playing');
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty('--fr-chrome-linger', '80');
+      document.getElementById('mp-subs').click();
+      document.querySelector('[data-control-id="size"]').dispatchEvent(new CustomEvent('framed:adjust', {detail: {delta: 1, fast: false}}));
+      document.getElementById('mp-video').dispatchEvent(new Event('pause'));
+    });
+    assert.equal(await page.locator('#mp-state').textContent(), 'Playing', 'stray pause while editing subtitles must not override AVPlay');
+    await page.waitForTimeout(120);
+    assert.equal(await page.locator('#mp').getAttribute('data-chrome'), 'shown', 'subtitle menu keeps controls visible');
+    await page.evaluate(() => screenPlayer.back());
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#mp').getAttribute('data-chrome'), 'hidden', 'closing subtitles restores auto-hide without toggling playback');
+    await page.evaluate(() => {
+      engine.pause();
+      document.getElementById('mp-video').dispatchEvent(new Event('playing'));
+    });
+    assert.equal(await page.locator('#mp-state').textContent(), 'Paused', 'stray playing event must not override a real pause');
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#mp').getAttribute('data-chrome'), 'shown', 'real pause keeps controls visible');
+    await page.evaluate(() => {
+      document.documentElement.style.removeProperty('--fr-chrome-linger');
+      engine.play();
+    });
     await page.evaluate(() => document.getElementById('mp-timeline').dispatchEvent(new CustomEvent('framed:adjust', {detail: {delta: 1, fast: false}})));
     assert.equal(await page.locator('#mp-preview').evaluate(el => el.style.width), '', 'preview must keep thumb width');
     assert.ok(parseFloat(await page.locator('#mp-preview').evaluate(el => el.style.left)) > 0);
