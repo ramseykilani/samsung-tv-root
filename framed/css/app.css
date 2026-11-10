@@ -575,7 +575,7 @@ html[data-motion="reduced"] .wait__tick { -webkit-animation: none; animation: no
 .player__video { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; background: var(--fr-color-veil); }
 .player__video::cue {
   font-family: var(--fr-cue-font); font-size: var(--cue-size, 100%);
-  color: var(--fr-cue-ink); background: var(--fr-cue-ground);
+  color: var(--fr-cue-ink); background: var(--cue-background, transparent);
 }
 /* AVPlay draws video on a plane behind the webview, so cues render in DOM.
    The opaque player surface must also get out of the way for the plane to show. */
@@ -591,7 +591,7 @@ html[data-playback-engine="avplay"], html[data-playback-engine="avplay"] body { 
 }
 .player__sub-line {
   max-width: 80%; text-align: center; line-height: 1.3;
-  color: var(--fr-cue-ink); background: var(--fr-cue-ground);
+  color: var(--fr-cue-ink); background: var(--cue-background, transparent);
 }
 .player__dim {
   position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;

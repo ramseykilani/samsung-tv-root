@@ -79,7 +79,29 @@ const root = path.resolve(__dirname, '../framed');
     assert.equal(await page.evaluate(() => savedPrefs.subSize), 300);
     await adjust('size', -100);
     assert.equal(await page.evaluate(() => savedPrefs.subSize), 25);
+    await page.addStyleTag({ path: path.join(root, 'css/theme.css') });
+    await page.addStyleTag({ path: path.join(root, 'css/app.css') });
+    await page.evaluate(() => {
+      const line = document.createElement('span');
+      line.className = 'player__sub-line';
+      line.textContent = 'Caption on a black letterbox';
+      document.getElementById('mp-subtitles').appendChild(line);
+    });
+    const background = () => page.locator('.player__sub-line').evaluate(el => getComputedStyle(el).backgroundColor);
+    assert.equal(await background(), 'rgba(0, 0, 0, 0)', 'old preferences default to no background');
+    for (const [delta, value, css, color] of [
+      [1, 'black', '#000000', 'rgb(0, 0, 0)'],
+      [1, 'tinted', 'var(--fr-cue-ground)', 'rgba(18, 25, 28, 0.72)'],
+      [-1, 'black', '#000000', 'rgb(0, 0, 0)'],
+      [-1, 'off', 'transparent', 'rgba(0, 0, 0, 0)']
+    ]) {
+      await adjust('background', delta);
+      assert.equal(await page.evaluate(() => savedPrefs.subBackground), value);
+      assert.equal(await background(), color, 'AVPlay overlay updates immediately');
+      assert.equal(await page.locator('#mp-video').evaluate(el => el.style.getPropertyValue('--cue-background')), css,
+        'HTML5 cues receive the same background');
+    }
     assert.deepEqual(errors, []);
-    console.log('Subtitle appearance checks passed: granular sizing, position, cue alignment, control clearance and bounds.');
+    console.log('Subtitle appearance checks passed: granular sizing, position, cue alignment, control clearance, bounds and saved background choices.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
