@@ -652,9 +652,9 @@ window.framed = window.framed || {};
       });
     },
     // hand a live (cat,item) or a persisted snapshot to the detail screen
-    open: function (cat, item) {
+    open: function (cat, item, episodeId) {
       if (!cat && item && item.cat) { cat = reviveCat(item.cat); item = snapshotItem(null, item); }
-      current = { cat: cat, item: item };
+      current = { cat: cat, item: item, episodeId: episodeId || null };
     },
     item: function () { return current; },
     start: function (stream, ctx) { currentStream = stream; playingCtx = ctx || playingCtx; },
