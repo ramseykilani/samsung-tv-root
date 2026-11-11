@@ -746,3 +746,7 @@ html[data-playback-engine="avplay"], html[data-playback-engine="avplay"] body { 
 .brightness-hud__label { display: flex; justify-content: space-between; margin-bottom: var(--fr-space-3); }
 .brightness-hud__track { height: var(--fr-brightness-track-height); background: var(--fr-color-border); }
 .brightness-hud__fill { height: 100%; background: var(--fr-color-focus); }
+
+/* Source descriptions preserve addon line breaks and long release filenames. */
+.src-description { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; padding: var(--fr-space-4); color: var(--fr-color-text-muted); }
+.ep-watch { width: auto; margin-left: calc(6.4rem + var(--fr-space-4)); }

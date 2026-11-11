@@ -1,7 +1,7 @@
 /*
  * framed — Media detail screen, design pass-2 contract.
  *   One filled act: Play/Resume (gated while sources load or when none play).
- *   Quiet acts: Save to My List, Mark watched (series: scoped to the open episode),
+ *   Quiet acts: Save to My List, Mark watched (series: alongside each episode),
  *   Forget my place. Series render one season at a time; the open episode's sources
  *   hang beneath it. Sources: playable rows first, dead rows folded behind .src-more;
  *   struck rows stay reachable and OK repeats the reason as a sentence.
@@ -99,7 +99,8 @@ window.framed = window.framed || {};
     var it = cur.item;
     var p = F.media.progressFor(it.type, it.id);
     if (isSeries()) {
-      var v = openEp || resumeEp() || episodes[0];
+      if (!openEp) return 'Choose an episode';
+      var v = openEp;
       var se = epSE(v);
       var pv = v && F.media.progressFor(it.type, v.id);
       if (pv && pv.dur > 0) return se + ' · from ' + fmt(pv.pos);
@@ -124,7 +125,8 @@ window.framed = window.framed || {};
     playBtn.querySelector('.act__name').textContent = hasProgress ? 'Resume' : 'Play';
     playBtn.querySelector('.act__value').textContent = playValue();
     var gated, why = '';
-    if (!streams.length) { gated = true; why = 'Finding sources…'; }
+    if (isSeries() && !openEp) { gated = true; why = 'Choose an episode below'; }
+    else if (!streams.length) { gated = true; why = 'Finding sources…'; }
     else if (!firstPlayable) { gated = true; why = 'Nothing here plays on this TV yet'; }
     else { gated = false; }
     if (gated) playBtn.setAttribute('data-gated', 'true'); else playBtn.removeAttribute('data-gated');
@@ -132,10 +134,11 @@ window.framed = window.framed || {};
     playWhy.textContent = why;
     dismissBtn.hidden = !hasProgress;
     saveBtn.querySelector('.act__name').textContent = F.media.isSaved(cur.item.type, cur.item.id) ? 'Remove from My List' : 'Save to My List';
+    watchedBtn.hidden = cur.item.type === 'series';
     var videoId = openEp ? openEp.id : cur.item.id;
     var watched = F.media.isWatched(cur.item.type, videoId);
     watchedBtn.querySelector('.act__name').textContent = isSeries()
-      ? (watched ? 'Mark ' + epSE(openEp) + ' unwatched' : 'Mark ' + epSE(openEp) + ' watched')
+      ? (watched ? 'Mark ' + epSE(openEp || episodes[0]) + ' unwatched' : 'Mark ' + epSE(openEp || episodes[0]) + ' watched')
       : (watched ? 'Mark unwatched' : 'Mark watched');
   }
 
@@ -198,7 +201,10 @@ window.framed = window.framed || {};
       id: 'season', name: 'Season', type: 'choice', value: season, options: seasonOptions()
     }], function (id, value) {
       season = value;
+      openEp = null; epSourcesEl = null;
+      ++loadToken; streams = []; firstPlayable = null;
       renderEpisodes();
+      paintPlay();
     });
   }
 
@@ -243,6 +249,7 @@ window.framed = window.framed || {};
     kept.forEach(function (n) { n.remove(); });
     if (!isSeries()) { episodesHead.hidden = true; return; }
     episodesHead.hidden = false;
+    openRow = null; epSourcesEl = null;
     var firstOfSeason = null;
     episodes.forEach(function (v) {
       var s = v.season == null ? 0 : v.season;
@@ -271,6 +278,20 @@ window.framed = window.framed || {};
       }
       row.addEventListener('click', function () { toggleEpisode(v, row); });
       episodesEl.appendChild(row);
+      var watch = h('button', 'src-more ep-watch', watched ? 'Mark unwatched' : 'Mark watched');
+      watch.setAttribute('data-focusable', '');
+      watch.setAttribute('tabindex', '-1');
+      watch.setAttribute('aria-label', (watched ? 'Mark unwatched: ' : 'Mark watched: ') + episodeLabel(v));
+      watch._videoId = v.id;
+      watch.addEventListener('click', function () {
+        F.media.toggleWatched(cur.cat, cur.item, v.id);
+        renderEpisodes();
+        if (openEp) renderSources();
+        paintPlay();
+        var buttons = episodesEl.querySelectorAll('.ep-watch');
+        for (var j = 0; j < buttons.length; j++) if (buttons[j]._videoId === v.id) F.nav.focus(buttons[j]);
+      });
+      episodesEl.appendChild(watch);
       if (!firstOfSeason) firstOfSeason = row;
       if (openEp === v) {
         openRow = row;
@@ -283,7 +304,9 @@ window.framed = window.framed || {};
 
   function toggleEpisode(v, row) {
     if (openEp === v) { // closing keeps nothing to show
-      openEp = null; openRow = null; epSourcesEl = null; streams = []; renderSources();
+      ++loadToken;
+      openEp = null; openRow = null; epSourcesEl = null; streams = []; firstPlayable = null;
+      streamsEl.innerHTML = ""; paintPlay();
       renderEpisodes();
       return;
     }
@@ -311,7 +334,24 @@ window.framed = window.framed || {};
       if (!s.playable) { F.toast(s.reasonSentence, 'info'); return; }
       playStream(s);
     });
-    return row;
+    var wrapper = h('div', 'source-option');
+    wrapper.appendChild(row);
+    var details = h('button', 'src-more', 'Show full description');
+    details.setAttribute('data-focusable', '');
+    details.setAttribute('tabindex', '-1');
+    details.setAttribute('aria-expanded', 'false');
+    var raw = s.raw || {};
+    var full = h('div', 'src-description', [raw.name || s.name, raw.title, raw.description,
+      raw.behaviorHints && raw.behaviorHints.filename, s.reasonSentence].filter(Boolean).join('\n') || s.file);
+    full.hidden = true;
+    details.addEventListener('click', function () {
+      full.hidden = !full.hidden;
+      details.setAttribute('aria-expanded', String(!full.hidden));
+      details.textContent = full.hidden ? 'Show full description' : 'Hide full description';
+    });
+    wrapper.appendChild(details);
+    wrapper.appendChild(full);
+    return wrapper;
   }
 
   function container() { return epSourcesEl || streamsEl; }
@@ -426,7 +466,7 @@ window.framed = window.framed || {};
 
   function loadStreams(focusSource) {
     var token = ++loadToken;
-    streams = [];
+    streams = []; firstPlayable = null;
     foldOpen = false;
     loadingSources();
     var videoId = openEp ? openEp.id : cur.item.id;
@@ -492,7 +532,7 @@ window.framed = window.framed || {};
               return ((a.season || 0) - (b.season || 0)) || ((a.episode || 0) - (b.episode || 0));
             });
             seasons = computeSeasons();
-            var rp = resumeEp();
+            var rp = episodes.filter(function (v) { return v.id === cur.episodeId; })[0] || resumeEp();
             season = rp ? (rp.season == null ? 0 : rp.season) : seasons[0];
             openEp = rp || episodes.filter(function (v) { return (v.season == null ? 0 : v.season) === season; })[0] || episodes[0];
             renderSeasonPick();
@@ -500,7 +540,7 @@ window.framed = window.framed || {};
             paintPlay();
           }
         }
-        loadStreams(false);
+        loadStreams(!!cur.episodeId);
       });
       // meta may never arrive (addon without the meta resource): streams must still load
       setTimeout(function () { if (!el.hidden && token === loadToken && !streams.length && !firstPlayable) loadStreams(false); }, 1200);

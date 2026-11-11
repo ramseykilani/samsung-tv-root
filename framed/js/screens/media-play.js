@@ -259,7 +259,7 @@ window.framed = window.framed || {};
       veilTitle.textContent = t; veilSub.textContent = se;
       veilMsg.textContent = nextEp ? 'The next episode is ' + epLabel(nextEp) + '.' : 'That’s the end.';
       veilActsOn = true;
-      veilGo.hidden = false; veilGo.querySelector('.act__name').textContent = nextEp ? 'Play the next episode' : 'Back to the detail';
+      veilGo.hidden = false; veilGo.querySelector('.act__name').textContent = nextEp ? 'Choose next episode source' : 'Back to the detail';
       veilGo.querySelector('.act__value').textContent = '';
       if (nextEp) { veilAlt.hidden = false; veilAlt.querySelector('.act__name').textContent = 'Back to the detail'; }
     }
@@ -348,28 +348,8 @@ window.framed = window.framed || {};
     if (!nextEp) return;
     var ep = nextEp;
     stopUpnext();
-    var wantId = ep.id;
-    F.media.streams(ctx.item.type, wantId, function (ss) {
-      var playable = (ss || []).filter(function (s) { return s.playable; });
-      var ready = playable.filter(function (s) { return s.ready; })[0];
-      var pick = ready || playable[0];
-      if (!pick) {
-        attr('upnext', 'missing');
-        upnext = 'missing';
-        return;
-      }
-      F.media.start(pick, {
-        cat: ctx.cat, item: ctx.item, episodeId: wantId,
-        episodeLabel: (ep.season != null && ep.episode != null ? 'S' + ep.season + ' · E' + ep.episode + ' · ' : '') + (ep.title || ep.name || 'Episode'),
-        episodes: ctx.episodes, streamName: pick.name
-      });
-      ctx = F.media.playingContext();
-      nextEp = null;
-      for (var i = 0; ctx.episodes && i < ctx.episodes.length - 1; i++) {
-        if (ctx.episodes[i].id === wantId) { nextEp = ctx.episodes[i + 1]; break; }
-      }
-      startStream(pick);
-    });
+    F.media.open(ctx.cat, ctx.item, ep.id);
+    F.router.go('media-item');
   }
   nextBtn.addEventListener('click', playNext);
 
@@ -386,7 +366,7 @@ window.framed = window.framed || {};
     if (!nextEp) return;
     upnextTitle.textContent = epLabel(nextEp);
     upnext = 'offered'; attr('upnext', 'offered');
-    upnextWords.textContent = prefs().endBehavior === 'auto' ? 'Plays when this ends' : 'Choose Play now, or decide when this ends';
+    upnextWords.textContent = prefs().endBehavior === 'auto' ? 'Choose a source when this ends' : 'Choose a source now, or decide when this ends';
     showChrome();
     var cur = F.nav.current();
     if (cur === timeline || document.activeElement === timeline) F.nav.focus(upnextGo);
@@ -650,9 +630,9 @@ window.framed = window.framed || {};
     var seriesSpecs = [
       { id: 'autoplay', name: 'When this ends', type: 'choice',
         value: prefs().endBehavior,
-        options: [{ value: 'auto', label: 'Play next episode' }, { value: 'ask', label: 'Ask me' },
+        options: [{ value: 'auto', label: 'Choose next episode source' }, { value: 'ask', label: 'Ask me' },
           { value: 'art', label: 'Return to Art' }, { value: 'detail', label: 'Back to details' }],
-        note: 'Applies to future videos too. Play next episode waits for the end; if there is no next episode, shows the finished screen.' }
+        note: 'Applies to future videos too. Choose next episode source opens the source picker at the end; if there is no next episode, shows the finished screen.' }
     ];
     return { subs: subSpecs, play: playSpecs, series: seriesSpecs };
   }

@@ -67,7 +67,7 @@ framed/
 | `#/settings` | Home art · Theme · About | ▴ ▾ row · ◂ ▸ adjust · Back → home |
 | `#/media` | Watch home, modelled on Stremio: **Board** (Continue + My List rows, then a row per catalog), Browse (one catalog, paged, with its genre filter), My List (sortable, type-filtered), Continue, Addons; Search over all of it | ▴ ▾ browse · ◂ ▸ switch catalog/shelf/filter · OK open · red (`s`) save · green (`w`) mark watched · Back clears search, then → home |
 | `#/media-item` | Detail: backdrop, poster, title, year/genres/rating/cert/country, cast & director, description, Save/Resume/Mark watched/Dismiss actions, episodes (series), stream list with quality tags | ▴ ▾ move · OK act / play (or quiet refusal for unplayable sources) · Back → browse |
-| `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + autoplay for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back closes visible controls first, then → detail (position kept) |
+| `#/media-play` | Playback on the native HTML5 `<video>`, resuming at the saved position; next-episode popup + source selection for series | OK play/pause · ◂ −10 s · ▸ +30 s · ▴ ▾ ∓60 s · green (`c`) playback panel (speed · subtitles · audio · autoplay) · media keys · Back closes visible controls first, then → detail (position kept) |
 
 Art options are persisted **per picture** in `localStorage["framed.artPer"]`; the most
 recent look in `localStorage["framed.art"]` is the default for pictures without their own
@@ -523,3 +523,5 @@ The lower bound keeps the screen recoverable with Channel Up.
 Validate with `node tests/test_brightness.js` (Playwright/Chromium). Before TV
 release, check physical channel keys, hold repeat, AVPlay dimming, Art isolation,
 and that the normal channel keys still work after leaving Framed.
+
+Series have a watched/unwatched control beside each episode. Next episode opens that episode’s sources, including across seasons; the automatic end behavior opens this picker when playback ends. Each source has a **Show full description** toggle for the complete addon name, title, description, and filename.
