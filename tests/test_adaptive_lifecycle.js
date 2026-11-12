@@ -44,11 +44,25 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => window.reads), readsBeforeEntry, 'entry reuses the polling loop');
     // Changes while viewing Art still ease toward the new target.
     await page.evaluate(() => { window.sensorLux = 213; });
-    await page.clock.runFor(3500);
+    await page.clock.runFor(2500);
     assert((await page.evaluate(() => framed.adaptive.state().output.brightness)) >
       (await page.evaluate(() => framed.adaptiveCore.target(window.testSettings, framed.adaptive.state().sensor, Date.now()).brightness)));
-    await page.clock.runFor(60000);
+    await page.clock.runFor(1100);
     const settled = await output();
+    // Retarget mid-fade without jumping, then finish within one second.
+    await page.evaluate(() => { framed.adaptive.state().sensor.lux = 586; });
+    await page.clock.runFor(250);
+    const rising = await page.evaluate(() => framed.adaptive.state().output.brightness);
+    assert(rising > Number(settled.split(' ')[0]));
+    await page.clock.runFor(16);
+    const nextFrame = await page.evaluate(() => framed.adaptive.state().output.brightness);
+    assert(nextFrame > rising, 'fractional output advances on consecutive frames');
+    await page.evaluate(() => { framed.adaptive.state().sensor.lux = 213; });
+    await page.clock.runFor(16);
+    const redirected = await page.evaluate(() => framed.adaptive.state().output.brightness);
+    assert(Math.abs(redirected - nextFrame) < 0.01, 'retarget starts at the displayed value');
+    await page.clock.runFor(1100);
+    assert.equal(await output(), settled, 'reversed fade reaches its exact target');
     const reading = await page.evaluate(() => framed.adaptive.state().sensor.receivedAt);
     await act('stop');
     const reads = await page.evaluate(() => window.reads);
@@ -73,7 +87,7 @@ const { chromium } = require('playwright');
     const fading = await page.evaluate(() => framed.adaptive.state().output);
     assert(fading.brightness < Number(beforeAbsence.split(' ')[0]));
     assert(fading.brightness > 0.167, 'stale readings fade smoothly toward 15%');
-    await page.clock.runFor(60000);
+    await page.clock.runFor(1100);
     assert(Math.abs((await page.evaluate(() => framed.adaptive.state().output.brightness)) - 0.167) < 1e-8);
 
     // A completed request from before stop must not replace the retained sample.
