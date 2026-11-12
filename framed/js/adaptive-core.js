@@ -38,8 +38,10 @@
     }
     return { brightness: brightness, warm: warm, fresh: !!fresh };
   }
-  function step(previous, next, dt) {
-    var a = 1 - Math.exp(-clamp(dt, 0, 2) / 3);
+  // One-second smoothstep: fractional gains, with gentle starts and stops.
+  function step(previous, next, elapsed) {
+    var t = clamp(elapsed, 0, 1);
+    var a = t * t * (3 - 2 * t);
     return { brightness: previous.brightness + a * (next.brightness - previous.brightness),
       warm: previous.warm + a * (next.warm - previous.warm), fresh: next.fresh };
   }

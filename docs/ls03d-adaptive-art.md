@@ -57,8 +57,12 @@ The original power curve was a weighted least-squares fit to (4.5, 8),
 calibration. The retained curve produces about 12%, 16%, 32%, and 45% at
 12.5, 27.5, 213, and 586 lux, and about 54% at the sensor's 1000-lux limit.
 The 586-lux direct-lamp observation remains provisional, and the region above
-it is an unvalidated extrapolation. Transitions retain three-second exponential
-smoothing. Manual brightness continues to allow the full 0–100% range.
+it is an unvalidated extrapolation. Sensor-driven brightness and tone changes use a one-second
+smoothstep fade, updated about 60 times per second with fractional RGB gains.
+A new target starts from the currently displayed value; identical readings do
+not restart the fade. The sensor still polls every three seconds. Physical
+low-light smoothness needs validation on the TV, where panel precision may
+limit the smallest visible change. Manual brightness continues to allow the full 0–100% range.
 Auto ignores saved manual brightness and legacy Art floor values; Art floor is
 no longer a setting.
 Percentages use the manual slider's gain mapping (2% + 98% × slider/100), so

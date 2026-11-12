@@ -51,8 +51,20 @@ assert.equal(core.target({...s,adaptiveBrightness:'off',brightness:5},sample(213
 assert.equal(core.target({...s,brightness:0},null,1000).brightness,gain(15));
 assert.equal(core.valid(sample(NaN)),false);
 assert.equal(core.valid(sample(10,Infinity)),false);
-const after = core.step({brightness:1,warm:0},{brightness:0.02,warm:0.5,fresh:true},1);
+const after = core.step({brightness:1,warm:0},{brightness:0.02,warm:0.5,fresh:true},0.5);
 assert(after.brightness>0.02 && after.brightness<1);
 assert(after.warm>0 && after.warm<0.5);
 assert.equal(core.matrix(after).split(' ').length,20);
 console.log('Adaptive policy: darkness, CCT, manual independence, stale data and smoothing passed.');
+
+// Small changes retain fractional brightness in both directions and finish at 1s.
+for (const [from, to] of [[3, 4], [4, 3]]) {
+  const start = {brightness:gain(from), warm:0};
+  const end = {brightness:gain(to), warm:0, fresh:true};
+  const values = Array.from({length:61}, (_, i) => core.step(start, end, i / 60).brightness);
+  assert.equal(values[0], start.brightness);
+  assert.equal(values[60], end.brightness);
+  assert.equal(new Set(values).size, 61);
+  for (let i=1; i<values.length; i++) assert((values[i] - values[i-1]) * (to-from) > 0);
+  assert.deepEqual(core.step(start, end, 2), end);
+}

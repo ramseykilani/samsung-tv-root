@@ -1,6 +1,6 @@
 (function (F) {
   var core = F.adaptiveCore, sensor = null, running = false, generation = 0;
-  var pollTimer = null, paintTimer = null, previousTime = 0, current = null, error = '';
+  var pollTimer = null, paintTimer = null, fadeStarted = 0, fadeFrom = null, fadeTarget = null, current = null, error = '', lastMatrix = '';
   var matrix = document.getElementById('adaptive-color-matrix');
   var stage = document.getElementById('art-stage');
   function settings() {
@@ -15,9 +15,19 @@
   function artVisible() { return F.router && F.router.current() === 'art'; }
   function paint(immediate) {
     var now = Date.now(), target = core.target(settings(), sensor, now);
-    current = immediate || !current ? target : core.step(current, target, (now - previousTime) / 1000);
-    previousTime = now;
-    matrix.setAttribute('values', core.matrix(current));
+    if (immediate || !current) {
+      current = target; fadeFrom = target; fadeTarget = target; fadeStarted = now;
+    } else {
+      // Finish the old curve up to this instant before redirecting it. Repeated
+      // samples of the same target must not restart the one-second fade.
+      current = core.step(fadeFrom, fadeTarget, (now - fadeStarted) / 1000);
+      if (target.brightness !== fadeTarget.brightness || target.warm !== fadeTarget.warm) {
+        fadeFrom = current; fadeTarget = target; fadeStarted = now;
+      }
+      current.fresh = target.fresh;
+    }
+    var values = core.matrix(current);
+    if (values !== lastMatrix) { matrix.setAttribute('values', values); lastMatrix = values; }
     stage.style.filter = 'url(#adaptive-art-filter)';
     var text = !enabled() ? 'Manual' : target.fresh ? Math.round(sensor.lux) + ' lux · ' + sensor.cct_kelvin + ' K' : (settings().adaptiveBrightness === 'on' ? 'Sensor unavailable · 15% brightness' : 'Sensor unavailable · manual brightness');
     var status = document.getElementById('ambient-status');
@@ -49,8 +59,8 @@
     stop(); if (document.hidden) return;
     // Resume at the displayed value, without counting time spent off-screen as
     // a smoothing step or snapping to the fallback before the next read arrives.
-    running = true; previousTime = Date.now(); paint(false); poll(generation);
-    paintTimer = setInterval(function () { paint(!artVisible()); }, 250);
+    running = true; fadeFrom = current; fadeStarted = Date.now(); paint(false); poll(generation);
+    paintTimer = setInterval(function () { paint(!artVisible()); }, 16);
   }
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) stop(); else start();
