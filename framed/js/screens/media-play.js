@@ -80,6 +80,7 @@ window.framed = window.framed || {};
   var nextEp = null;              // following meta.video
   var altStream = null;           // another playable source for the refused veil
   var silentWarned = false;
+  var savedOnce = false;
 
   var state = 'starting';
   var chrome = 'shown';
@@ -306,7 +307,11 @@ window.framed = window.framed || {};
   }
 
   video.addEventListener('play', function () { if (state !== 'refused' && !eng.paused()) setState('playing'); });
-  video.addEventListener('playing', function () { if (state !== 'refused' && !eng.paused()) setState('playing'); restoreAudioLanguage(); silentCheck(); });
+  video.addEventListener('playing', function () {
+    if (state !== 'refused' && !eng.paused()) setState('playing');
+    if (!savedOnce && ctx) { savedOnce = true; F.media.ensureSaved(ctx.cat, ctx.item); }
+    restoreAudioLanguage(); silentCheck();
+  });
   // AVPlay relays events through this element, which can also emit native or
   // queued events. Only accept a pause that agrees with the active engine.
   video.addEventListener('pause', function () {
@@ -758,6 +763,7 @@ window.framed = window.framed || {};
     clearTimers();
     state = 'starting';
     silentWarned = false;
+    savedOnce = false;
     audioRestored = false;
     attr('state', 'starting'); attr('slow', 'false'); attr('scrub', 'idle');
     attr('upnext', 'none'); attr('panel', 'closed'); attr('chrome', 'shown');

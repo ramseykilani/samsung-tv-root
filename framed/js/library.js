@@ -157,6 +157,10 @@ window.framed = window.framed || {};
           if (same) return;
           REJECTED = bad;
           if (bad) console.info('[framed] left out ' + bad + ' remote ' + (bad === 1 ? 'picture' : 'pictures') + ' (not 16:9)');
+          if (!ok.length) {
+            console.info('[framed] every remote picture was rejected — keeping bundled set');
+            return;
+          }
           set(ok, 'remote');
         });
       };

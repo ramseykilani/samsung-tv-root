@@ -6,7 +6,8 @@ window.framed = window.framed || {};
   // "moonlight" = the Moonlight Tizen client (package MoonLightS, app MoonLightS.MoonlightWasm)
   // — install + Sunshine pairing steps are in README.md "Stream from PC".
   var EXTERNAL_APP_IDS = {
-    moonlight: 'MoonLightS.MoonlightWasm'
+    moonlight: 'MoonLightS.MoonlightWasm',
+    youtube: '111299001912'
   };
   /* =================================== */
   var el = document.getElementById('screen-launcher');
@@ -42,7 +43,22 @@ window.framed = window.framed || {};
     if (!tile) return;
     var app = tile.getAttribute('data-app');
     if (tile.getAttribute('data-kind') === 'screen') F.router.go(app);
-    else window.__tvBridge.launch(EXTERNAL_APP_IDS[app] || app);
+    else {
+      var label = tile.querySelector('.tile__name');
+      var name = (label && label.textContent) || app;
+      try {
+        var p = window.__tvBridge.launch(EXTERNAL_APP_IDS[app] || app);
+        if (p && typeof p.then === 'function') {
+          p.then(function (r) {
+            if (r && r.ok === false) F.toast('Couldn’t open ' + name, 'warn');
+          }).catch(function () {
+            F.toast('Couldn’t open ' + name, 'warn');
+          });
+        }
+      } catch (e) {
+        F.toast('Couldn’t open ' + name, 'warn');
+      }
+    }
   });
 
   F.router.register('launcher', {
