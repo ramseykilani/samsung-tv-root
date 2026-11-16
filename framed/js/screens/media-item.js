@@ -506,8 +506,18 @@ window.framed = window.framed || {};
   F.router.register('media-item', {
     el: el,
     enter: function () {
-      cur = F.media.item();
-      if (!cur) { F.router.go('media'); return; }
+      var incoming = F.media.item();
+      if (!incoming) { F.router.go('media'); return; }
+      // Returning to the same title (e.g. from the player): refresh UI only
+      if (cur && cur.item.id === incoming.item.id && cur.item.type === incoming.item.type
+          && (!incoming.episodeId || (openEp && incoming.episodeId === openEp.id))) {
+        cur = incoming;
+        paintPlay();
+        if (isSeries()) renderEpisodes();
+        F.nav.setScope(el, { remember: true });
+        return;
+      }
+      cur = incoming;
       var it = cur.item;
       episodes = []; seasons = []; season = null; seasonCtl = null;
       openEp = null; openRow = null; epSourcesEl = null;

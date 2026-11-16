@@ -45,7 +45,9 @@ window.framed = window.framed || {};
   var kbOpen = false;
   var kbText = '';
   var kbMode = 'search';   // 'search' | 'addon'
+  var kbShift = false;
   var wantInitialFocus = false; // entering Watch should land on content, not the toolbar
+  var _returnState = null;      // saved by leave(), restored by enter() on re-entry
 
   function setStatus(t) { statusEl.textContent = t || ''; }
   // grid recede: .has-cursor is the JS mirror of :focus-within (risk-list engine)
@@ -283,7 +285,7 @@ window.framed = window.framed || {};
         return ((pb && pb.at) || 0) - ((pa && pa.at) || 0);
       });
       showEntries(saved.map(function (it) { return { cat: null, item: it }; }),
-        'My List is empty. Open a title and choose “Save to My List”, or press the red button on a poster.');
+        'My List is empty. Open a title and choose "Save to My List", or press the red button on a poster.');
       if (saved.length) setStatus(saved.length + (saved.length === 1 ? ' title' : ' titles') + ' in My List');
     } else {
       var cont = F.media.continueItems();
@@ -368,13 +370,13 @@ window.framed = window.framed || {};
     filterEl.hidden = true;
     libEl.hidden = true;
     var token = ++loadToken;
-    setStatus('Searching for “' + q + '”…');
+    setStatus('Searching for "' + q + '"…');
     gridEl.innerHTML = '';
     moreBtn.hidden = true;
     F.media.search(q, function (results) {
       if (el.hidden || token !== loadToken) return;
-      showEntries(results, 'No titles found for “' + q + '”. Back clears the search.');
-      if (results.length) setStatus(results.length + (results.length === 1 ? ' result' : ' results') + ' for “' + q + '” · Back clears');
+      showEntries(results, 'No titles found for "' + q + '". Back clears the search.');
+      if (results.length) setStatus(results.length + (results.length === 1 ? ' result' : ' results') + ' for "' + q + '" · Back clears');
     });
   }
 
@@ -452,7 +454,7 @@ window.framed = window.framed || {};
 
   /* ---------- on-screen keyboard (search + addon URL entry) ---------- */
 
-  var KEY_ROWS = ['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ0123', '456789.-/:'];
+  var KEY_ROWS = ['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ0123', '456789.-/:', '=_|?&%#@+~'];
   function paintQuery() {
     queryEl.textContent = kbText || (kbMode === 'addon' ? 'Addon URL (…/manifest.json)' : 'Search titles…');
   }
@@ -466,13 +468,18 @@ window.framed = window.framed || {};
           b.className = 'media-key';
           b.setAttribute('data-focusable', '');
           b.setAttribute('tabindex', '-1');
-          b.textContent = ch;
-          b.addEventListener('click', function () { kbText += ch.toLowerCase(); paintQuery(); });
+          var isLetter = ch >= 'A' && ch <= 'Z';
+          b.textContent = isLetter && !kbShift ? ch.toLowerCase() : ch;
+          b.addEventListener('click', function () {
+            kbText += isLetter ? (kbShift ? ch : ch.toLowerCase()) : ch;
+            paintQuery();
+          });
           keysGrid.appendChild(b);
         })(row[i]);
       }
     });
-    [['Space', function () { kbText += ' '; }], ['Delete', function () { kbText = kbText.slice(0, -1); }],
+    [['Shift', function () { kbShift = !kbShift; buildKeyboard(); }],
+     ['Space', function () { kbText += ' '; }], ['Delete', function () { kbText = kbText.slice(0, -1); }],
      ['Clear', function () { kbText = ''; }], [kbMode === 'addon' ? 'Install' : 'Search', function () { submitKeyboard(); }], ['Cancel', function () { closeKeyboard(); }]
     ].forEach(function (pair) {
       var b = document.createElement('button');
@@ -480,6 +487,7 @@ window.framed = window.framed || {};
       b.setAttribute('data-focusable', '');
       b.setAttribute('tabindex', '-1');
       b.textContent = pair[0];
+      if (pair[0] === 'Shift') b.setAttribute('data-selected', String(kbShift));
       b.addEventListener('click', function () { pair[1](); paintQuery(); });
       keysGrid.appendChild(b);
     });
@@ -508,6 +516,7 @@ window.framed = window.framed || {};
   function openKeyboard(mode) {
     kbMode = mode || 'search';
     kbText = kbMode === 'search' ? (query || '') : '';
+    kbShift = false;
     buildKeyboard();
     kbOpen = true;
     keysEl.hidden = false;
@@ -594,22 +603,47 @@ window.framed = window.framed || {};
   F.router.register('media', {
     el: el,
     enter: function () {
-      var stored = F.store.get('media', { catalog: 0 });
-      view = stored.view || 'board';
-      libSort = stored.libSort || 'added';
-      libType = stored.libType || 'all';
-      wantInitialFocus = true;
+      var restoring = _returnState;
+      _returnState = null;
+      if (restoring) {
+        view = restoring.view;
+        genre = restoring.genre;
+        libSort = restoring.libSort;
+        libType = restoring.libType;
+      } else {
+        var stored = F.store.get('media', { catalog: 0 });
+        view = stored.view || 'board';
+        libSort = stored.libSort || 'added';
+        libType = stored.libType || 'all';
+        genre = '';
+      }
+      wantInitialFocus = !restoring;
       query = '';
-      genre = '';
       kbOpen = false;
       keysEl.hidden = true;
+      var savedQuery = restoring ? (restoring.query || '') : '';
       setStatus('Loading catalogs…');
       refreshCats(function () {
         if (el.hidden) return;
         if (!cats.length && (view === 'board' || view === 'browse')) { setStatus('No addons reachable. Check the network, or open the Addons shelf.'); gridEl.innerHTML = ''; }
-        applyView();
+        if (savedQuery) {
+          paintShelves();
+          buildTools();
+          runSearch(savedQuery);
+        } else {
+          applyView();
+        }
       });
       F.nav.setScope(el, { remember: true });
+    },
+    leave: function () {
+      _returnState = {
+        view: view,
+        query: query,
+        genre: genre,
+        libSort: libSort,
+        libType: libType
+      };
     },
     back: function () {
       if (kbOpen) { closeKeyboard(); return true; }
