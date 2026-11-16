@@ -40,6 +40,19 @@ jobs:
       - run: uv build
       - run: uv run samsung-tv-root --version
       - run: uv run samsung-tv-root doctor --json
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: '22'
+      # Only non-Playwright JS tests run here; browser-based tests
+      # (test_adaptive_lifecycle, test_art_controls, test_brightness,
+      # test_controls, test_media_episodes, test_player, test_player_audio,
+      # test_player_subtitle_appearance) need a Chromium environment.
+      - name: Run JS unit tests
+        run: |
+          node tests/test_adaptive.js
+          node tests/test_art_frames.js
+          node tests/test_library.js
+          node tests/test_screensaver.js
 
   payloads:
     name: build TV payloads

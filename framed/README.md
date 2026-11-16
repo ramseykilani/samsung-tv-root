@@ -6,15 +6,14 @@ repository’s root controller; see the [project documentation](../README.md) fo
 its exploit-based root acquisition and security limitations.
 
 > **Design: Mhach** — see HANDBACK.md beside this folder. Visual decisions live in `css/theme.css`
-> (tokens + fonts) and `css/frames.css` (art frames); `css/app.css` is layout. The notes below about
-> `theme-placeholder.css` describe the pre-design scaffold.
+> (tokens + fonts) and `css/frames.css` (art frames); `css/app.css` is layout.
 
 A launcher + art-mode web app for a Samsung Frame TV (2024 · Tizen 8.0 · 4K panel), delivered as
 a **mechanics-complete, unstyled scaffold**. Plain HTML/CSS/JS — no build step, no framework, no
 CDN, no webfonts; runs offline in the TV web runtime and opens as-is in a desktop browser.
 
 **The visual design is intentionally not done.** Everything that is a visual decision lives in one
-file, `css/theme-placeholder.css`, and is marked `DESIGN SURFACE: replace these tokens`. The
+file, `css/theme.css`, and is marked `DESIGN SURFACE: replace these tokens`. The
 future design pass should treat that file as its replace-file and do a fresh design on top of the
 mechanics described here — not redesign an existing look.
 
@@ -23,7 +22,7 @@ framed/
 ├── config.xml                 Tizen web-app manifest (wgt)
 ├── index.html                 single page, six screens, hash routing, plain <script> tags
 ├── css/
-│   ├── theme-placeholder.css  ★ DESIGN SURFACE — every colour / font / radius / motion token
+│   ├── theme.css              ★ DESIGN SURFACE — every colour / font / radius / motion token
 │   └── app.css                layout + mechanics only; consumes the tokens, holds no literals
 ├── js/
 │   ├── bridge.js              window.__tvBridge STUB (the TV seam)
@@ -41,7 +40,7 @@ framed/
 │   └── demo/                  bundled offline Stremio addon (manifest + catalog/meta/stream JSON)
 └── assets/
     ├── icon.png
-    ├── art/                   bundled picture library (6 placeholder test cards, landscape + portrait + square)
+    ├── art/                   bundled picture library (1 sample landscape image) + demo addon posters
     └── media/                 bundled demo clip (demo.mp4, served by the demo addon)
 ```
 
@@ -55,7 +54,7 @@ framed/
 | Art | 16:9 pictures only, whole, inside a thin frame that hugs them (no mat, no crop, no caption); 9 flat frame styles with colour choices, picture grid in the panel, per-picture look memory, persistence, panel focus-trap, `s` key, corner affordance reveal | Panel chrome, any motion |
 | Slideshow | Library seam (`js/library.js`), sequencer (`js/slideshow.js`): off / every N hours / every N days, sequential / seeded shuffle, elapsed-period catch-up on open, Left/Right manual step, `p`/MediaPlayPause toggle, two-layer cross-fade on `--fr-motion`, picture grid in the panel (the one on the wall is marked), persistence | Cross-fade feel (duration/easing via `--fr-motion`), indicator typography, real picture content |
 | Settings | Framed-level only: home-art bezel style, theme chooser with disabled "coming soon" slots, About. All art-level settings live in the Art panel | Real theme list and token blocks, all visuals |
-| Theme | `html[data-theme]` hook, single token file, `--fr-motion` switch (0ms now) | **Everything in `theme-placeholder.css`** |
+| Theme | `html[data-theme]` hook, single token file, `--fr-motion` switch (0ms now) | **Everything in `theme.css`** |
 | Assets | Placeholder test cards + icon | Real imagery and icon |
 
 ## Screens
@@ -331,9 +330,11 @@ auto-generate it server-side; nothing is hand-maintained):
 
 ### 2. `bundled` — `assets/art/` (always present)
 
-Six placeholder test cards (the two original demo cards plus four generated ones). This is
+One sample landscape image (`marsh.jpg`). This is
 what shows at boot, and what stays if `REMOTE_ART_BASE` is empty, the desktop is off, the
-fetch fails or times out, or the manifest is malformed. There is deliberately **no error UI**
+fetch fails or times out, or the manifest is malformed. The `assets/art/` directory also
+contains demo poster PNGs used by the bundled Stremio addon (`addons/demo/`), but those
+are not part of the art library's BUNDLED array. There is deliberately **no error UI**
 — one `console.info` line is logged and the bundled set is used. When the manifest arrives
 later, `F.library.set(items, 'remote')` swaps the list and fires `framed:library`; the
 slideshow re-wraps its position and the Art screen repaints. The Settings About line
@@ -465,7 +466,7 @@ window; tiles are 36 rem (360 px logical), all text ≥ 2.8 rem (28 px logical).
 
 ## Replacing the theme (for the design session)
 
-1. Replace `css/theme-placeholder.css`. Keep the variable names (or rename them and update
+1. Replace `css/theme.css`. Keep the variable names (or rename them and update
    `app.css`). Add `html[data-theme="<name>"] { … }` blocks for each theme; `settings.js` sets
    `data-theme` from the Theme control — edit its option list there.
 2. `--fr-motion` is `0ms` in the scaffold; `app.css` already applies it to focus, selection and
