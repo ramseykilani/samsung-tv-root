@@ -50,13 +50,13 @@ window.framed = window.framed || {};
         var p = window.__tvBridge.launch(EXTERNAL_APP_IDS[app] || app);
         if (p && typeof p.then === 'function') {
           p.then(function (r) {
-            if (r && r.ok === false) F.toast('Couldn’t open ' + name, 'warn');
+            if (r && r.ok === false) F.toast(‘Couldn\’t open ‘ + name, ‘warn’);
           }).catch(function () {
-            F.toast('Couldn’t open ' + name, 'warn');
+            F.toast('Couldn\'t open ' + name, 'warn');
           });
         }
       } catch (e) {
-        F.toast('Couldn’t open ' + name, 'warn');
+        F.toast('Couldn\'t open ' + name, 'warn');
       }
     }
   });
