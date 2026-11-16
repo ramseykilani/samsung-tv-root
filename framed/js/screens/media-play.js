@@ -344,11 +344,11 @@ window.framed = window.framed || {};
   document.addEventListener('visibilitychange', saveProgress);
 
   function onSuspend() {
-    if (state === 'starting' || state === 'refused' || state === 'ended') return;
+    if (state === 'refused' || state === 'ended') return;
     if (document.hidden) {
       eng.suspend();
     } else {
-      eng.restore();
+      if (!eng.restore()) F.toast('Playback could not resume', 'warn');
     }
   }
 
@@ -451,7 +451,7 @@ window.framed = window.framed || {};
   function selectAddonSub(sub) {
     disableAllSubs();
     subUrl = sub.url;
-    var token = subsToken;
+    var token = ++subsToken;
     if (eng.kind === 'avplay') {
       // AVPlay draws video on a plane behind the page — <track> can't render;
       // fetch the file ourselves and paint cues into .player__subs.

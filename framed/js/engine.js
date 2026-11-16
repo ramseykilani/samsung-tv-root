@@ -245,12 +245,12 @@ window.framed = window.framed || {};
       },
       lastError: function () { return err; },
       suspend: function () {
-        if (!active || pausedFlag || !meta) return;
+        if (!active || !meta) return;
         try { av.suspend(); } catch (e) { /* not playing */ }
       },
       restore: function () {
-        if (!active || !meta) return;
-        try { av.restore(); } catch (e) { /* not suspended */ }
+        if (!active || !meta) return false;
+        try { av.restore(); return true; } catch (e) { return false; }
       }
     };
   }
@@ -295,7 +295,7 @@ window.framed = window.framed || {};
       },
       lastError: function () { return video.error; },
       suspend: function () {},
-      restore: function () {}
+      restore: function () { return true; }
     };
   }
 

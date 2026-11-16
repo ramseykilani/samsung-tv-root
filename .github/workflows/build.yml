@@ -52,6 +52,7 @@ jobs:
           node tests/test_adaptive.js
           node tests/test_art_frames.js
           node tests/test_library.js
+          node tests/test_media_subtitles.js
           node tests/test_screensaver.js
 
   payloads:

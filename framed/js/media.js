@@ -354,15 +354,15 @@ window.framed = window.framed || {};
   function streams(type, id, cb) {
     var per = {};
     var pending = MEDIA_ADDONS.length;
-    var asked = 0, answered = 0;
+    var asked = 0, answered = 0, failed = 0;
     function done() {
       if (--pending === 0) {
         var result = flatten(per).slice(0, MEDIA_MAX_STREAMS);
-        result.meta = { asked: asked, answered: answered };
+        result.meta = { asked: asked, answered: answered, failed: failed };
         cb(result);
       }
     }
-    if (!pending || !id) { var empty = []; empty.meta = { asked: 0, answered: 0 }; return cb(empty); }
+    if (!pending || !id) { var empty = []; empty.meta = { asked: 0, answered: 0, failed: 0 }; return cb(empty); }
     MEDIA_ADDONS.forEach(function (addon, ai) {
       loadManifest(addon, function (m) {
         if (m && hasResource(m, 'stream')) {
@@ -380,7 +380,7 @@ window.framed = window.framed || {};
             }
             done();
           });
-        } else done();
+        } else { if (!m) failed++; done(); }
       });
     });
   }

@@ -44,6 +44,7 @@ window.framed = window.framed || {};
   var visitToken = 0;
   var loadToken = 0;
   var streamsMeta = null;
+  var loaded = false;
   var playFocusedOnce = false;
 
   function setStatus(t) { statusEl.textContent = t || ''; }
@@ -478,10 +479,11 @@ window.framed = window.framed || {};
     var videoId = openEp ? openEp.id : cur.item.id;
     F.media.streams(cur.item.type, videoId, function (ss) {
       if (el.hidden || token !== loadToken) return;
+      loaded = true;
       streams = ss || [];
       streamsMeta = (ss && ss.meta) || null;
       // All stream-capable addons failed/timed out: blame the network.
-      if (!streams.length && streamsMeta && streamsMeta.asked > 0 && streamsMeta.answered === 0) {
+      if (!streams.length && streamsMeta && ((streamsMeta.asked > 0 && streamsMeta.answered === 0) || (streamsMeta.asked === 0 && streamsMeta.failed > 0))) {
         var box = container();
         if (box) {
           box.innerHTML = '';
@@ -509,7 +511,7 @@ window.framed = window.framed || {};
       var incoming = F.media.item();
       if (!incoming) { F.router.go('media'); return; }
       // Returning to the same title (e.g. from the player): refresh UI only
-      if (cur && cur.item.id === incoming.item.id && cur.item.type === incoming.item.type
+      if (loaded && cur && cur.item.id === incoming.item.id && cur.item.type === incoming.item.type
           && (!incoming.episodeId || (openEp && incoming.episodeId === openEp.id))) {
         cur = incoming;
         paintPlay();
@@ -522,7 +524,7 @@ window.framed = window.framed || {};
       episodes = []; seasons = []; season = null; seasonCtl = null;
       openEp = null; openRow = null; epSourcesEl = null;
       streams = []; firstPlayable = null; bestReady = null; foldOpen = false;
-      streamsMeta = null;
+      streamsMeta = null; loaded = false;
       playFocusedOnce = false;
       var vt = ++visitToken;
       ++loadToken;
@@ -562,7 +564,7 @@ window.framed = window.framed || {};
           }
         }
         // Series need streams loaded after meta determines the episode.
-        if (it.type === 'series') loadStreams(!!cur.episodeId);
+        if (isSeries()) loadStreams(!!cur.episodeId);
       });
       // Non-series: stream id does not depend on meta, so start immediately in parallel.
       if (it.type !== 'series') loadStreams(false);

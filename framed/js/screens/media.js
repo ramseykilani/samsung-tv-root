@@ -47,7 +47,8 @@ window.framed = window.framed || {};
   var kbMode = 'search';   // 'search' | 'addon'
   var kbShift = false;
   var wantInitialFocus = false; // entering Watch should land on content, not the toolbar
-  var _returnState = null;      // saved by leave(), restored by enter() on re-entry
+  var _returnState = null;      // saved before navigating to detail, restored on re-entry
+  var _goingToDetail = false;
 
   function setStatus(t) { statusEl.textContent = t || ''; }
   // grid recede: .has-cursor is the JS mirror of :focus-within (risk-list engine)
@@ -111,6 +112,7 @@ window.framed = window.framed || {};
     card.appendChild(sub);
     card.addEventListener('click', function () {
       F.media.open(entry.cat, entry.item);
+      _goingToDetail = true;
       F.router.go('media-item');
     });
     return card;
@@ -478,12 +480,18 @@ window.framed = window.framed || {};
         })(row[i]);
       }
     });
-    [['Shift', function () { kbShift = !kbShift; buildKeyboard(); }],
+    [['Shift', function () {
+      kbShift = !kbShift; buildKeyboard();
+      var btns = keysGrid.querySelectorAll('.media-key');
+      for (var k = 0; k < btns.length; k++) {
+        if (btns[k].textContent === 'Shift') { F.nav.focus(btns[k]); break; }
+      }
+    }],
      ['Space', function () { kbText += ' '; }], ['Delete', function () { kbText = kbText.slice(0, -1); }],
      ['Clear', function () { kbText = ''; }], [kbMode === 'addon' ? 'Install' : 'Search', function () { submitKeyboard(); }], ['Cancel', function () { closeKeyboard(); }]
     ].forEach(function (pair) {
       var b = document.createElement('button');
-      b.className = 'media-key media-key--wide';
+      b.className = pair[0] === 'Shift' ? 'media-key' : 'media-key media-key--wide';
       b.setAttribute('data-focusable', '');
       b.setAttribute('tabindex', '-1');
       b.textContent = pair[0];
@@ -617,7 +625,7 @@ window.framed = window.framed || {};
         libType = stored.libType || 'all';
         genre = '';
       }
-      wantInitialFocus = !restoring;
+      wantInitialFocus = true;
       query = '';
       kbOpen = false;
       keysEl.hidden = true;
@@ -637,13 +645,13 @@ window.framed = window.framed || {};
       F.nav.setScope(el, { remember: true });
     },
     leave: function () {
-      _returnState = {
-        view: view,
-        query: query,
-        genre: genre,
-        libSort: libSort,
-        libType: libType
-      };
+      if (_goingToDetail) {
+        _goingToDetail = false;
+        _returnState = {
+          view: view, query: query, genre: genre,
+          libSort: libSort, libType: libType
+        };
+      }
     },
     back: function () {
       if (kbOpen) { closeKeyboard(); return true; }
