@@ -133,13 +133,13 @@ window.framed = window.framed || {};
           try {
             av.setSelectTrack('AUDIO', tracks[i].index);
             for (var j = 0; j < tracks.length; j++) tracks[j].enabled = j === i;
-            F.toast('Sound switched to a track this TV can decode — the file's main track is DTS', 'ok');
+            F.toast("Sound switched to a track this TV can decode — the file's main track is DTS", 'ok');
           } catch (e) { /* keep the default */ }
           return;
         }
       }
       // every track is DTS-family: nothing AVPlay (or this TV) can decode
-      F.toast('Every sound track in this file is DTS — this TV can't decode DTS. Pick another source.', 'warn');
+      F.toast("Every sound track in this file is DTS — this TV can't decode DTS. Pick another source.", 'warn');
     }
 
     function fail(e, stage) {

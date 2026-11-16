@@ -414,13 +414,13 @@ window.framed = window.framed || {};
         ' play on this TV' + (readyAny ? '. Ready ones start at once.' : '.')));
       playable.forEach(function (s) { box.appendChild(sourceRow(s)); });
       if (dead.length) {
-        var why = debridConfigured() ? 'torrents your debrid service didn't take'
+        var why = debridConfigured() ? "torrents your debrid service didn't take"
                                    : 'plain torrents, from addons without TorBox';
         var fold = document.createElement('button');
         fold.className = 'src-more';
         fold.setAttribute('data-focusable', ''); fold.setAttribute('tabindex', '-1');
         fold.setAttribute('aria-expanded', String(foldOpen));
-        fold.appendChild(h('span', null, dead.length + ' more can't play on this TV'));
+        fold.appendChild(h('span', null, dead.length + " more can't play on this TV"));
         fold.appendChild(h('span', 'src-more__why', why));
         fold.appendChild(h('span', 'src-more__sign', foldOpen ? 'Hide' : 'Show'));
         var deadBox = h('div', 'src-dead');

@@ -98,8 +98,31 @@ window.framed = window.framed || {};
 
   applyAddonPrefs();
 
+  var WATCHED_CAP = 500;
+
   function watch() { return F.store.get('watch', WATCH_DEFAULTS); }
-  function saveWatch(w) { return F.store.set('watch', w); }
+  function saveWatch(w) {
+    try {
+      return F.store.set('watch', w);
+    } catch (e) {
+      // localStorage quota exceeded — evict oldest watched entries and retry once
+      try {
+        evictWatched(w, Math.max(50, Math.floor(WATCHED_CAP / 4)));
+        return F.store.set('watch', w);
+      } catch (e2) {
+        note('saveWatch failed after eviction: ' + (e2 && e2.message || e2));
+      }
+    }
+    return w;
+  }
+  function evictWatched(w, count) {
+    var all = w.watched || {};
+    var keys = Object.keys(all);
+    if (keys.length <= count) return;
+    keys.sort(function (a, b) { return (all[b].at || 0) - (all[a].at || 0); });
+    for (var i = count; i < keys.length; i++) delete all[keys[i]];
+    w.watched = all;
+  }
   function progressKey(type, id) { return (type || 'movie') + ':' + id; }
 
   // Catalogs and items are handed around live ({ addon:{base}, … }); anything persisted
@@ -313,12 +336,12 @@ window.framed = window.framed || {};
       kind === 'torrent' ? 'Torrent · needs a debrid service' :
       kind === 'external' ? 'Plays outside framed only' :
       kind === 'ytId' ? 'YouTube link · open in YouTube' :
-      kind === 'notWebReady' ? 'The TV's player can't open this link' : 'No direct file link';
+      kind === 'notWebReady' ? "The TV's player can't open this link" : 'No direct file link';
     var reasonSentence = playable ? '' :
       kind === 'torrent' ? 'This is a torrent. A debrid service such as TorBox makes torrents playable.' :
       kind === 'external' ? 'This source opens in another app, not in framed.' :
       kind === 'ytId' ? 'This is a YouTube link. Open it in the YouTube app.' :
-      'The TV's player can't open this source's link.';
+      "The TV's player can't open this source's link.";
     var dts = playable && DTS_RE.test(hay);
     return { addon: addon.name, name: name, q: q, size: size, file: file, flag: flag, reason: reason,
       reasonSentence: reasonSentence, playable: playable, ready: ready, debrid: debrid, dts: dts,
@@ -408,13 +431,25 @@ window.framed = window.framed || {};
     if (finished) {
       delete all[progressKey(it.type, videoId)];
       var watchedAll = w.watched || {};
-      watchedAll[progressKey(it.type, videoId)] = { at: Date.now(), item: snapshotItem(playingCtx.cat, it) };
+      watchedAll[progressKey(it.type, videoId)] = {
+        at: Date.now(),
+        id: it.id, type: it.type || 'movie',
+        episodeId: playingCtx.episodeId || null,
+        episodeLabel: playingCtx.episodeLabel || ''
+      };
+      // cap the watched set
+      var wKeys = Object.keys(watchedAll);
+      if (wKeys.length > WATCHED_CAP) {
+        wKeys.sort(function (a, b) { return (watchedAll[b].at || 0) - (watchedAll[a].at || 0); });
+        for (var wi = WATCHED_CAP; wi < wKeys.length; wi++) delete watchedAll[wKeys[wi]];
+      }
       w.watched = watchedAll;
     }
     else all[progressKey(it.type, videoId)] = {
       pos: Math.floor(pos), dur: Math.floor(dur), at: Date.now(),
       episodeId: playingCtx.episodeId || null, episodeLabel: playingCtx.episodeLabel || '',
-      item: snapshotItem(playingCtx.cat, it)
+      item: { id: it.id, type: it.type || 'movie', name: it.name,
+        poster: it.poster || null, cat: snapshotCat(playingCtx.cat) }
     };
     // keep the shelf small and fresh: newest 40
     var keys = Object.keys(all).sort(function (a, b) { return (all[b].at || 0) - (all[a].at || 0); });
@@ -466,7 +501,7 @@ window.framed = window.framed || {};
     var w = watch();
     var all = w.watched || {};
     var key = progressKey(item.type, videoId || item.id);
-    if (on) all[key] = { at: Date.now(), item: snapshotItem(cat, item) };
+    if (on) all[key] = { at: Date.now(), id: item.id, type: item.type || 'movie' };
     else delete all[key];
     w.watched = all; saveWatch(w);
     if (on) clearProgress(item.type, videoId || item.id);
