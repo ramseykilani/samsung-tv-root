@@ -239,17 +239,17 @@ window.framed = window.framed || {};
       veilGo.querySelector('.act__value').textContent = '';
       veilAlt.hidden = false; veilAlt.querySelector('.act__name').textContent = 'Keep waiting';
     } else if (kind === 'refused') {
-      veilKicker.textContent = 'This source can’t play';
+      veilKicker.textContent = 'This source can't play';
       veilTitle.textContent = t; veilSub.textContent = se;
       var err = eng.lastError();
       var code = err && typeof err.code === 'number' ? err.code : 0;
-      var msg = 'The TV’s player refused this link.', cause = '';
+      var msg = 'The TV's player refused this link.', cause = '';
       if (code === 2) { msg = 'The video data never arrived.'; cause = 'The host may be down or the link has expired.'; }
       else if (code === 3) {
-        msg = 'This TV can’t decode the video or sound in this file.';
-        cause = stream && stream.dts ? 'The file’s sound is DTS — Samsung TVs don’t decode DTS. Pick a source without that flag.' : '';
+        msg = 'This TV can't decode the video or sound in this file.';
+        cause = stream && stream.dts ? 'The file's sound is DTS — Samsung TVs don't decode DTS. Pick a source without that flag.' : '';
       }
-      else if (code === 4) msg = 'This file’s format isn’t one the TV can read.';
+      else if (code === 4) msg = 'This file's format isn't one the TV can read.';
       veilMsg.textContent = msg;
       if (cause) { veilCause.hidden = false; veilCause.textContent = cause; }
       veilActsOn = true;
@@ -259,7 +259,7 @@ window.framed = window.framed || {};
     } else if (kind === 'ended') {
       veilKicker.textContent = 'Finished';
       veilTitle.textContent = t; veilSub.textContent = se;
-      veilMsg.textContent = nextEp ? 'The next episode is ' + epLabel(nextEp) + '.' : 'That’s the end.';
+      veilMsg.textContent = nextEp ? 'The next episode is ' + epLabel(nextEp) + '.' : 'That's the end.';
       veilActsOn = true;
       veilGo.hidden = false; veilGo.querySelector('.act__name').textContent = nextEp ? 'Choose next episode source' : 'Back to the detail';
       veilGo.querySelector('.act__value').textContent = '';
@@ -460,9 +460,9 @@ window.framed = window.framed || {};
           cueOverlay.setCues(F.engine.parseCues(subXhr.responseText));
           cueOverlay.tick(eng.time() - subDelay);
           liftCues();
-        } else F.toast('That subtitle file didn’t load', 'warn');
+        } else F.toast('That subtitle file didn't load', 'warn');
       };
-      subXhr.onerror = function () { F.toast('That subtitle file didn’t load', 'warn'); };
+      subXhr.onerror = function () { F.toast('That subtitle file didn't load', 'warn'); };
       subXhr.send();
       return;
     }
@@ -485,9 +485,9 @@ window.framed = window.framed || {};
       xhr.open('GET', sub.url, true);
       xhr.onload = function () {
         if (xhr.status >= 200 && xhr.status < 300) attach(URL.createObjectURL(new Blob([srtToVtt(xhr.responseText)], { type: 'text/vtt' })));
-        else F.toast('That subtitle file didn’t load', 'warn');
+        else F.toast('That subtitle file didn't load', 'warn');
       };
-      xhr.onerror = function () { F.toast('That subtitle file didn’t load', 'warn'); };
+      xhr.onerror = function () { F.toast('That subtitle file didn't load', 'warn'); };
       xhr.send();
     } else attach(sub.url);
   }
@@ -574,11 +574,11 @@ window.framed = window.framed || {};
     var tracks = eng.audioTracks();
     if (tracks === undefined) {
       return { id: 'sound', name: 'Sound', type: 'action', gated: true,
-        note: 'This TV can’t switch sound tracks in this file.' + (stream && stream.dts ? ' Its sound is ' + (/\btruehd\b/i.test(stream.flag || '') ? 'TrueHD' : 'DTS') + ' — pick a source without that flag.' : '') };
+        note: 'This TV can't switch sound tracks in this file.' + (stream && stream.dts ? ' Its sound is ' + (/\btruehd\b/i.test(stream.flag || '') ? 'TrueHD' : 'DTS') + ' — pick a source without that flag.' : '') };
     }
     if (!tracks || tracks.length < 2) {
       return { id: 'sound', name: 'Sound', type: 'action', gated: true,
-        note: 'This stream has one sound track.' + (stream && stream.dts ? ' It’s ' + 'DTS — Samsung TVs don’t decode DTS; the video will be silent. Pick a source without that flag.' : '') };
+        note: 'This stream has one sound track.' + (stream && stream.dts ? ' It's ' + 'DTS — Samsung TVs don't decode DTS; the video will be silent. Pick a source without that flag.' : '') };
     }
     var opts = [];
     for (var i = 0; i < tracks.length; i++) {
@@ -602,7 +602,7 @@ window.framed = window.framed || {};
     setTimeout(function () {
       if (el.hidden || state === 'refused') return;
       if (typeof video.webkitAudioDecodedByteCount === 'number' && video.webkitAudioDecodedByteCount === 0) {
-        F.toast('Playing without sound — this TV can’t decode this track (likely DTS). Pick a source without the sound flag.', 'warn');
+        F.toast('Playing without sound — this TV can't decode this track (likely DTS). Pick a source without the sound flag.', 'warn');
       }
     }, 4000);
   }
@@ -697,7 +697,7 @@ window.framed = window.framed || {};
         audioRestored = true;
         F.media.setPrefs({ audioLang: audioLanguage(eng.audioTracks()[currentAudioTrack()]) });
       }
-      if (!switched) F.toast('Couldn’t switch sound tracks. Try again or choose another track.', 'warn');
+      if (!switched) F.toast('Couldn't switch sound tracks. Try again or choose another track.', 'warn');
       stripValues();
     }
   }
