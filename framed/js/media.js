@@ -52,12 +52,35 @@ window.framed = window.framed || {};
   // Installed set = defaults (minus any the viewer disabled) + addons installed
   // from the Addons shelf, persisted in "framed.media" { customAddons, disabledAddons }.
   var MEDIA_ADDONS = DEFAULT_ADDONS.slice();
+  var localAddonsData = null;        // cached addons.local.json entries (or null if absent/not loaded)
+  var localAddonsQueue = null;       // pending callbacks while the file is being fetched
+
+  // Merge cached local overrides into a working addon list.
+  // Same-name entries replace; unknown names prepend; disabled names are skipped.
+  function applyLocalOverrides(list, disabled) {
+    var locals = localAddonsData;
+    var fresh = [];
+    for (var i = 0; i < locals.length; i++) {
+      var l = locals[i];
+      if (!l || !l.base || !l.name) continue;
+      if (disabled.indexOf(l.name) !== -1) continue;
+      var replaced = false;
+      for (var j = 0; j < list.length; j++) {
+        if (list[j].name === l.name) { list[j] = { name: l.name, base: l.base }; replaced = true; break; }
+      }
+      if (!replaced) fresh.push({ name: l.name, base: l.base });
+    }
+    for (var k = fresh.length - 1; k >= 0; k--) list.unshift(fresh[k]);
+  }
 
   function applyAddonPrefs() {
     var prefs = F.store.get('media', { catalog: 0 });
     var disabled = prefs.disabledAddons || [];
-    var out = DEFAULT_ADDONS.filter(function (a) { return disabled.indexOf(a.name) === -1; });
-    (prefs.customAddons || []).forEach(function (a) { if (a && a.base && a.name) out.push(a); });
+    // Work on copies so DEFAULT_ADDONS objects are never mutated.
+    var out = DEFAULT_ADDONS.filter(function (a) { return disabled.indexOf(a.name) === -1; })
+      .map(function (a) { return { name: a.name, base: a.base }; });
+    (prefs.customAddons || []).forEach(function (a) { if (a && a.base && a.name) out.push({ name: a.name, base: a.base }); });
+    if (localAddonsData) applyLocalOverrides(out, disabled);
     MEDIA_ADDONS = out;
     manifests = {};
   }
@@ -159,26 +182,23 @@ window.framed = window.framed || {};
 
   // Merge gitignored addons.local.json once: same-name entries replace defaults,
   // unknown names prepend. Silent no-op when the file is absent (keep-off-the-air key store).
+  // The loaded entries are cached in localAddonsData so applyAddonPrefs() can
+  // re-apply them after an install/remove rebuilds MEDIA_ADDONS.
   function withLocalAddons(cb) {
     if (localAddonsLoaded) return cb();
-    localAddonsLoaded = true;
+    if (localAddonsQueue) { localAddonsQueue.push(cb); return; }
+    localAddonsQueue = [cb];
     getJSON('addons.local.json', function (json) {
       var locals = json && json.addons;
       if (locals && locals.length) {
-        var fresh = [];
-        for (var i = 0; i < locals.length; i++) {
-          var l = locals[i];
-          if (!l || !l.base || !l.name) continue;
-          var replaced = false;
-          for (var j = 0; j < MEDIA_ADDONS.length; j++) {
-            if (MEDIA_ADDONS[j].name === l.name) { MEDIA_ADDONS[j].base = l.base; replaced = true; break; }
-          }
-          if (!replaced) fresh.push(l);
-        }
-        MEDIA_ADDONS = fresh.concat(MEDIA_ADDONS);
-        note('addons.local.json applied: ' + (fresh.length ? fresh.length + ' prepended, ' : '') + (locals.length - fresh.length) + ' replaced');
+        localAddonsData = locals;
+        applyAddonPrefs();
+        note('addons.local.json applied');
       }
-      cb();
+      localAddonsLoaded = true;
+      var cbs = localAddonsQueue;
+      localAddonsQueue = null;
+      for (var i = 0; i < cbs.length; i++) cbs[i]();
     });
   }
 
@@ -291,12 +311,12 @@ window.framed = window.framed || {};
       kind === 'torrent' ? 'Torrent · needs a debrid service' :
       kind === 'external' ? 'Plays outside framed only' :
       kind === 'ytId' ? 'YouTube link · open in YouTube' :
-      kind === 'notWebReady' ? 'The TV’s player can’t open this link' : 'No direct file link';
+      kind === 'notWebReady' ? 'The TV's player can't open this link' : 'No direct file link';
     var reasonSentence = playable ? '' :
       kind === 'torrent' ? 'This is a torrent. A debrid service such as TorBox makes torrents playable.' :
       kind === 'external' ? 'This source opens in another app, not in framed.' :
       kind === 'ytId' ? 'This is a YouTube link. Open it in the YouTube app.' :
-      'The TV’s player can’t open this source’s link.';
+      'The TV's player can't open this source's link.';
     var dts = playable && DTS_RE.test(hay);
     return { addon: addon.name, name: name, q: q, size: size, file: file, flag: flag, reason: reason,
       reasonSentence: reasonSentence, playable: playable, ready: ready, debrid: debrid, dts: dts,
@@ -304,16 +324,27 @@ window.framed = window.framed || {};
   }
 
   // Streams for an item, from every addon that declares the 'stream' resource.
+  // The returned array carries a .meta object { asked, answered } so the UI can
+  // distinguish "addons answered but found nothing" from "all addons failed."
   function streams(type, id, cb) {
     var per = {};
     var pending = MEDIA_ADDONS.length;
-    function done() { if (--pending === 0) cb(flatten(per).slice(0, MEDIA_MAX_STREAMS)); }
-    if (!pending || !id) return cb([]);
+    var asked = 0, answered = 0;
+    function done() {
+      if (--pending === 0) {
+        var result = flatten(per).slice(0, MEDIA_MAX_STREAMS);
+        result.meta = { asked: asked, answered: answered };
+        cb(result);
+      }
+    }
+    if (!pending || !id) { var empty = []; empty.meta = { asked: 0, answered: 0 }; return cb(empty); }
     MEDIA_ADDONS.forEach(function (addon, ai) {
       loadManifest(addon, function (m) {
         if (m && hasResource(m, 'stream')) {
+          asked++;
           var path = 'stream/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + '.json';
           getJSON(addonUrl(addon.base, path), function (json) {
+            if (json) answered++;
             var ss = json && json.streams;
             if (ss && ss.length) {
               per[ai] = [];
@@ -538,7 +569,7 @@ window.framed = window.framed || {};
         loadManifest(addon, function (m) {
           out[ai] = {
             name: addon.name, base: addon.base,
-            custom: !(function () { for (var i = 0; i < DEFAULT_ADDONS.length; i++) if (DEFAULT_ADDONS[i].base === addon.base) return false; return true; })(),
+            custom: DEFAULT_ADDONS.every(function (d) { return d.name !== addon.name; }),
             version: (m && m.version) || '', description: (m && m.description) || '',
             resources: resourceNames(m), types: (m && m.types) || [],
             reachable: !!m

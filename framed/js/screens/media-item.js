@@ -41,7 +41,9 @@ window.framed = window.framed || {};
   var firstPlayable = null;
   var bestReady = null;
   var foldOpen = false;
+  var visitToken = 0;
   var loadToken = 0;
+  var streamsMeta = null;
   var playFocusedOnce = false;
 
   function setStatus(t) { statusEl.textContent = t || ''; }
@@ -396,8 +398,11 @@ window.framed = window.framed || {};
     if (bestReady) firstPlayable = bestReady;
 
     if (!streams.length) {
-      box.appendChild(emptyState('No sources for this episode',
-        'None of your addons listed one. A new episode can take a day to appear.',
+      var heading = isSeries() ? 'No sources for this episode' : 'No sources available';
+      var cause = isSeries()
+        ? 'None of your addons listed one. A new episode can take a day to appear.'
+        : 'None of your addons found a source for this title.';
+      box.appendChild(emptyState(heading, cause,
         'Ask again', function () { reloadStreams(); }));
       paintPlay();
       return;
@@ -409,13 +414,13 @@ window.framed = window.framed || {};
         ' play on this TV' + (readyAny ? '. Ready ones start at once.' : '.')));
       playable.forEach(function (s) { box.appendChild(sourceRow(s)); });
       if (dead.length) {
-        var why = debridConfigured() ? 'torrents your debrid service didn’t take'
+        var why = debridConfigured() ? 'torrents your debrid service didn't take'
                                    : 'plain torrents, from addons without TorBox';
         var fold = document.createElement('button');
         fold.className = 'src-more';
         fold.setAttribute('data-focusable', ''); fold.setAttribute('tabindex', '-1');
         fold.setAttribute('aria-expanded', String(foldOpen));
-        fold.appendChild(h('span', null, dead.length + ' more can’t play on this TV'));
+        fold.appendChild(h('span', null, dead.length + ' more can't play on this TV'));
         fold.appendChild(h('span', 'src-more__why', why));
         fold.appendChild(h('span', 'src-more__sign', foldOpen ? 'Hide' : 'Show'));
         var deadBox = h('div', 'src-dead');
@@ -467,23 +472,27 @@ window.framed = window.framed || {};
   function loadStreams(focusSource) {
     var token = ++loadToken;
     streams = []; firstPlayable = null;
+    streamsMeta = null;
     foldOpen = false;
     loadingSources();
     var videoId = openEp ? openEp.id : cur.item.id;
     F.media.streams(cur.item.type, videoId, function (ss) {
       if (el.hidden || token !== loadToken) return;
       streams = ss || [];
-      if (!streams.length) {
+      streamsMeta = (ss && ss.meta) || null;
+      // All stream-capable addons failed/timed out: blame the network.
+      if (!streams.length && streamsMeta && streamsMeta.asked > 0 && streamsMeta.answered === 0) {
         var box = container();
         if (box) {
           box.innerHTML = '';
-          box.appendChild(emptyState('Couldn’t reach your addons',
+          box.appendChild(emptyState("Couldn't reach your addons",
             'None of them answered within 6 seconds. The TV may be offline, or the addons are down.',
             'Ask again', function () { loadStreams(false); }, true));
           paintPlay();
         }
         return;
       }
+      // Addons answered (or none had the stream resource): show what we got.
       renderSources();
       if (focusSource) {
         var target = container() && container().querySelector('.src[data-playable="true"]');
@@ -503,8 +512,10 @@ window.framed = window.framed || {};
       episodes = []; seasons = []; season = null; seasonCtl = null;
       openEp = null; openRow = null; epSourcesEl = null;
       streams = []; firstPlayable = null; bestReady = null; foldOpen = false;
+      streamsMeta = null;
       playFocusedOnce = false;
-      var token = ++loadToken;
+      var vt = ++visitToken;
+      ++loadToken;
       titleEl.textContent = it.name;
       metaEl.textContent = '';
       descEl.textContent = it.description || '';
@@ -523,7 +534,7 @@ window.framed = window.framed || {};
       setStatus('Loading…');
       F.nav.setScope(el, { remember: true });
       F.media.meta(cur.cat, it.id, function (m) {
-        if (el.hidden || token !== loadToken) return;
+        if (el.hidden || vt !== visitToken) return;
         setStatus('');
         if (m) {
           paintMeta(m);
@@ -540,10 +551,11 @@ window.framed = window.framed || {};
             paintPlay();
           }
         }
-        loadStreams(!!cur.episodeId);
+        // Series need streams loaded after meta determines the episode.
+        if (it.type === 'series') loadStreams(!!cur.episodeId);
       });
-      // meta may never arrive (addon without the meta resource): streams must still load
-      setTimeout(function () { if (!el.hidden && token === loadToken && !streams.length && !firstPlayable) loadStreams(false); }, 1200);
+      // Non-series: stream id does not depend on meta, so start immediately in parallel.
+      if (it.type !== 'series') loadStreams(false);
     },
     back: function () {
       F.router.go('media');
