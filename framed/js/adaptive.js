@@ -60,7 +60,16 @@
     // Resume at the displayed value, without counting time spent off-screen as
     // a smoothing step or snapping to the fallback before the next read arrives.
     running = true; fadeFrom = current; fadeStarted = Date.now(); paint(false); poll(generation);
-    paintTimer = setInterval(function () { paint(!artVisible()); }, 16);
+    schedulePaint();
+  }
+  function fading() {
+    return current && fadeTarget && (current.brightness !== fadeTarget.brightness || current.warm !== fadeTarget.warm);
+  }
+  function schedulePaint() {
+    clearInterval(paintTimer); paintTimer = null;
+    if (!running) return;
+    var interval = (artVisible() && fading()) ? 16 : 200;
+    paintTimer = setInterval(function () { paint(!artVisible()); schedulePaint(); }, interval);
   }
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) stop(); else start();

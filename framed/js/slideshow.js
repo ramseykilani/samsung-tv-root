@@ -104,11 +104,16 @@ window.framed = window.framed || {};
     if (steps > 0) save({ index: (pos() + steps) % n, lastAdvance: s.lastAdvance + steps * p });
   }
 
+  var MAX_DELAY = 3600000; // 1 hour — avoids setTimeout's 2^31-1 ms overflow (~24.8 days)
   function schedule() {
     stop();
     if (!running) return;
     var p = periodMs(); if (!p) return;
     var due = Math.max(50, (s.lastAdvance || Date.now()) + p - Date.now());
+    if (due > MAX_DELAY) {
+      timer = setTimeout(function () { schedule(); }, MAX_DELAY);
+      return;
+    }
     timer = setTimeout(function () {
       save({ index: (pos() + 1) % Math.max(1, count()), lastAdvance: Date.now() });
       schedule();
