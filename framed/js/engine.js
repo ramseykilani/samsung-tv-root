@@ -117,8 +117,15 @@ window.framed = window.framed || {};
     }
     // prefer a track the TV can actually decode when the default is DTS-family
     function preferPlayableTrack() {
-      if (dtsSwitched || !tracks || tracks.length < 2) return;
+      if (dtsSwitched || !tracks) return;
       dtsSwitched = true;
+      if (tracks.length < 2) {
+        var only = tracks[0];
+        if (only && DTS_RE.test(only.codec || '')) {
+          F.toast('This file\'s only sound track is DTS -- this TV can\'t decode it. The video will be silent.', 'warn');
+        }
+        return;
+      }
       var cur = tracks.filter(function (t) { return t.enabled; })[0] || tracks[0];
       if (!DTS_RE.test(cur.codec || cur.lang)) return;
       for (var i = 0; i < tracks.length; i++) {
@@ -236,7 +243,15 @@ window.framed = window.framed || {};
         for (var j = 0; j < tracks.length; j++) tracks[j].enabled = j === i;
         return true;
       },
-      lastError: function () { return err; }
+      lastError: function () { return err; },
+      suspend: function () {
+        if (!active || pausedFlag || !meta) return;
+        try { av.suspend(); } catch (e) { /* not playing */ }
+      },
+      restore: function () {
+        if (!active || !meta) return;
+        try { av.restore(); } catch (e) { /* not suspended */ }
+      }
     };
   }
 
@@ -278,7 +293,9 @@ window.framed = window.framed || {};
         } catch (e) { return false; }
         return !!t[i].enabled;
       },
-      lastError: function () { return video.error; }
+      lastError: function () { return video.error; },
+      suspend: function () {},
+      restore: function () {}
     };
   }
 

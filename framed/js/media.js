@@ -281,7 +281,7 @@ window.framed = window.framed || {};
   // Samsung panels (Dolby decodes fine): flagged on the row and named in refusals.
   var DEBRID_RE = /\b(torbox|real-?debrid|alldebrid|premiumize|easydebrid|debrid-?link|offcloud)\b|\[(tb|rd|ad|pm|ed|dl|oc)\+?\]/i;
   var READY_RE = /\[(tb|rd|ad|pm|ed|dl|oc)\+\]|\bcached\b|\binstant\b/i;
-  var DTS_RE = /\b(dts(-?hd|-?x|-?es)?|truehd|atmos)\b/i;
+  var DTS_RE = /\b(dts([-:]?(hd|x|es))?|truehd)\b/i;
   function normalizeStream(addon, s) {
     if (!s) return null;
     // direct URLs only — http(s) absolute or app/LAN-relative; reject magnet/torrent indirection
@@ -304,7 +304,9 @@ window.framed = window.framed || {};
       if (debrid) flags.push(ready ? 'Ready' : 'TorBox fetches it first');
       if (/\b(hdr|hdr10|dolby[ -]?vision|\bdv\b)/i.test(hay)) flags.push('HDR');
       var dm = DTS_RE.exec(hay);
-      if (dm) flags.push('sound may not play (' + (/truehd|atmos/i.test(dm[1]) ? 'TrueHD' : 'DTS') + ')');
+      // Atmos alone is fine (usually DD+ / E-AC3 which the TV decodes);
+      // only flag when DTS or TrueHD is present (DTS_RE catches those).
+      if (dm) flags.push('sound may not play (' + (/truehd/i.test(dm[1]) ? 'TrueHD' : 'DTS') + ')');
     }
     var flag = flags.join(' · ');
     var reason = playable ? '' :

@@ -81,6 +81,7 @@ window.framed = window.framed || {};
   var altStream = null;           // another playable source for the refused veil
   var silentWarned = false;
   var savedOnce = false;
+  var subsLoading = false;
 
   var state = 'starting';
   var chrome = 'shown';
@@ -341,6 +342,15 @@ window.framed = window.framed || {};
   });
   document.addEventListener('visibilitychange', saveProgress);
 
+  function onSuspend() {
+    if (state === 'starting' || state === 'refused' || state === 'ended') return;
+    if (document.hidden) {
+      eng.suspend();
+    } else {
+      eng.restore();
+    }
+  }
+
   /* ---------- play / pause / next ---------- */
 
   function toggle() {
@@ -499,10 +509,11 @@ window.framed = window.framed || {};
       if (old[i].src && old[i].src.indexOf('blob:') === 0) { try { URL.revokeObjectURL(old[i].src); } catch (e) { /* ignore */ } }
       if (old[i].parentElement) old[i].parentElement.removeChild(old[i]);
     }
-    if (!ctx || !ctx.item) { refreshDrawer(); return; }
-    if (ctl.subs) ctl.subs.setNote('lang', 'Asking your subtitle addons…');
+    if (!ctx || !ctx.item) { subsLoading = false; refreshDrawer(); return; }
+    subsLoading = true;
     F.media.subtitles(ctx.item.type, ctx.episodeId || ctx.item.id, function (subs) {
       if (el.hidden) return;
+      subsLoading = false;
       addonSubs = subs || [];
       groupSubs();
       refreshDrawer();
@@ -563,7 +574,7 @@ window.framed = window.framed || {};
     var tracks = eng.audioTracks();
     if (tracks === undefined) {
       return { id: 'sound', name: 'Sound', type: 'action', gated: true,
-        note: 'This TV can’t switch sound tracks in this file.' + (stream && stream.dts ? ' Its sound is ' + (/\b(truehd|atmos)\b/i.test(stream.flag || '') ? 'TrueHD' : 'DTS') + ' — pick a source without that flag.' : '') };
+        note: 'This TV can’t switch sound tracks in this file.' + (stream && stream.dts ? ' Its sound is ' + (/\btruehd\b/i.test(stream.flag || '') ? 'TrueHD' : 'DTS') + ' — pick a source without that flag.' : '') };
     }
     if (!tracks || tracks.length < 2) {
       return { id: 'sound', name: 'Sound', type: 'action', gated: true,
@@ -611,7 +622,7 @@ window.framed = window.framed || {};
   function drawerSpecs() {
     var subSpecs = [
       { id: 'lang', name: 'Language', type: 'choice', value: subLang, options: langOptions(),
-        note: !subLangs.length ? 'No subtitles arrived for this video.' : null },
+        note: subsLoading ? 'Loading subtitles...' : (!subLangs.length ? 'No subtitles arrived for this video.' : null) },
       { id: 'version', name: 'Version', type: 'choice', value: subUrl, options: versionOptions(),
         hidden: !(subLang && (subFiles[subLang] || []).length > 1) },
       { id: 'size', name: 'Size', type: 'range', value: prefs().subSize, min: 25, max: 300, step: 5,
@@ -831,9 +842,11 @@ window.framed = window.framed || {};
           if (ctx.streams[j] !== stream && ctx.streams[j].playable) { altStream = ctx.streams[j]; break; }
         }
       }
+      document.addEventListener('visibilitychange', onSuspend);
       startStream(stream);
     },
     leave: function () {
+      document.removeEventListener('visibilitychange', onSuspend);
       saveProgress();
       clearTimers();
       eng.close();
